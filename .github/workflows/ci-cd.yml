@@ -35,7 +35,7 @@ jobs:
                 cache: true
             
             - name: Run tests
-              run: go run ./...
+              run: go test ./...
 
     build-n-push:
         name: Build and push to GHCR
