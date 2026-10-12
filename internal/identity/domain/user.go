@@ -2,6 +2,8 @@ package domain
 
 import "time"
 
+var UserIDPrefix = "usr"
+
 type User struct {
 	firstName    *Username
 	lastName     *Username

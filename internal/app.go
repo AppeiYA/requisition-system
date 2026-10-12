@@ -37,7 +37,7 @@ func (a *App) Run() error {
 	}
 	a.config = cfg
 
-	otel:= telemetry.NewTelemetry("requisition-system")
+	otel := telemetry.NewTelemetry("requisition-system")
 	shutdownOtel, err := otel.Setup(ctx)
 	if err != nil {
 		return err

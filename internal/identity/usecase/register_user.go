@@ -4,4 +4,6 @@ import identityout "github.com/AppeiYA/requisition-system/internal/identity/port
 
 type RegisterUserUsecase struct {
 	userRepo identityout.UsersRepository
+	passwordHasher identityout.PasswordHasher
+	idGenerator identityout.IDGenerator
 }

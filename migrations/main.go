@@ -5,14 +5,14 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
-	"path/filepath"
 
 	"github.com/AppeiYA/requisition-system/internal/shared/config"
-	"github.com/jmoiron/sqlx"
 	"github.com/golang-migrate/migrate/v4"
 	migratepostgres "github.com/golang-migrate/migrate/v4/database/postgres"
+	"github.com/jmoiron/sqlx"
 )
 
 func main() {
@@ -28,7 +28,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
-	databaseUrl := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s", 
+	databaseUrl := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s",
 		cfg.DB.User,
 		cfg.DB.Password,
 		cfg.DB.Host,
@@ -68,7 +68,7 @@ func main() {
 	)
 	if err != nil {
 		log.Fatal(err)
-}
+	}
 	defer func() {
 		srcErr, dbErr := m.Close()
 		if srcErr != nil {

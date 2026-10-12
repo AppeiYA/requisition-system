@@ -53,7 +53,7 @@ func setup(ctx context.Context, serviceName string) (func(ctx context.Context) e
 
 	metricExporter, err := stdoutmetric.New()
 	if err != nil {
-		_= traceProvider.Shutdown(ctx)
+		_ = traceProvider.Shutdown(ctx)
 		return nil, err
 	}
 
