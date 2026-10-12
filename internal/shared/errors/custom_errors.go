@@ -52,3 +52,10 @@ func NewForbiddenError(message string) *CustomError {
 		Code:    http.StatusForbidden,
 	}
 }
+
+func NewConflictError(message string) *CustomError {
+	return &CustomError{
+		Message: message,
+		Code:    http.StatusConflict,
+	}
+}

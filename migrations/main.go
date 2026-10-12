@@ -28,16 +28,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
-	databaseUrl := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s",
-		cfg.DB.User,
-		cfg.DB.Password,
-		cfg.DB.Host,
-		cfg.DB.Port,
-		cfg.DB.Name,
-		cfg.DB.SSLMode,
-	)
 
-	db, err := sqlx.Connect("postgres", databaseUrl)
+	db, err := sqlx.Connect("postgres", cfg.DB.DSN())
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}

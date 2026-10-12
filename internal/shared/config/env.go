@@ -24,6 +24,9 @@ type DBConfig struct {
 	Password string
 	Name     string
 	SSLMode  string
+	MaxOpenConnections  int
+	MaxIdleConnections  int
+	MaxLifetimeMinutes  int
 }
 
 type ServerConfig struct {

@@ -37,9 +37,19 @@ func Load() (*Config, error) {
 
 func LoadServerConfig() (*ServerConfig, error) {
 	address := getEnv("SERVER_PORT", ":8080")
-	readTimeout := getTimeDurationEnv("SERVER_READ_TIMEOUT", 5*time.Second)
-	writeTimeout := getTimeDurationEnv("SERVER_WRITE_TIMEOUT", 10*time.Second)
-	idleTimeout := getTimeDurationEnv("SERVER_IDLE_TIMEOUT", 120*time.Second)
+
+	readTimeout, err := getTimeDurationEnv("SERVER_READ_TIMEOUT", 5*time.Second)
+	if err != nil {
+		return nil, err
+	}
+	writeTimeout, err := getTimeDurationEnv("SERVER_WRITE_TIMEOUT", 10*time.Second)
+	if err != nil {
+		return nil, err
+	}
+	idleTimeout, err := getTimeDurationEnv("SERVER_IDLE_TIMEOUT", 120*time.Second)
+	if err != nil {
+		return nil, err
+	}
 
 	return &ServerConfig{
 		Address:      address,
@@ -70,13 +80,29 @@ func LoadDBConfig() (*DBConfig, error) {
 		return nil, err
 	}
 
+	maxOpenConnections, err := getIntEnv("DB_MAX_OPEN_CONNECTIONS", 25)
+	if err != nil {
+		return nil, err
+	}
+	maxIdleConnections, err := getIntEnv("DB_MAX_IDLE_CONNECTIONS", 10)
+	if err != nil {
+		return nil, err
+	}
+	maxLifetimeMinutes, err := getIntEnv("DB_MAX_LIFETIME_MINUTES", 30)
+	if err != nil {
+		return nil, err
+	}
+
 	return &DBConfig{
-		Host:     dbHost,
-		Port:     getEnv("DB_PORT", "5432"),
-		User:     dbUser,
-		Password: dbPassword,
-		Name:     dbName,
-		SSLMode:  getEnv("DB_SSL_MODE", "disable"),
+		Host:               dbHost,
+		Port:               getEnv("DB_PORT", "5432"),
+		User:               dbUser,
+		Password:           dbPassword,
+		Name:               dbName,
+		SSLMode:            getEnv("DB_SSL_MODE", "disable"),
+		MaxOpenConnections: maxOpenConnections,
+		MaxIdleConnections: maxIdleConnections,
+		MaxLifetimeMinutes: maxLifetimeMinutes,
 	}, nil
 }
 

@@ -7,6 +7,8 @@ import (
 )
 
 func Test_NewUser(t *testing.T) {
+	t.Parallel()
+
 	email, err := NewEmail("john.doe@example.com")
 	if err != nil {
 		t.Fatalf("unexpected error creating email: %v", err)
@@ -17,74 +19,80 @@ func Test_NewUser(t *testing.T) {
 		t.Fatalf("unexpected error creating password hash: %v", err)
 	}
 
+	const (
+		defaultID        = "usr_12345"
+		defaultFirstName = "John"
+		defaultLastName  = "Doe"
+	)
+
 	tests := []struct {
 		name        string
+		id          string
 		firstName   string
 		lastName    string
-		email       *Email
-		passHash    *PasswordHash
 		wantErr     bool
 		expectedErr error
 	}{
 		{
 			name:      "successful user creation",
-			firstName: "John",
-			lastName:  "Doe",
-			email:     email,
-			passHash:  passwordHash,
+			id:        defaultID,
+			firstName: defaultFirstName,
+			lastName:  defaultLastName,
 			wantErr:   false,
 		},
 		{
+			name:        "id is empty",
+			id:          "",
+			firstName:   defaultFirstName,
+			lastName:    defaultLastName,
+			wantErr:     true,
+			expectedErr: ErrInvalidID,
+		},
+		{
 			name:        "firstName is empty",
+			id:          defaultID,
 			firstName:   "",
-			lastName:    "Doe",
-			email:       email,
-			passHash:    passwordHash,
+			lastName:    defaultLastName,
 			wantErr:     true,
 			expectedErr: ErrUsernameTooShort(FirstName),
 		},
 		{
 			name:        "firstName is too short",
+			id:          defaultID,
 			firstName:   "J",
-			lastName:    "Doe",
-			email:       email,
-			passHash:    passwordHash,
+			lastName:    defaultLastName,
 			wantErr:     true,
 			expectedErr: ErrUsernameTooShort(FirstName),
 		},
 		{
 			name:        "firstName is too long",
+			id:          defaultID,
 			firstName:   strings.Repeat("a", 101),
-			lastName:    "Doe",
-			email:       email,
-			passHash:    passwordHash,
+			lastName:    defaultLastName,
 			wantErr:     true,
 			expectedErr: ErrUsernameTooLong(FirstName),
 		},
 		{
 			name:        "lastName is empty",
-			firstName:   "John",
+			id:          defaultID,
+			firstName:   defaultFirstName,
 			lastName:    "",
-			email:       email,
-			passHash:    passwordHash,
 			wantErr:     true,
 			expectedErr: ErrUsernameTooShort(LastName),
 		},
 		{
 			name:        "lastName is too short",
-			firstName:   "John",
+			id:          defaultID,
+			firstName:   defaultFirstName,
 			lastName:    "D",
-			email:       email,
-			passHash:    passwordHash,
 			wantErr:     true,
 			expectedErr: ErrUsernameTooShort(LastName),
 		},
 		{
 			name:        "lastName is too long",
-			firstName:   "John",
+			id:          defaultID,
+			firstName:   defaultFirstName,
 			lastName:    strings.Repeat("a", 101),
-			email:       email,
-			passHash:    passwordHash,
 			wantErr:     true,
 			expectedErr: ErrUsernameTooLong(LastName),
 		},
@@ -92,21 +100,21 @@ func Test_NewUser(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			before := time.Now()
-			user, err := NewUser(tt.firstName, tt.lastName, tt.email, tt.passHash)
+			user, err := NewUser(tt.id, tt.firstName, tt.lastName, email, passwordHash)
 			after := time.Now()
 
 			if tt.wantErr {
 				if err == nil {
-					t.Errorf("NewUser() error = nil, wantErr %v", tt.wantErr)
+					t.Fatalf("NewUser() error = nil, wantErr %v", tt.wantErr)
 				}
 				if user != nil {
 					t.Errorf("NewUser() = %v, want nil", user)
 				}
-				if tt.expectedErr != nil && err != nil {
-					if err.Error() != tt.expectedErr.Error() {
-						t.Errorf("NewUser() error = %v, want %v", err, tt.expectedErr)
-					}
+				if tt.expectedErr != nil && err.Error() != tt.expectedErr.Error() {
+					t.Errorf("NewUser() error = %v, want %v", err, tt.expectedErr)
 				}
 				return
 			}
@@ -124,11 +132,11 @@ func Test_NewUser(t *testing.T) {
 			if user.LastName().Value() != tt.lastName {
 				t.Errorf("user.LastName().Value() = %v, want %v", user.LastName().Value(), tt.lastName)
 			}
-			if user.Email() != tt.email {
-				t.Errorf("user.Email() = %v, want %v", user.Email(), tt.email)
+			if user.Email() != email {
+				t.Errorf("user.Email() = %v, want %v", user.Email(), email)
 			}
-			if user.PasswordHash() != tt.passHash {
-				t.Errorf("user.PasswordHash() = %v, want %v", user.PasswordHash(), tt.passHash)
+			if user.PasswordHash() != passwordHash {
+				t.Errorf("user.PasswordHash() = %v, want %v", user.PasswordHash(), passwordHash)
 			}
 			if user.Status() != ACTIVE {
 				t.Errorf("user.Status() = %v, want %v", user.Status(), ACTIVE)
@@ -144,12 +152,14 @@ func Test_NewUser(t *testing.T) {
 }
 
 func Test_ReconstituteUser(t *testing.T) {
+	t.Parallel()
+
 	now := time.Now()
 	past := now.Add(-24 * time.Hour)
 	recently := now.Add(-1 * time.Hour)
 
-	tests := []struct {
-		name         string
+	type reconstituteInput struct {
+		id           string
 		firstName    string
 		lastName     string
 		email        string
@@ -157,164 +167,144 @@ func Test_ReconstituteUser(t *testing.T) {
 		status       string
 		createdAt    time.Time
 		updatedAt    *time.Time
-		wantErr      bool
-		expectedErr  error
+	}
+
+	validInput := func() reconstituteInput {
+		return reconstituteInput{
+			id:           "usr_12345",
+			firstName:    "John",
+			lastName:     "Doe",
+			email:        "john.doe@example.com",
+			passwordHash: "hashed_password",
+			status:       "active",
+			createdAt:    past,
+			updatedAt:    nil,
+		}
+	}
+
+	tests := []struct {
+		name        string
+		mutate      func(*reconstituteInput)
+		wantErr     bool
+		expectedErr error
 	}{
 		{
-			name:         "successful reconstitution without updatedAt",
-			firstName:    "John",
-			lastName:     "Doe",
-			email:        "john.doe@example.com",
-			passwordHash: "hashed_password",
-			status:       "active",
-			createdAt:    past,
-			updatedAt:    nil,
-			wantErr:      false,
+			name:    "successful reconstitution without updatedAt",
+			mutate:  nil,
+			wantErr: false,
 		},
 		{
-			name:         "successful reconstitution with updatedAt",
-			firstName:    "Jane",
-			lastName:     "Doe",
-			email:        "jane.doe@example.com",
-			passwordHash: "hashed_password",
-			status:       "suspended",
-			createdAt:    past,
-			updatedAt:    &recently,
-			wantErr:      false,
+			name: "successful reconstitution with updatedAt",
+			mutate: func(in *reconstituteInput) {
+				in.firstName = "Jane"
+				in.status = "suspended"
+				in.updatedAt = &recently
+			},
+			wantErr: false,
 		},
 		{
-			name:         "invalid firstName format (too short)",
-			firstName:    "J",
-			lastName:     "Doe",
-			email:        "john.doe@example.com",
-			passwordHash: "hashed_password",
-			status:       "active",
-			createdAt:    past,
-			updatedAt:    nil,
-			wantErr:      true,
-			expectedErr:  ErrUsernameTooShort(FirstName),
+			name: "invalid firstName format (too short)",
+			mutate: func(in *reconstituteInput) {
+				in.firstName = "J"
+			},
+			wantErr:     true,
+			expectedErr: ErrUsernameTooShort(FirstName),
 		},
 		{
-			name:         "invalid firstName format (too long)",
-			firstName:    strings.Repeat("a", 101),
-			lastName:     "Doe",
-			email:        "john.doe@example.com",
-			passwordHash: "hashed_password",
-			status:       "active",
-			createdAt:    past,
-			updatedAt:    nil,
-			wantErr:      true,
-			expectedErr:  ErrUsernameTooLong(FirstName),
+			name: "invalid firstName format (too long)",
+			mutate: func(in *reconstituteInput) {
+				in.firstName = strings.Repeat("a", 101)
+			},
+			wantErr:     true,
+			expectedErr: ErrUsernameTooLong(FirstName),
 		},
 		{
-			name:         "invalid lastName format (too short)",
-			firstName:    "John",
-			lastName:     "D",
-			email:        "john.doe@example.com",
-			passwordHash: "hashed_password",
-			status:       "active",
-			createdAt:    past,
-			updatedAt:    nil,
-			wantErr:      true,
-			expectedErr:  ErrUsernameTooShort(LastName),
+			name: "invalid lastName format (too short)",
+			mutate: func(in *reconstituteInput) {
+				in.lastName = "D"
+			},
+			wantErr:     true,
+			expectedErr: ErrUsernameTooShort(LastName),
 		},
 		{
-			name:         "invalid lastName format (too long)",
-			firstName:    "John",
-			lastName:     strings.Repeat("a", 101),
-			email:        "john.doe@example.com",
-			passwordHash: "hashed_password",
-			status:       "active",
-			createdAt:    past,
-			updatedAt:    nil,
-			wantErr:      true,
-			expectedErr:  ErrUsernameTooLong(LastName),
+			name: "invalid lastName format (too long)",
+			mutate: func(in *reconstituteInput) {
+				in.lastName = strings.Repeat("a", 101)
+			},
+			wantErr:     true,
+			expectedErr: ErrUsernameTooLong(LastName),
 		},
 		{
-			name:         "invalid email format",
-			firstName:    "John",
-			lastName:     "Doe",
-			email:        "invalid-email",
-			passwordHash: "hashed_password",
-			status:       "active",
-			createdAt:    past,
-			updatedAt:    nil,
-			wantErr:      true,
-			expectedErr:  ErrInvalidEmailFormat,
+			name: "invalid email format",
+			mutate: func(in *reconstituteInput) {
+				in.email = "invalid-email"
+			},
+			wantErr:     true,
+			expectedErr: ErrInvalidEmailFormat,
 		},
 		{
-			name:         "empty email",
-			firstName:    "John",
-			lastName:     "Doe",
-			email:        "",
-			passwordHash: "hashed_password",
-			status:       "active",
-			createdAt:    past,
-			updatedAt:    nil,
-			wantErr:      true,
-			expectedErr:  ErrInvalidEmailFormat,
+			name: "empty email",
+			mutate: func(in *reconstituteInput) {
+				in.email = ""
+			},
+			wantErr:     true,
+			expectedErr: ErrInvalidEmailFormat,
 		},
 		{
-			name:         "empty password hash",
-			firstName:    "John",
-			lastName:     "Doe",
-			email:        "john.doe@example.com",
-			passwordHash: "",
-			status:       "active",
-			createdAt:    past,
-			updatedAt:    nil,
-			wantErr:      true,
-			expectedErr:  ErrInvalidPasswordHash,
+			name: "empty password hash",
+			mutate: func(in *reconstituteInput) {
+				in.passwordHash = ""
+			},
+			wantErr:     true,
+			expectedErr: ErrInvalidPasswordHash,
 		},
 		{
-			name:         "invalid status",
-			firstName:    "John",
-			lastName:     "Doe",
-			email:        "john.doe@example.com",
-			passwordHash: "hashed_password",
-			status:       "pending",
-			createdAt:    past,
-			updatedAt:    nil,
-			wantErr:      true,
-			expectedErr:  ErrInvalidStatus,
+			name: "invalid status",
+			mutate: func(in *reconstituteInput) {
+				in.status = "pending"
+			},
+			wantErr:     true,
+			expectedErr: ErrInvalidStatus,
 		},
 		{
-			name:         "empty status",
-			firstName:    "John",
-			lastName:     "Doe",
-			email:        "john.doe@example.com",
-			passwordHash: "hashed_password",
-			status:       "",
-			createdAt:    past,
-			updatedAt:    nil,
-			wantErr:      true,
-			expectedErr:  ErrInvalidStatus,
+			name: "empty status",
+			mutate: func(in *reconstituteInput) {
+				in.status = ""
+			},
+			wantErr:     true,
+			expectedErr: ErrInvalidStatus,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			in := validInput()
+			if tt.mutate != nil {
+				tt.mutate(&in)
+			}
+
 			user, err := ReconstituteUser(
-				tt.firstName,
-				tt.lastName,
-				tt.email,
-				tt.passwordHash,
-				tt.status,
-				tt.createdAt,
-				tt.updatedAt,
+				in.id,
+				in.firstName,
+				in.lastName,
+				in.email,
+				in.passwordHash,
+				in.status,
+				in.createdAt,
+				in.updatedAt,
 			)
 
 			if tt.wantErr {
 				if err == nil {
-					t.Errorf("ReconstituteUser() error = nil, wantErr %v", tt.wantErr)
+					t.Fatalf("ReconstituteUser() error = nil, wantErr %v", tt.wantErr)
 				}
 				if user != nil {
 					t.Errorf("ReconstituteUser() = %v, want nil", user)
 				}
-				if tt.expectedErr != nil && err != nil {
-					if err.Error() != tt.expectedErr.Error() {
-						t.Errorf("ReconstituteUser() error = %v, want %v", err, tt.expectedErr)
-					}
+				if tt.expectedErr != nil && err.Error() != tt.expectedErr.Error() {
+					t.Errorf("ReconstituteUser() error = %v, want %v", err, tt.expectedErr)
 				}
 				return
 			}
@@ -326,31 +316,31 @@ func Test_ReconstituteUser(t *testing.T) {
 				t.Fatalf("ReconstituteUser() returned nil user")
 			}
 
-			if user.FirstName().Value() != tt.firstName {
-				t.Errorf("user.FirstName().Value() = %v, want %v", user.FirstName().Value(), tt.firstName)
+			if user.FirstName().Value() != in.firstName {
+				t.Errorf("user.FirstName().Value() = %v, want %v", user.FirstName().Value(), in.firstName)
 			}
-			if user.LastName().Value() != tt.lastName {
-				t.Errorf("user.LastName().Value() = %v, want %v", user.LastName().Value(), tt.lastName)
+			if user.LastName().Value() != in.lastName {
+				t.Errorf("user.LastName().Value() = %v, want %v", user.LastName().Value(), in.lastName)
 			}
-			if user.Email().Value() != tt.email {
-				t.Errorf("user.Email().Value() = %v, want %v", user.Email().Value(), tt.email)
+			if user.Email().Value() != in.email {
+				t.Errorf("user.Email().Value() = %v, want %v", user.Email().Value(), in.email)
 			}
-			if user.PasswordHash().Value() != tt.passwordHash {
-				t.Errorf("user.PasswordHash().Value() = %v, want %v", user.PasswordHash().Value(), tt.passwordHash)
+			if user.PasswordHash().Value() != in.passwordHash {
+				t.Errorf("user.PasswordHash().Value() = %v, want %v", user.PasswordHash().Value(), in.passwordHash)
 			}
-			if user.Status().Value() != tt.status {
-				t.Errorf("user.Status().Value() = %v, want %v", user.Status().Value(), tt.status)
+			if user.Status().Value() != in.status {
+				t.Errorf("user.Status().Value() = %v, want %v", user.Status().Value(), in.status)
 			}
-			if !user.CreatedAt().Equal(tt.createdAt) {
-				t.Errorf("user.CreatedAt() = %v, want %v", user.CreatedAt(), tt.createdAt)
+			if !user.CreatedAt().Equal(in.createdAt) {
+				t.Errorf("user.CreatedAt() = %v, want %v", user.CreatedAt(), in.createdAt)
 			}
-			if tt.updatedAt == nil {
+			if in.updatedAt == nil {
 				if user.UpdatedAt() != nil {
 					t.Errorf("user.UpdatedAt() = %v, want nil", user.UpdatedAt())
 				}
 			} else {
-				if user.UpdatedAt() == nil || !user.UpdatedAt().Equal(*tt.updatedAt) {
-					t.Errorf("user.UpdatedAt() = %v, want %v", user.UpdatedAt(), tt.updatedAt)
+				if user.UpdatedAt() == nil || !user.UpdatedAt().Equal(*in.updatedAt) {
+					t.Errorf("user.UpdatedAt() = %v, want %v", user.UpdatedAt(), in.updatedAt)
 				}
 			}
 		})
@@ -358,6 +348,8 @@ func Test_ReconstituteUser(t *testing.T) {
 }
 
 func Test_User_UpdateStatus(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name          string
 		initialStatus Status
@@ -402,16 +394,18 @@ func Test_User_UpdateStatus(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			email, _ := NewEmail("john.doe@example.com")
-			pass, _ := NewPasswordHash("hashed_password")
+			t.Parallel()
 
-			var user *User
-			var err error
-			if tt.initialStatus == ACTIVE {
-				user, err = NewUser("John", "Doe", email, pass)
-			} else {
-				user, err = ReconstituteUser("John", "Doe", "john.doe@example.com", "hashed_password", string(tt.initialStatus), time.Now(), nil)
-			}
+			user, err := ReconstituteUser(
+				"usr_12345",
+				"John",
+				"Doe",
+				"john.doe@example.com",
+				"hashed_password",
+				string(tt.initialStatus),
+				time.Now(),
+				nil,
+			)
 			if err != nil {
 				t.Fatalf("failed to create initial user: %v", err)
 			}
@@ -422,9 +416,9 @@ func Test_User_UpdateStatus(t *testing.T) {
 
 			if tt.wantErr {
 				if updateErr == nil {
-					t.Errorf("user.UpdateStatus() error = nil, wantErr %v", tt.wantErr)
+					t.Fatalf("user.UpdateStatus() error = nil, wantErr %v", tt.wantErr)
 				}
-				if tt.expectedErr != nil && updateErr != tt.expectedErr {
+				if tt.expectedErr != nil && updateErr.Error() != tt.expectedErr.Error() {
 					t.Errorf("user.UpdateStatus() error = %v, want %v", updateErr, tt.expectedErr)
 				}
 				if user.Status() != tt.initialStatus {
