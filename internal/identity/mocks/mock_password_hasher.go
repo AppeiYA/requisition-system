@@ -1,10 +1,10 @@
-package mock
+package identitymocks
 
 import (
+	"fmt"
+
 	identityout "github.com/AppeiYA/requisition-system/internal/identity/ports/out"
 )
-
-var _ identityout.PasswordHasher = (*MockPasswordHasher)(nil)
 
 type MockPasswordHasher struct {
 	HashPasswordFunc    func(password string) (string, error)
@@ -12,20 +12,25 @@ type MockPasswordHasher struct {
 }
 
 func NewMockPasswordHasher() *MockPasswordHasher {
-	return &MockPasswordHasher{}
+	return &MockPasswordHasher{
+		HashPasswordFunc: func(password string) (string, error) {
+			return password, nil
+		},
+		ComparePasswordFunc: func(hashedPassword, password string) error {
+			if hashedPassword != password {
+				return fmt.Errorf("invalid password")
+			}
+			return nil
+		},
+	}
 }
 
 func (m *MockPasswordHasher) HashPassword(password string) (string, error) {
-	if m.HashPasswordFunc != nil {
-		return m.HashPasswordFunc(password)
-	}
-	return "hashed_" + password, nil
+	return m.HashPasswordFunc(password)
 }
 
 func (m *MockPasswordHasher) ComparePassword(hashedPassword, password string) error {
-	if m.ComparePasswordFunc != nil {
-		return m.ComparePasswordFunc(hashedPassword, password)
-	}
-	return nil
+	return m.ComparePasswordFunc(hashedPassword, password)
 }
 
+var _ identityout.PasswordHasher = (*MockPasswordHasher)(nil)

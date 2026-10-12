@@ -5,8 +5,9 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/AppeiYA/requisition-system/internal/identity/adapters/out/mock"
 	"github.com/AppeiYA/requisition-system/internal/identity/domain"
+	identitymocks "github.com/AppeiYA/requisition-system/internal/identity/mocks"
+	identityin "github.com/AppeiYA/requisition-system/internal/identity/ports/in"
 	customerrors "github.com/AppeiYA/requisition-system/internal/shared/errors"
 )
 
@@ -15,21 +16,21 @@ func Test_RegisterUserUsecase_Success(t *testing.T) {
 
 	var savedUser *domain.User
 
-	repo := mock.NewMockUsersRepository()
+	repo := identitymocks.NewMockUsersRepository()
 	repo.SaveUserFunc = func(ctx context.Context, user *domain.User) error {
 		savedUser = user
 		return nil
 	}
-	hasher := mock.NewMockPasswordHasher()
-	idGen := mock.NewMockIDGenerator()
+	hasher := identitymocks.NewMockPasswordHasher()
+	idGen := identitymocks.NewMockIDGenerator()
 
 	uc := NewRegisterUserUsecase(repo, hasher, idGen)
 
-	dto := RegisterUserDTO{
-		FirstName: mock.DefaultFirstName,
-		LastName:  mock.DefaultLastName,
-		Email:     mock.DefaultEmail,
-		Password:  mock.DefaultPassword,
+	dto := identityin.RegisterUserDTO{
+		FirstName: identitymocks.DefaultFirstName,
+		LastName:  identitymocks.DefaultLastName,
+		Email:     identitymocks.DefaultEmail,
+		Password:  identitymocks.DefaultPassword,
 	}
 
 	err := uc.Execute(context.Background(), dto)
@@ -41,14 +42,14 @@ func Test_RegisterUserUsecase_Success(t *testing.T) {
 		t.Fatal("expected user to be saved, got nil")
 	}
 
-	if savedUser.FirstName().Value() != mock.DefaultFirstName {
-		t.Errorf("expected first name '%s', got '%s'", mock.DefaultFirstName, savedUser.FirstName().Value())
+	if savedUser.FirstName().Value() != identitymocks.DefaultFirstName {
+		t.Errorf("expected first name '%s', got '%s'", identitymocks.DefaultFirstName, savedUser.FirstName().Value())
 	}
-	if savedUser.LastName().Value() != mock.DefaultLastName {
-		t.Errorf("expected last name '%s', got '%s'", mock.DefaultLastName, savedUser.LastName().Value())
+	if savedUser.LastName().Value() != identitymocks.DefaultLastName {
+		t.Errorf("expected last name '%s', got '%s'", identitymocks.DefaultLastName, savedUser.LastName().Value())
 	}
-	if savedUser.Email().Value() != mock.DefaultEmail {
-		t.Errorf("expected email '%s', got '%s'", mock.DefaultEmail, savedUser.Email().Value())
+	if savedUser.Email().Value() != identitymocks.DefaultEmail {
+		t.Errorf("expected email '%s', got '%s'", identitymocks.DefaultEmail, savedUser.Email().Value())
 	}
 	if savedUser.Status() != domain.ACTIVE {
 		t.Errorf("expected status 'active', got '%s'", savedUser.Status())
@@ -61,13 +62,13 @@ func Test_RegisterUserUsecase_ContextCancelled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	uc := NewRegisterUserUsecase(mock.NewMockUsersRepository(), mock.NewMockPasswordHasher(), mock.NewMockIDGenerator())
+	uc := NewRegisterUserUsecase(identitymocks.NewMockUsersRepository(), identitymocks.NewMockPasswordHasher(), identitymocks.NewMockIDGenerator())
 
-	dto := RegisterUserDTO{
-		FirstName: mock.DefaultFirstName,
-		LastName:  mock.DefaultLastName,
-		Email:     mock.DefaultEmail,
-		Password:  mock.DefaultPassword,
+	dto := identityin.RegisterUserDTO{
+		FirstName: identitymocks.DefaultFirstName,
+		LastName:  identitymocks.DefaultLastName,
+		Email:     identitymocks.DefaultEmail,
+		Password:  identitymocks.DefaultPassword,
 	}
 
 	err := uc.Execute(ctx, dto)
@@ -79,7 +80,7 @@ func Test_RegisterUserUsecase_ContextCancelled(t *testing.T) {
 func Test_RegisterUserUsecase_PasswordValidation(t *testing.T) {
 	t.Parallel()
 
-	uc := NewRegisterUserUsecase(mock.NewMockUsersRepository(), mock.NewMockPasswordHasher(), mock.NewMockIDGenerator())
+	uc := NewRegisterUserUsecase(identitymocks.NewMockUsersRepository(), identitymocks.NewMockPasswordHasher(), identitymocks.NewMockIDGenerator())
 
 	tests := []struct {
 		name        string
@@ -127,10 +128,10 @@ func Test_RegisterUserUsecase_PasswordValidation(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			dto := RegisterUserDTO{
-				FirstName: mock.DefaultFirstName,
-				LastName:  mock.DefaultLastName,
-				Email:     mock.DefaultEmail,
+			dto := identityin.RegisterUserDTO{
+				FirstName: identitymocks.DefaultFirstName,
+				LastName:  identitymocks.DefaultLastName,
+				Email:     identitymocks.DefaultEmail,
 				Password:  tt.password,
 			}
 
@@ -148,13 +149,13 @@ func Test_RegisterUserUsecase_PasswordValidation(t *testing.T) {
 func Test_RegisterUserUsecase_InvalidEmail(t *testing.T) {
 	t.Parallel()
 
-	uc := NewRegisterUserUsecase(mock.NewMockUsersRepository(), mock.NewMockPasswordHasher(), mock.NewMockIDGenerator())
+	uc := NewRegisterUserUsecase(identitymocks.NewMockUsersRepository(), identitymocks.NewMockPasswordHasher(), identitymocks.NewMockIDGenerator())
 
-	dto := RegisterUserDTO{
-		FirstName: mock.DefaultFirstName,
-		LastName:  mock.DefaultLastName,
+	dto := identityin.RegisterUserDTO{
+		FirstName: identitymocks.DefaultFirstName,
+		LastName:  identitymocks.DefaultLastName,
 		Email:     "invalid-email",
-		Password:  mock.DefaultPassword,
+		Password:  identitymocks.DefaultPassword,
 	}
 
 	err := uc.Execute(context.Background(), dto)
@@ -166,19 +167,19 @@ func Test_RegisterUserUsecase_InvalidEmail(t *testing.T) {
 func Test_RegisterUserUsecase_UserAlreadyExists(t *testing.T) {
 	t.Parallel()
 
-	existingUser := mock.ValidUser()
-	repo := mock.NewMockUsersRepository()
+	existingUser := identitymocks.ValidUser()
+	repo := identitymocks.NewMockUsersRepository()
 	repo.GetUserByEmailFunc = func(ctx context.Context, email *domain.Email) (*domain.User, error) {
 		return existingUser, nil
 	}
 
-	uc := NewRegisterUserUsecase(repo, mock.NewMockPasswordHasher(), mock.NewMockIDGenerator())
+	uc := NewRegisterUserUsecase(repo, identitymocks.NewMockPasswordHasher(), identitymocks.NewMockIDGenerator())
 
-	dto := RegisterUserDTO{
-		FirstName: mock.DefaultFirstName,
-		LastName:  mock.DefaultLastName,
-		Email:     mock.DefaultEmail,
-		Password:  mock.DefaultPassword,
+	dto := identityin.RegisterUserDTO{
+		FirstName: identitymocks.DefaultFirstName,
+		LastName:  identitymocks.DefaultLastName,
+		Email:     identitymocks.DefaultEmail,
+		Password:  identitymocks.DefaultPassword,
 	}
 
 	err := uc.Execute(context.Background(), dto)
@@ -193,18 +194,18 @@ func Test_RegisterUserUsecase_UserAlreadyExists(t *testing.T) {
 func Test_RegisterUserUsecase_GetUserByEmail_NotFoundErrorIgnored(t *testing.T) {
 	t.Parallel()
 
-	repo := mock.NewMockUsersRepository()
+	repo := identitymocks.NewMockUsersRepository()
 	repo.GetUserByEmailFunc = func(ctx context.Context, email *domain.Email) (*domain.User, error) {
 		return nil, customerrors.NewNotFoundError("user not found")
 	}
 
-	uc := NewRegisterUserUsecase(repo, mock.NewMockPasswordHasher(), mock.NewMockIDGenerator())
+	uc := NewRegisterUserUsecase(repo, identitymocks.NewMockPasswordHasher(), identitymocks.NewMockIDGenerator())
 
-	dto := RegisterUserDTO{
-		FirstName: mock.DefaultFirstName,
-		LastName:  mock.DefaultLastName,
-		Email:     mock.DefaultEmail,
-		Password:  mock.DefaultPassword,
+	dto := identityin.RegisterUserDTO{
+		FirstName: identitymocks.DefaultFirstName,
+		LastName:  identitymocks.DefaultLastName,
+		Email:     identitymocks.DefaultEmail,
+		Password:  identitymocks.DefaultPassword,
 	}
 
 	err := uc.Execute(context.Background(), dto)
@@ -217,18 +218,18 @@ func Test_RegisterUserUsecase_GetUserByEmail_RepoError(t *testing.T) {
 	t.Parallel()
 
 	dbErr := errors.New("db connection failure")
-	repo := mock.NewMockUsersRepository()
+	repo := identitymocks.NewMockUsersRepository()
 	repo.GetUserByEmailFunc = func(ctx context.Context, email *domain.Email) (*domain.User, error) {
 		return nil, dbErr
 	}
 
-	uc := NewRegisterUserUsecase(repo, mock.NewMockPasswordHasher(), mock.NewMockIDGenerator())
+	uc := NewRegisterUserUsecase(repo, identitymocks.NewMockPasswordHasher(), identitymocks.NewMockIDGenerator())
 
-	dto := RegisterUserDTO{
-		FirstName: mock.DefaultFirstName,
-		LastName:  mock.DefaultLastName,
-		Email:     mock.DefaultEmail,
-		Password:  mock.DefaultPassword,
+	dto := identityin.RegisterUserDTO{
+		FirstName: identitymocks.DefaultFirstName,
+		LastName:  identitymocks.DefaultLastName,
+		Email:     identitymocks.DefaultEmail,
+		Password:  identitymocks.DefaultPassword,
 	}
 
 	err := uc.Execute(context.Background(), dto)
@@ -241,18 +242,18 @@ func Test_RegisterUserUsecase_IDGeneratorError(t *testing.T) {
 	t.Parallel()
 
 	idGenErr := errors.New("id generation failed")
-	idGen := mock.NewMockIDGenerator()
+	idGen := identitymocks.NewMockIDGenerator()
 	idGen.GenerateIDFunc = func(prefix string) (string, error) {
 		return "", idGenErr
 	}
 
-	uc := NewRegisterUserUsecase(mock.NewMockUsersRepository(), mock.NewMockPasswordHasher(), idGen)
+	uc := NewRegisterUserUsecase(identitymocks.NewMockUsersRepository(), identitymocks.NewMockPasswordHasher(), idGen)
 
-	dto := RegisterUserDTO{
-		FirstName: mock.DefaultFirstName,
-		LastName:  mock.DefaultLastName,
-		Email:     mock.DefaultEmail,
-		Password:  mock.DefaultPassword,
+	dto := identityin.RegisterUserDTO{
+		FirstName: identitymocks.DefaultFirstName,
+		LastName:  identitymocks.DefaultLastName,
+		Email:     identitymocks.DefaultEmail,
+		Password:  identitymocks.DefaultPassword,
 	}
 
 	err := uc.Execute(context.Background(), dto)
@@ -265,18 +266,18 @@ func Test_RegisterUserUsecase_PasswordHasherError(t *testing.T) {
 	t.Parallel()
 
 	hasherErr := errors.New("hashing failed")
-	hasher := mock.NewMockPasswordHasher()
+	hasher := identitymocks.NewMockPasswordHasher()
 	hasher.HashPasswordFunc = func(password string) (string, error) {
 		return "", hasherErr
 	}
 
-	uc := NewRegisterUserUsecase(mock.NewMockUsersRepository(), hasher, mock.NewMockIDGenerator())
+	uc := NewRegisterUserUsecase(identitymocks.NewMockUsersRepository(), hasher, identitymocks.NewMockIDGenerator())
 
-	dto := RegisterUserDTO{
-		FirstName: mock.DefaultFirstName,
-		LastName:  mock.DefaultLastName,
-		Email:     mock.DefaultEmail,
-		Password:  mock.DefaultPassword,
+	dto := identityin.RegisterUserDTO{
+		FirstName: identitymocks.DefaultFirstName,
+		LastName:  identitymocks.DefaultLastName,
+		Email:     identitymocks.DefaultEmail,
+		Password:  identitymocks.DefaultPassword,
 	}
 
 	err := uc.Execute(context.Background(), dto)
@@ -288,30 +289,30 @@ func Test_RegisterUserUsecase_PasswordHasherError(t *testing.T) {
 func Test_RegisterUserUsecase_DomainValidationFailure(t *testing.T) {
 	t.Parallel()
 
-	uc := NewRegisterUserUsecase(mock.NewMockUsersRepository(), mock.NewMockPasswordHasher(), mock.NewMockIDGenerator())
+	uc := NewRegisterUserUsecase(identitymocks.NewMockUsersRepository(), identitymocks.NewMockPasswordHasher(), identitymocks.NewMockIDGenerator())
 
 	tests := []struct {
 		name        string
-		dto         RegisterUserDTO
+		dto         identityin.RegisterUserDTO
 		expectedErr error
 	}{
 		{
 			name: "short first name",
-			dto: RegisterUserDTO{
+			dto: identityin.RegisterUserDTO{
 				FirstName: "J",
-				LastName:  mock.DefaultLastName,
-				Email:     mock.DefaultEmail,
-				Password:  mock.DefaultPassword,
+				LastName:  identitymocks.DefaultLastName,
+				Email:     identitymocks.DefaultEmail,
+				Password:  identitymocks.DefaultPassword,
 			},
 			expectedErr: domain.ErrUsernameTooShort(domain.FirstName),
 		},
 		{
 			name: "short last name",
-			dto: RegisterUserDTO{
-				FirstName: mock.DefaultFirstName,
+			dto: identityin.RegisterUserDTO{
+				FirstName: identitymocks.DefaultFirstName,
 				LastName:  "D",
-				Email:     mock.DefaultEmail,
-				Password:  mock.DefaultPassword,
+				Email:     identitymocks.DefaultEmail,
+				Password:  identitymocks.DefaultPassword,
 			},
 			expectedErr: domain.ErrUsernameTooShort(domain.LastName),
 		},
@@ -336,18 +337,18 @@ func Test_RegisterUserUsecase_SaveUserError(t *testing.T) {
 	t.Parallel()
 
 	saveErr := errors.New("save user failed")
-	repo := mock.NewMockUsersRepository()
+	repo := identitymocks.NewMockUsersRepository()
 	repo.SaveUserFunc = func(ctx context.Context, user *domain.User) error {
 		return saveErr
 	}
 
-	uc := NewRegisterUserUsecase(repo, mock.NewMockPasswordHasher(), mock.NewMockIDGenerator())
+	uc := NewRegisterUserUsecase(repo, identitymocks.NewMockPasswordHasher(), identitymocks.NewMockIDGenerator())
 
-	dto := RegisterUserDTO{
-		FirstName: mock.DefaultFirstName,
-		LastName:  mock.DefaultLastName,
-		Email:     mock.DefaultEmail,
-		Password:  mock.DefaultPassword,
+	dto := identityin.RegisterUserDTO{
+		FirstName: identitymocks.DefaultFirstName,
+		LastName:  identitymocks.DefaultLastName,
+		Email:     identitymocks.DefaultEmail,
+		Password:  identitymocks.DefaultPassword,
 	}
 
 	err := uc.Execute(context.Background(), dto)

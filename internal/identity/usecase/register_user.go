@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/AppeiYA/requisition-system/internal/identity/domain"
+	identityin "github.com/AppeiYA/requisition-system/internal/identity/ports/in"
 	identityout "github.com/AppeiYA/requisition-system/internal/identity/ports/out"
 	customerrors "github.com/AppeiYA/requisition-system/internal/shared/errors"
 )
@@ -13,13 +14,6 @@ import (
 var (
 	ErrUserAlreadyExists = customerrors.NewConflictError("user with this email already exists")
 )
-
-type RegisterUserDTO struct {
-	FirstName string
-	LastName  string
-	Email     string
-	Password  string
-}
 
 type RegisterUserUsecase struct {
 	userRepo       identityout.UsersRepository
@@ -39,7 +33,7 @@ func NewRegisterUserUsecase(
 	}
 }
 
-func (u *RegisterUserUsecase) Execute(ctx context.Context, dto RegisterUserDTO) error {
+func (u *RegisterUserUsecase) Execute(ctx context.Context, dto identityin.RegisterUserDTO) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
