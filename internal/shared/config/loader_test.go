@@ -1,0 +1,231 @@
+package config
+
+import (
+	"os"
+	"strings"
+	"testing"
+	"time"
+)
+
+func TestDBConfig_DSN(t *testing.T) {
+	cfg := DBConfig{
+		Host:     "db.example.com",
+		Port:     "5433",
+		User:     "app",
+		Password: "s3cret",
+		Name:     "mydb",
+		SSLMode:  "require",
+	}
+
+	want := "host=db.example.com port=5433 user=app password=s3cret dbname=mydb sslmode=require"
+	if got := cfg.DSN(); got != want {
+		t.Errorf("DSN() = %q, want %q", got, want)
+	}
+}
+
+// unsetEnv removes a variable for the duration of the test, restoring the
+// previous value (or absence) afterwards.
+func unsetEnv(t *testing.T, key string) {
+	t.Helper()
+	old, had := os.LookupEnv(key)
+	if err := os.Unsetenv(key); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if had {
+			_ = os.Setenv(key, old)
+		} else {
+			_ = os.Unsetenv(key)
+		}
+	})
+}
+
+func requireDBEnv(t *testing.T) {
+	t.Helper()
+	t.Setenv("DB_HOST", "localhost")
+	t.Setenv("DB_USER", "user")
+	t.Setenv("DB_PASSWORD", "pass")
+	t.Setenv("DB_NAME", "mydb")
+}
+
+func TestGetIntEnv_Valid(t *testing.T) {
+	t.Setenv("TEST_INT_VALID", "42")
+
+	got, err := getIntEnv("TEST_INT_VALID", 7)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != 42 {
+		t.Errorf("getIntEnv() = %d, want 42", got)
+	}
+}
+
+func TestGetIntEnv_Invalid(t *testing.T) {
+	t.Setenv("TEST_INT_INVALID", "not-a-number")
+
+	_, err := getIntEnv("TEST_INT_INVALID", 7)
+	if err == nil {
+		t.Fatal("expected error for invalid int, got nil")
+	}
+	if !strings.Contains(err.Error(), "TEST_INT_INVALID") {
+		t.Errorf("error should mention variable name, got: %v", err)
+	}
+}
+
+func TestGetIntEnv_Default(t *testing.T) {
+	unsetEnv(t, "TEST_INT_UNSET")
+
+	got, err := getIntEnv("TEST_INT_UNSET", 9)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != 9 {
+		t.Errorf("getIntEnv() = %d, want default 9", got)
+	}
+}
+
+func TestGetTimeDurationEnv_Valid(t *testing.T) {
+	t.Setenv("TEST_DURATION_VALID", "90s")
+
+	got, err := getTimeDurationEnv("TEST_DURATION_VALID", time.Second)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != 90*time.Second {
+		t.Errorf("getTimeDurationEnv() = %v, want 90s", got)
+	}
+}
+
+func TestGetTimeDurationEnv_Invalid(t *testing.T) {
+	t.Setenv("TEST_DURATION_INVALID", "not-a-duration")
+
+	_, err := getTimeDurationEnv("TEST_DURATION_INVALID", time.Second)
+	if err == nil {
+		t.Fatal("expected error for invalid duration, got nil")
+	}
+	if !strings.Contains(err.Error(), "TEST_DURATION_INVALID") {
+		t.Errorf("error should mention variable name, got: %v", err)
+	}
+}
+
+func TestGetTimeDurationEnv_Default(t *testing.T) {
+	unsetEnv(t, "TEST_DURATION_UNSET")
+
+	got, err := getTimeDurationEnv("TEST_DURATION_UNSET", 15*time.Second)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != 15*time.Second {
+		t.Errorf("getTimeDurationEnv() = %v, want default 15s", got)
+	}
+}
+
+func TestLoadDBConfig_Defaults(t *testing.T) {
+	requireDBEnv(t)
+	unsetEnv(t, "DB_PORT")
+	unsetEnv(t, "DB_SSL_MODE")
+	unsetEnv(t, "DB_MAX_OPEN_CONNECTIONS")
+	unsetEnv(t, "DB_MAX_IDLE_CONNECTIONS")
+	unsetEnv(t, "DB_MAX_LIFETIME_MINUTES")
+
+	cfg, err := LoadDBConfig()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if cfg.Host != "localhost" || cfg.User != "user" || cfg.Password != "pass" || cfg.Name != "mydb" {
+		t.Errorf("expected required fields from env, got: %+v", cfg)
+	}
+	if cfg.Port != "5432" {
+		t.Errorf("Port = %q, want default 5432", cfg.Port)
+	}
+	if cfg.SSLMode != "disable" {
+		t.Errorf("SSLMode = %q, want default disable", cfg.SSLMode)
+	}
+	if cfg.MaxOpenConnections != 25 {
+		t.Errorf("MaxOpenConnections = %d, want default 25", cfg.MaxOpenConnections)
+	}
+	if cfg.MaxIdleConnections != 10 {
+		t.Errorf("MaxIdleConnections = %d, want default 10", cfg.MaxIdleConnections)
+	}
+	if cfg.MaxLifetimeMinutes != 30 {
+		t.Errorf("MaxLifetimeMinutes = %d, want default 30", cfg.MaxLifetimeMinutes)
+	}
+}
+
+func TestLoadDBConfig_ReadsValues(t *testing.T) {
+	requireDBEnv(t)
+	t.Setenv("DB_PORT", "5433")
+	t.Setenv("DB_SSL_MODE", "require")
+	t.Setenv("DB_MAX_OPEN_CONNECTIONS", "50")
+	t.Setenv("DB_MAX_IDLE_CONNECTIONS", "5")
+	t.Setenv("DB_MAX_LIFETIME_MINUTES", "60")
+
+	cfg, err := LoadDBConfig()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if cfg.Port != "5433" || cfg.SSLMode != "require" {
+		t.Errorf("expected port/sslmode from env, got: %+v", cfg)
+	}
+	if cfg.MaxOpenConnections != 50 {
+		t.Errorf("MaxOpenConnections = %d, want 50", cfg.MaxOpenConnections)
+	}
+	if cfg.MaxIdleConnections != 5 {
+		t.Errorf("MaxIdleConnections = %d, want 5", cfg.MaxIdleConnections)
+	}
+	if cfg.MaxLifetimeMinutes != 60 {
+		t.Errorf("MaxLifetimeMinutes = %d, want 60", cfg.MaxLifetimeMinutes)
+	}
+}
+
+func TestLoadDBConfig_InvalidInt(t *testing.T) {
+	requireDBEnv(t)
+	t.Setenv("DB_MAX_OPEN_CONNECTIONS", "abc")
+
+	_, err := LoadDBConfig()
+	if err == nil {
+		t.Fatal("expected error for invalid int env, got nil")
+	}
+	if !strings.Contains(err.Error(), "DB_MAX_OPEN_CONNECTIONS") {
+		t.Errorf("error should mention DB_MAX_OPEN_CONNECTIONS, got: %v", err)
+	}
+}
+
+func TestLoadServerConfig_Defaults(t *testing.T) {
+	unsetEnv(t, "SERVER_PORT")
+	unsetEnv(t, "SERVER_READ_TIMEOUT")
+	unsetEnv(t, "SERVER_WRITE_TIMEOUT")
+	unsetEnv(t, "SERVER_IDLE_TIMEOUT")
+
+	cfg, err := LoadServerConfig()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if cfg.Address != ":8080" {
+		t.Errorf("Address = %q, want default :8080", cfg.Address)
+	}
+	if cfg.ReadTimeout != 5*time.Second {
+		t.Errorf("ReadTimeout = %v, want 5s", cfg.ReadTimeout)
+	}
+	if cfg.WriteTimeout != 10*time.Second {
+		t.Errorf("WriteTimeout = %v, want 10s", cfg.WriteTimeout)
+	}
+	if cfg.IdleTimeout != 120*time.Second {
+		t.Errorf("IdleTimeout = %v, want 120s", cfg.IdleTimeout)
+	}
+}
+
+func TestLoadServerConfig_InvalidDuration(t *testing.T) {
+	t.Setenv("SERVER_READ_TIMEOUT", "not-a-duration")
+
+	_, err := LoadServerConfig()
+	if err == nil {
+		t.Fatal("expected error for invalid duration env, got nil")
+	}
+	if !strings.Contains(err.Error(), "SERVER_READ_TIMEOUT") {
+		t.Errorf("error should mention SERVER_READ_TIMEOUT, got: %v", err)
+	}
+}

@@ -31,22 +31,28 @@ func requireEnv(variable string) (string, error) {
 	}
 }
 
-func getIntEnv(variable string, defaultValue int) int {
-	if val, ok := os.LookupEnv(variable); ok {
-		if intVal, err := strconv.Atoi(val); err == nil {
-			return intVal
-		}
+func getIntEnv(variable string, defaultValue int) (int, error) {
+	val, ok := os.LookupEnv(variable)
+	if !ok {
+		return defaultValue, nil
 	}
-	return defaultValue
+	intVal, err := strconv.Atoi(val)
+	if err != nil {
+		return 0, returnEnvInvalidError(variable, "int")
+	}
+	return intVal, nil
 }
 
-func getTimeDurationEnv(variable string, defaultValue time.Duration) time.Duration {
-	if val, ok := os.LookupEnv(variable); ok {
-		if durationVal, err := time.ParseDuration(val); err == nil {
-			return durationVal
-		}
+func getTimeDurationEnv(variable string, defaultValue time.Duration) (time.Duration, error) {
+	val, ok := os.LookupEnv(variable)
+	if !ok {
+		return defaultValue, nil
 	}
-	return defaultValue
+	durationVal, err := time.ParseDuration(val)
+	if err != nil {
+		return 0, returnEnvInvalidError(variable, "duration")
+	}
+	return durationVal, nil
 }
 
 func (c DBConfig) DSN() string {
