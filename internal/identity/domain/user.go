@@ -1,10 +1,19 @@
 package domain
 
-import "time"
+import (
+	"time"
+
+	customerrors "github.com/AppeiYA/requisition-system/internal/shared/errors"
+)
 
 var UserIDPrefix = "usr"
 
+var (
+	ErrInvalidID     = customerrors.NewInternalServerError("empty id in create user")
+)
+
 type User struct {
+	id string
 	firstName    *Username
 	lastName     *Username
 	email        *Email
@@ -14,7 +23,10 @@ type User struct {
 	updatedAt    *time.Time
 }
 
-func NewUser(firstName, lastName string, email *Email, passwordHash *PasswordHash) (*User, error) {
+func NewUser(id, firstName, lastName string, email *Email, passwordHash *PasswordHash) (*User, error) {
+	if id == "" {
+		return nil, ErrInvalidID
+	}
 	status, err := NewStatus("active")
 	if err != nil {
 		return nil, err
@@ -28,6 +40,7 @@ func NewUser(firstName, lastName string, email *Email, passwordHash *PasswordHas
 		return nil, err
 	}
 	return &User{
+		id:           id,
 		firstName:    first_name,
 		lastName:     last_name,
 		email:        email,
@@ -37,7 +50,7 @@ func NewUser(firstName, lastName string, email *Email, passwordHash *PasswordHas
 	}, nil
 }
 
-func ReconstituteUser(firstName, lastName, email, passwordHash, status string, createdAt time.Time, updatedAt *time.Time) (*User, error) {
+func ReconstituteUser(id, firstName, lastName, email, passwordHash, status string, createdAt time.Time, updatedAt *time.Time) (*User, error) {
 	first_name, err := NewUsername(firstName, FirstName)
 	if err != nil {
 		return nil, err
@@ -64,6 +77,7 @@ func ReconstituteUser(firstName, lastName, email, passwordHash, status string, c
 	}
 
 	return &User{
+		id:           id,
 		firstName:    first_name,
 		lastName:     last_name,
 		email:        emailAddr,
@@ -72,6 +86,10 @@ func ReconstituteUser(firstName, lastName, email, passwordHash, status string, c
 		createdAt:    createdAt,
 		updatedAt:    updatedAt,
 	}, nil
+}
+
+func (u *User) ID() string {
+	return u.id
 }
 
 func (u *User) FirstName() *Username {
