@@ -13,6 +13,8 @@ import (
 	"github.com/golang-migrate/migrate/v4"
 	migratepostgres "github.com/golang-migrate/migrate/v4/database/postgres"
 	"github.com/jmoiron/sqlx"
+
+	_ "github.com/golang-migrate/migrate/v4/source/file"
 )
 
 func main() {

@@ -1,0 +1,31 @@
+package identitypostgres
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+
+	"github.com/AppeiYA/requisition-system/internal/identity/adapters/out/postgres/models"
+	"github.com/AppeiYA/requisition-system/internal/identity/domain"
+	customerrors "github.com/AppeiYA/requisition-system/internal/shared/errors"
+)
+
+var ErrUserNotFound = customerrors.NewNotFoundError("user not found")
+
+var getUserByEmailQuery = `
+	SELECT id, first_name, last_name, email, password_hash, status, created_at, updated_at
+	FROM users
+	WHERE email = $1
+`
+func (r *UserRepository) GetUserByEmail(ctx context.Context, email *domain.Email) (*domain.User, error) {
+	var userModel models.UserModel
+	var executor = r.repository.Executor(ctx)
+	err := executor.GetContext(ctx, &userModel, getUserByEmailQuery, email.Value())
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrUserNotFound
+		}
+		return nil, err
+	}
+	return userModel.ToDomain()
+}
