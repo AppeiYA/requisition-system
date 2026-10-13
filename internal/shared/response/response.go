@@ -1,10 +1,18 @@
 package response
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+
+	customerrors "github.com/AppeiYA/requisition-system/internal/shared/errors"
 )
+
+type FieldError struct {
+	Field   string `json:"field"`
+	Message string `json:"message"`
+}
 
 type Response struct {
 	Success bool        `json:"success"`
@@ -12,11 +20,25 @@ type Response struct {
 	Data    interface{} `json:"data,omitempty"`
 }
 
+type ErrorResponse struct {
+	Response
+	Error   string       `json:"error"`
+	Details []FieldError `json:"details,omitempty"`
+}
+
 func isSuccess(code int) bool {
 	return code >= http.StatusOK && code < http.StatusMultipleChoices
 }
 
 func Success(c *gin.Context, message string, code int, data any) {
+	c.JSON(code, Response{
+		Success: true,
+		Message: message,
+		Data:    data,
+	})
+}
+
+func JSON(c *gin.Context, message string, code int, data any) {
 	c.JSON(code, Response{
 		Success: isSuccess(code),
 		Message: message,
@@ -26,8 +48,35 @@ func Success(c *gin.Context, message string, code int, data any) {
 
 func Error(c *gin.Context, message string, code int, data any) {
 	c.AbortWithStatusJSON(code, Response{
-		Success: isSuccess(code),
+		Success: false,
 		Message: message,
 		Data:    data,
 	})
+}
+
+func ErrorWithDetails(
+	c *gin.Context,
+	errorCode string,
+	message string,
+	code int,
+	details []FieldError,
+) {
+	c.AbortWithStatusJSON(code, ErrorResponse{
+		Response: Response{
+			Success: false,
+			Message: message,
+		},
+		Error:   errorCode,
+		Details: details,
+	})
+}
+
+func ErrorFrom(c *gin.Context, err error) {
+	var customErr *customerrors.CustomError
+	if errors.As(err, &customErr) {
+		Error(c, customErr.Message, customErr.Code, nil)
+		return
+	}
+
+	Error(c, "internal server error", http.StatusInternalServerError, nil)
 }

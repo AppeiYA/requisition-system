@@ -9,53 +9,68 @@ import (
 )
 
 type LoginUserUsecase struct {
-	userRepository identityout.UsersRepository
-	tokenService   identityout.TokenService
-	passwordHasher identityout.PasswordHasher
+	userRepository        identityout.UsersRepository
+	accessTokenService    identityout.AccessTokenService
+	refreshSessionRepo    identityout.RefreshSessionRepository
+	refreshTokenGenerator identityout.RefreshTokenGenerator
+	passwordHasher        identityout.PasswordHasher
 }
 
-func NewLoginUserUsecase(userRepository identityout.UsersRepository, tokenService identityout.TokenService, passwordHasher identityout.PasswordHasher) *LoginUserUsecase {
+func NewLoginUserUsecase(
+	userRepository identityout.UsersRepository,
+	accessTokenService identityout.AccessTokenService,
+	refreshSessionRepo identityout.RefreshSessionRepository,
+	refreshTokenGenerator identityout.RefreshTokenGenerator,
+	passwordHasher identityout.PasswordHasher,
+) *LoginUserUsecase {
 	return &LoginUserUsecase{
-		userRepository: userRepository,
-		tokenService:   tokenService,
-		passwordHasher: passwordHasher,
+		userRepository:        userRepository,
+		accessTokenService:    accessTokenService,
+		refreshSessionRepo:    refreshSessionRepo,
+		refreshTokenGenerator: refreshTokenGenerator,
+		passwordHasher:        passwordHasher,
 	}
 }
 
-func (u *LoginUserUsecase) Execute(ctx context.Context, req identityin.LoginUserRequest) (string, error) {
+func (u *LoginUserUsecase) Execute(ctx context.Context, req identityin.LoginUserRequest) (*identityin.TokenResponse, error) {
 	// create new email vo
 	email, err := domain.NewEmail(req.Email)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	// get user by email
 	user, err := u.userRepository.GetUserByEmail(ctx, email)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	// create new password vo
 	password, err := domain.NewPassword(req.Password)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	// compare password
-	err = u.passwordHasher.ComparePassword(user.PasswordHash().Value(), password.Value())
-	if err != nil {
-		return "", err
+	if err := u.passwordHasher.ComparePassword(user.PasswordHash().Value(), password.Value()); err != nil {
+		return nil, err
 	}
 
-	// generate token
-	token, err := u.tokenService.GenerateToken(ctx, &identityout.TokenModel{
-		ID:    user.ID(),
-		Email: user.Email().Value(),
-	})
-	
+	// issue a short-lived access token
+	access, err := u.accessTokenService.GenerateAccessToken(ctx, &identityout.TokenModel{ID: user.ID()})
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	return token, nil
+	// issue an opaque refresh token and persist only its hash
+	refreshToken, err := u.refreshTokenGenerator.Generate()
+	if err != nil {
+		return nil, err
+	}
+
+	if err := u.refreshSessionRepo.Create(ctx, user.ID(), u.refreshTokenGenerator.Hash(refreshToken)); err != nil {
+		return nil, err
+	}
+
+	return newTokenResponse(access, refreshToken), nil
 }

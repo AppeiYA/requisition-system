@@ -1,9 +1,19 @@
 package config
 
 import (
+	"errors"
 	"time"
 
 	"github.com/joho/godotenv"
+)
+
+const minJWTSecretLength = 32
+
+var (
+	ErrJWTSecretTooShort                = errors.New("JWT secret must be at least 32 characters long")
+	ErrJWTRefreshTTLNotLongerThanAccess = errors.New(
+		"JWT refresh token TTL must be greater than the access token TTL",
+	)
 )
 
 func Load() (*Config, error) {
@@ -27,11 +37,23 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 
+	jwtConfig, err := LoadJWTConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	redisConfig, err := LoadRedisConfig()
+	if err != nil {
+		return nil, err
+	}
+
 	return &Config{
 		App:    *appConfig,
 		API:    *apiConfig,
 		DB:     *dbConfig,
+		Redis:  *redisConfig,
 		Server: *serverConfig,
+		JWT:    *jwtConfig,
 	}, nil
 }
 
@@ -119,5 +141,68 @@ func LoadAPIConfig() (*APIConfig, error) {
 
 	return &APIConfig{
 		BaseURL: baseURL,
+	}, nil
+}
+
+func LoadJWTConfig() (*JWTConfig, error) {
+	secret, err := requireEnv("JWT_SECRET")
+	if err != nil {
+		return nil, err
+	}
+
+	if len(secret) < minJWTSecretLength {
+		return nil, ErrJWTSecretTooShort
+	}
+
+	accessTokenTTL, err := getTimeDurationEnv("JWT_ACCESS_TOKEN_TTL", 15*time.Minute)
+	if err != nil {
+		return nil, err
+	}
+
+	refreshTokenTTL, err := getTimeDurationEnv("JWT_REFRESH_TOKEN_TTL", 7*24*time.Hour)
+	if err != nil {
+		return nil, err
+	}
+
+	if refreshTokenTTL <= accessTokenTTL {
+		return nil, ErrJWTRefreshTTLNotLongerThanAccess
+	}
+
+	leeway, err := getTimeDurationEnv("JWT_LEEWAY", 30*time.Second)
+	if err != nil {
+		return nil, err
+	}
+
+	return &JWTConfig{
+		Secret:          secret,
+		Issuer:          getEnv("JWT_ISSUER", "requisition-system"),
+		Audience:        getEnv("JWT_AUDIENCE", "requisition-system"),
+		AccessTokenTTL:  accessTokenTTL,
+		RefreshTokenTTL: refreshTokenTTL,
+		Leeway:          leeway,
+	}, nil
+}
+
+func LoadRedisConfig() (*RedisConfig, error) {
+	host, err := requireEnv("REDIS_HOST")
+	if err != nil {
+		return nil, err
+	}
+
+	db, err := getIntEnv("REDIS_DB", 0)
+	if err != nil {
+		return nil, err
+	}
+	port, err := requireEnv("REDIS_PORT")
+	if err != nil {
+		return nil, err
+	}
+
+	return &RedisConfig{
+		Host:  host,
+		Port:  port,
+		Username: getEnv("REDIS_USERNAME", ""),
+		Password: getEnv("REDIS_PASSWORD", ""),
+		DB:       db,
 	}, nil
 }
