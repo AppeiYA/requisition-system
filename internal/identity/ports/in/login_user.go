@@ -8,5 +8,5 @@ type LoginUserRequest struct {
 }
 
 type LoginUserUsecaseInt interface {
-	Execute(ctx context.Context, req LoginUserRequest) (string, error)
+	Execute(ctx context.Context, req LoginUserRequest) (*TokenResponse, error)
 }

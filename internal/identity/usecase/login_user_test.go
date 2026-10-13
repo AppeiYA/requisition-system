@@ -12,6 +12,21 @@ import (
 	customerrors "github.com/AppeiYA/requisition-system/internal/shared/errors"
 )
 
+func newLoginUsecase(
+	repo identityout.UsersRepository,
+	accessTokens identityout.AccessTokenService,
+	sessions identityout.RefreshSessionRepository,
+	generator identityout.RefreshTokenGenerator,
+) *LoginUserUsecase {
+	return NewLoginUserUsecase(
+		repo,
+		accessTokens,
+		sessions,
+		generator,
+		identitymocks.NewMockPasswordHasher(),
+	)
+}
+
 func Test_LoginUserUsecase_Success(t *testing.T) {
 	t.Parallel()
 
@@ -20,28 +35,61 @@ func Test_LoginUserUsecase_Success(t *testing.T) {
 		return identitymocks.ValidUser(), nil
 	}
 
-	tokenService := identitymocks.NewMockTokenService()
-	tokenService.GenerateTokenFunc = func(ctx context.Context, user *identityout.TokenModel) (string, error) {
+	accessTokens := identitymocks.NewMockAccessTokenService()
+	accessTokens.GenerateAccessTokenFunc = func(ctx context.Context, user *identityout.TokenModel) (*identityout.AccessToken, error) {
 		if user.ID != identitymocks.DefaultID {
 			t.Errorf("expected token model ID %q, got %q", identitymocks.DefaultID, user.ID)
 		}
-		if user.Email != identitymocks.DefaultEmail {
-			t.Errorf("expected token model email %q, got %q", identitymocks.DefaultEmail, user.Email)
-		}
-		return "test-token", nil
+		return &identityout.AccessToken{Value: "test-access-token", ExpiresIn: 900}, nil
 	}
 
-	uc := NewLoginUserUsecase(repo, tokenService, identitymocks.NewMockPasswordHasher())
+	generator := identitymocks.NewMockRefreshTokenGenerator()
+	generator.GenerateFunc = func() (string, error) {
+		return "test-refresh-token", nil
+	}
 
-	token, err := uc.Execute(context.Background(), identityin.LoginUserRequest{
+	var createdUserID, createdTokenHash string
+	sessions := identitymocks.NewMockRefreshSessionRepository()
+	sessions.CreateFunc = func(ctx context.Context, userID, tokenHash string) error {
+		createdUserID = userID
+		createdTokenHash = tokenHash
+		return nil
+	}
+
+	uc := newLoginUsecase(repo, accessTokens, sessions, generator)
+
+	resp, err := uc.Execute(context.Background(), identityin.LoginUserRequest{
 		Email:    identitymocks.DefaultEmail,
 		Password: identitymocks.DefaultPassword,
 	})
 	if err != nil {
 		t.Fatalf("expected nil error, got: %v", err)
 	}
-	if token != "test-token" {
-		t.Fatalf("expected token 'test-token', got: %q", token)
+	if resp == nil {
+		t.Fatal("expected token response, got nil")
+	}
+	if resp.AccessToken != "test-access-token" {
+		t.Errorf("expected access token 'test-access-token', got: %q", resp.AccessToken)
+	}
+	if resp.RefreshToken != "test-refresh-token" {
+		t.Errorf("expected refresh token 'test-refresh-token', got: %q", resp.RefreshToken)
+	}
+	if resp.TokenType != "Bearer" {
+		t.Errorf("expected token type Bearer, got: %q", resp.TokenType)
+	}
+	if resp.ExpiresIn != 900 {
+		t.Errorf("expected ExpiresIn 900, got: %d", resp.ExpiresIn)
+	}
+
+	// only the hash of the refresh token must be persisted
+	if createdUserID != identitymocks.DefaultID {
+		t.Errorf("expected session for user %q, got %q", identitymocks.DefaultID, createdUserID)
+	}
+	if createdTokenHash != "hash:test-refresh-token" {
+		t.Errorf("expected persisted token hash %q, got %q", "hash:test-refresh-token", createdTokenHash)
+	}
+	if createdTokenHash == resp.RefreshToken {
+		t.Error("raw refresh token must not be persisted")
 	}
 }
 
@@ -99,7 +147,12 @@ func Test_LoginUserUsecase_Errors(t *testing.T) {
 				return nil, customerrors.NewNotFoundError("user not found")
 			}
 
-			uc := NewLoginUserUsecase(repo, identitymocks.NewMockTokenService(), identitymocks.NewMockPasswordHasher())
+			uc := newLoginUsecase(
+				repo,
+				identitymocks.NewMockAccessTokenService(),
+				identitymocks.NewMockRefreshSessionRepository(),
+				identitymocks.NewMockRefreshTokenGenerator(),
+			)
 
 			token, err := uc.Execute(context.Background(), tt.request)
 			if err == nil {
@@ -108,14 +161,14 @@ func Test_LoginUserUsecase_Errors(t *testing.T) {
 			if err.Error() != tt.expectedErr.Error() {
 				t.Fatalf("expected %v, got: %v", tt.expectedErr, err)
 			}
-			if token != "" {
-				t.Fatalf("expected empty token on error, got %q", token)
+			if token != nil {
+				t.Fatalf("expected nil token response on error, got %q", token.AccessToken)
 			}
 		})
 	}
 }
 
-func Test_LoginUserUsecase_TokenServiceError(t *testing.T) {
+func Test_LoginUserUsecase_AccessTokenError(t *testing.T) {
 	t.Parallel()
 
 	tokenErr := errors.New("token generation failed")
@@ -125,12 +178,17 @@ func Test_LoginUserUsecase_TokenServiceError(t *testing.T) {
 		return identitymocks.ValidUser(), nil
 	}
 
-	tokenService := identitymocks.NewMockTokenService()
-	tokenService.GenerateTokenFunc = func(ctx context.Context, user *identityout.TokenModel) (string, error) {
-		return "", tokenErr
+	accessTokens := identitymocks.NewMockAccessTokenService()
+	accessTokens.GenerateAccessTokenFunc = func(ctx context.Context, user *identityout.TokenModel) (*identityout.AccessToken, error) {
+		return nil, tokenErr
 	}
 
-	uc := NewLoginUserUsecase(repo, tokenService, identitymocks.NewMockPasswordHasher())
+	uc := newLoginUsecase(
+		repo,
+		accessTokens,
+		identitymocks.NewMockRefreshSessionRepository(),
+		identitymocks.NewMockRefreshTokenGenerator(),
+	)
 
 	_, err := uc.Execute(context.Background(), identityin.LoginUserRequest{
 		Email:    identitymocks.DefaultEmail,
@@ -138,6 +196,78 @@ func Test_LoginUserUsecase_TokenServiceError(t *testing.T) {
 	})
 	if !errors.Is(err, tokenErr) {
 		t.Fatalf("expected tokenErr, got: %v", err)
+	}
+}
+
+func Test_LoginUserUsecase_RefreshTokenGeneratorError(t *testing.T) {
+	t.Parallel()
+
+	genErr := errors.New("entropy source unavailable")
+
+	repo := identitymocks.NewMockUsersRepository()
+	repo.GetUserByEmailFunc = func(ctx context.Context, email *domain.Email) (*domain.User, error) {
+		return identitymocks.ValidUser(), nil
+	}
+
+	generator := identitymocks.NewMockRefreshTokenGenerator()
+	generator.GenerateFunc = func() (string, error) {
+		return "", genErr
+	}
+
+	sessionsCreated := false
+	sessions := identitymocks.NewMockRefreshSessionRepository()
+	sessions.CreateFunc = func(ctx context.Context, userID, tokenHash string) error {
+		sessionsCreated = true
+		return nil
+	}
+
+	uc := newLoginUsecase(
+		repo,
+		identitymocks.NewMockAccessTokenService(),
+		sessions,
+		generator,
+	)
+
+	_, err := uc.Execute(context.Background(), identityin.LoginUserRequest{
+		Email:    identitymocks.DefaultEmail,
+		Password: identitymocks.DefaultPassword,
+	})
+	if !errors.Is(err, genErr) {
+		t.Fatalf("expected genErr, got: %v", err)
+	}
+	if sessionsCreated {
+		t.Error("session must not be created when token generation fails")
+	}
+}
+
+func Test_LoginUserUsecase_SessionCreateError(t *testing.T) {
+	t.Parallel()
+
+	storeErr := errors.New("refresh session store unavailable")
+
+	repo := identitymocks.NewMockUsersRepository()
+	repo.GetUserByEmailFunc = func(ctx context.Context, email *domain.Email) (*domain.User, error) {
+		return identitymocks.ValidUser(), nil
+	}
+
+	sessions := identitymocks.NewMockRefreshSessionRepository()
+	sessions.CreateFunc = func(ctx context.Context, userID, tokenHash string) error {
+		return storeErr
+	}
+
+	uc := newLoginUsecase(
+		repo,
+		identitymocks.NewMockAccessTokenService(),
+		sessions,
+		identitymocks.NewMockRefreshTokenGenerator(),
+	)
+
+	_, err := uc.Execute(context.Background(), identityin.LoginUserRequest{
+		Email:    identitymocks.DefaultEmail,
+		Password: identitymocks.DefaultPassword,
+	})
+	if !errors.Is(err, storeErr) {
+		t.Fatalf("expected storeErr, got: %v", err)
 	}
 }
 
@@ -151,7 +281,12 @@ func Test_LoginUserUsecase_GetUserByEmail_RepoError(t *testing.T) {
 		return nil, dbErr
 	}
 
-	uc := NewLoginUserUsecase(repo, identitymocks.NewMockTokenService(), identitymocks.NewMockPasswordHasher())
+	uc := newLoginUsecase(
+		repo,
+		identitymocks.NewMockAccessTokenService(),
+		identitymocks.NewMockRefreshSessionRepository(),
+		identitymocks.NewMockRefreshTokenGenerator(),
+	)
 
 	_, err := uc.Execute(context.Background(), identityin.LoginUserRequest{
 		Email:    identitymocks.DefaultEmail,

@@ -1,9 +1,12 @@
 package response
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+
+	customerrors "github.com/AppeiYA/requisition-system/internal/shared/errors"
 )
 
 type Response struct {
@@ -30,4 +33,17 @@ func Error(c *gin.Context, message string, code int, data any) {
 		Message: message,
 		Data:    data,
 	})
+}
+
+// ErrorFrom maps an application error onto the shared response format.
+// *customerrors.CustomError carries the status code; anything else is reported
+// as an internal server error without leaking infrastructure detail.
+func ErrorFrom(c *gin.Context, err error) {
+	var customErr *customerrors.CustomError
+	if errors.As(err, &customErr) {
+		Error(c, customErr.Message, customErr.Code, nil)
+		return
+	}
+
+	Error(c, "internal server error", http.StatusInternalServerError, nil)
 }

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"os"
 	"strings"
 	"testing"
@@ -227,5 +228,152 @@ func TestLoadServerConfig_InvalidDuration(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "SERVER_READ_TIMEOUT") {
 		t.Errorf("error should mention SERVER_READ_TIMEOUT, got: %v", err)
+	}
+}
+
+func requireJWTEnv(t *testing.T) string {
+	t.Helper()
+	secret := strings.Repeat("a", minJWTSecretLength)
+	t.Setenv("JWT_SECRET", secret)
+	return secret
+}
+
+func TestLoadJWTConfig_Defaults(t *testing.T) {
+	secret := requireJWTEnv(t)
+	unsetEnv(t, "JWT_ISSUER")
+	unsetEnv(t, "JWT_AUDIENCE")
+	unsetEnv(t, "JWT_ACCESS_TOKEN_TTL")
+	unsetEnv(t, "JWT_REFRESH_TOKEN_TTL")
+	unsetEnv(t, "JWT_LEEWAY")
+
+	cfg, err := LoadJWTConfig()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if cfg.Secret != secret {
+		t.Errorf("Secret = %q, want %q", cfg.Secret, secret)
+	}
+	if cfg.Issuer != "requisition-system" {
+		t.Errorf("Issuer = %q, want default requisition-system", cfg.Issuer)
+	}
+	if cfg.Audience != "requisition-system" {
+		t.Errorf("Audience = %q, want default requisition-system", cfg.Audience)
+	}
+	if cfg.AccessTokenTTL != 15*time.Minute {
+		t.Errorf("AccessTokenTTL = %v, want 15m", cfg.AccessTokenTTL)
+	}
+	if cfg.RefreshTokenTTL != 7*24*time.Hour {
+		t.Errorf("RefreshTokenTTL = %v, want 168h", cfg.RefreshTokenTTL)
+	}
+	if cfg.Leeway != 30*time.Second {
+		t.Errorf("Leeway = %v, want 30s", cfg.Leeway)
+	}
+}
+
+func TestLoadJWTConfig_ReadsValues(t *testing.T) {
+	requireJWTEnv(t)
+	t.Setenv("JWT_ISSUER", "my-issuer")
+	t.Setenv("JWT_AUDIENCE", "my-audience")
+	t.Setenv("JWT_ACCESS_TOKEN_TTL", "5m")
+	t.Setenv("JWT_REFRESH_TOKEN_TTL", "24h")
+	t.Setenv("JWT_LEEWAY", "10s")
+
+	cfg, err := LoadJWTConfig()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if cfg.Issuer != "my-issuer" || cfg.Audience != "my-audience" {
+		t.Errorf("expected issuer/audience from env, got: %+v", cfg)
+	}
+	if cfg.AccessTokenTTL != 5*time.Minute || cfg.RefreshTokenTTL != 24*time.Hour {
+		t.Errorf("expected TTLs from env, got: %+v", cfg)
+	}
+	if cfg.Leeway != 10*time.Second {
+		t.Errorf("Leeway = %v, want 10s", cfg.Leeway)
+	}
+}
+
+func TestLoadJWTConfig_SecretTooShort(t *testing.T) {
+	t.Setenv("JWT_SECRET", "too-short")
+
+	_, err := LoadJWTConfig()
+	if !errors.Is(err, ErrJWTSecretTooShort) {
+		t.Fatalf("expected ErrJWTSecretTooShort, got: %v", err)
+	}
+}
+
+func TestLoadRedisConfig_Defaults(t *testing.T) {
+	t.Setenv("REDIS_HOST", "localhost")
+	t.Setenv("REDIS_PORT", "6379")
+	unsetEnv(t, "REDIS_USERNAME")
+	unsetEnv(t, "REDIS_PASSWORD")
+	unsetEnv(t, "REDIS_DB")
+
+	cfg, err := LoadRedisConfig()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if cfg.Host != "localhost" || cfg.Port != "6379" {
+		t.Errorf("expected host/port from env, got: %+v", cfg)
+	}
+	if cfg.Username != "" || cfg.Password != "" {
+		t.Errorf("expected empty credentials, got: %+v", cfg)
+	}
+	if cfg.DB != 0 {
+		t.Errorf("DB = %d, want 0", cfg.DB)
+	}
+}
+
+func TestLoadRedisConfig_ReadsValues(t *testing.T) {
+	t.Setenv("REDIS_HOST", "redis.internal")
+	t.Setenv("REDIS_PORT", "6380")
+	t.Setenv("REDIS_USERNAME", "app")
+	t.Setenv("REDIS_PASSWORD", "s3cret")
+	t.Setenv("REDIS_DB", "2")
+
+	cfg, err := LoadRedisConfig()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if cfg.Host != "redis.internal" || cfg.Port != "6380" ||
+		cfg.Username != "app" || cfg.Password != "s3cret" {
+		t.Errorf("unexpected config: %+v", cfg)
+	}
+	if cfg.DB != 2 {
+		t.Errorf("DB = %d, want 2", cfg.DB)
+	}
+}
+
+func TestLoadRedisConfig_MissingHost(t *testing.T) {
+	unsetEnv(t, "REDIS_HOST")
+	t.Setenv("REDIS_PORT", "6379")
+
+	if _, err := LoadRedisConfig(); err == nil {
+		t.Fatal("expected error when REDIS_HOST is missing")
+	}
+}
+
+func TestLoadRedisConfig_InvalidDB(t *testing.T) {
+	t.Setenv("REDIS_HOST", "localhost")
+	t.Setenv("REDIS_PORT", "6379")
+	t.Setenv("REDIS_DB", "not-a-number")
+
+	if _, err := LoadRedisConfig(); err == nil {
+		t.Fatal("expected error for non-numeric REDIS_DB")
+	}
+}
+
+func TestLoadJWTConfig_RefreshTTLNotLongerThanAccess(t *testing.T) {
+	requireJWTEnv(t)
+	t.Setenv("JWT_ACCESS_TOKEN_TTL", "1h")
+	t.Setenv("JWT_REFRESH_TOKEN_TTL", "5m")
+
+	_, err := LoadJWTConfig()
+	if !errors.Is(err, ErrJWTRefreshTTLNotLongerThanAccess) {
+		t.Fatalf("expected ErrJWTRefreshTTLNotLongerThanAccess, got: %v", err)
 	}
 }

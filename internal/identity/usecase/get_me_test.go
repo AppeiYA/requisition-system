@@ -23,7 +23,7 @@ func Test_GetMeUsecase_Success(t *testing.T) {
 		return user, nil
 	}
 
-	uc := NewGetMeUsecase(repo, identitymocks.NewMockTokenService())
+	uc := NewGetMeUsecase(repo)
 
 	response, err := uc.Execute(context.Background(), identitymocks.DefaultID)
 	if err != nil {
@@ -63,7 +63,7 @@ func Test_GetMeUsecase_GetUserByID_RepoError(t *testing.T) {
 		return nil, dbErr
 	}
 
-	uc := NewGetMeUsecase(repo, identitymocks.NewMockTokenService())
+	uc := NewGetMeUsecase(repo)
 
 	response, err := uc.Execute(context.Background(), identitymocks.DefaultID)
 	if !errors.Is(err, dbErr) {
@@ -84,7 +84,7 @@ func Test_GetMeUsecase_GetUserByID_NotFound(t *testing.T) {
 		return nil, notFoundErr
 	}
 
-	uc := NewGetMeUsecase(repo, identitymocks.NewMockTokenService())
+	uc := NewGetMeUsecase(repo)
 
 	_, err := uc.Execute(context.Background(), identitymocks.DefaultID)
 	if err == nil {

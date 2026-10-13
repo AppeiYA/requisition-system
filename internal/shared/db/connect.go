@@ -6,6 +6,8 @@ import (
 
 	"github.com/AppeiYA/requisition-system/internal/shared/config"
 	"github.com/jmoiron/sqlx"
+
+	_ "github.com/lib/pq"
 )
 
 func Connect(cfg config.DBConfig) (*DB, error) {

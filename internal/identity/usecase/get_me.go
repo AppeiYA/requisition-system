@@ -11,7 +11,7 @@ type GetMeUsecase struct {
 	userRepo identityout.UsersRepository
 }
 
-func NewGetMeUsecase(userRepo identityout.UsersRepository, tokenSvc identityout.TokenService) *GetMeUsecase {
+func NewGetMeUsecase(userRepo identityout.UsersRepository) *GetMeUsecase {
 	return &GetMeUsecase{
 		userRepo: userRepo,
 	}

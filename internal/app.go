@@ -9,8 +9,10 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
-
+	
 	"github.com/AppeiYA/requisition-system/internal/shared/config"
+	"github.com/AppeiYA/requisition-system/internal/shared/db"
+	"github.com/AppeiYA/requisition-system/internal/shared/redis"
 	"github.com/AppeiYA/requisition-system/internal/shared/response"
 	"github.com/AppeiYA/requisition-system/internal/shared/server"
 	"github.com/AppeiYA/requisition-system/internal/shared/telemetry"
@@ -37,6 +39,26 @@ func (a *App) Run() error {
 	}
 	a.config = cfg
 
+	database, err := db.Connect(cfg.DB)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err := database.Close(); err != nil {
+			log.Printf("failed to close database: %v", err)
+		}
+	}()
+
+	redisClient, err := redis.Connect(cfg.Redis)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err := redisClient.Close(); err != nil {
+			log.Printf("failed to close redis client: %v", err)
+		}
+	}()
+
 	otel := telemetry.NewTelemetry("requisition-system")
 	shutdownOtel, err := otel.Setup(ctx)
 	if err != nil {
@@ -51,7 +73,7 @@ func (a *App) Run() error {
 		response.Success(c, "OK", http.StatusOK, nil)
 	})
 
-	NewRouter(api)
+	NewRouter(api, a.buildIdentityHandler(cfg, database, redisClient))
 
 	a.server = server.New(router, &cfg.Server)
 
@@ -75,7 +97,7 @@ func (a *App) Run() error {
 	shutDownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	if err := a.server.Shutdown(ctx); err != nil {
+	if err := a.server.Shutdown(shutDownCtx); err != nil {
 		runErr = errors.Join(runErr, err)
 	}
 
@@ -85,3 +107,8 @@ func (a *App) Run() error {
 
 	return runErr
 }
+
+// buildIdentityHandler wires the identity use cases to their adapters. It is
+// the only place that knows the concrete implementations, keeping the inner
+// layers free of infrastructure dependencies.
+
