@@ -16,7 +16,13 @@ type refreshRequest struct {
 func (h *Handler) refresh(c *gin.Context) {
 	var req refreshRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Error(c, "invalid request body", http.StatusBadRequest, nil)
+		response.ErrorWithDetails(
+			c,
+			"VALIDATION_ERROR",
+			"validation failed",
+			http.StatusBadRequest,
+			response.ValidationErrors(err),
+		)
 		return
 	}
 

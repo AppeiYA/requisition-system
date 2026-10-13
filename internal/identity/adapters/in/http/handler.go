@@ -7,7 +7,6 @@ import (
 	identityout "github.com/AppeiYA/requisition-system/internal/identity/ports/out"
 )
 
-
 type Handler struct {
 	loginUsecase   identityin.LoginUserUsecaseInt
 	refreshUsecase identityin.RefreshTokenUsecaseInt

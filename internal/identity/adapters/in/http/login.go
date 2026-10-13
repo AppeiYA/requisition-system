@@ -12,7 +12,13 @@ import (
 func (h *Handler) login(c *gin.Context) {
 	var req loginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Error(c, "invalid request body", http.StatusBadRequest, nil)
+		response.ErrorWithDetails(
+			c,
+			"VALIDATION_ERROR",
+			"validation failed",
+			http.StatusBadRequest,
+			response.ValidationErrors(err),
+		)
 		return
 	}
 

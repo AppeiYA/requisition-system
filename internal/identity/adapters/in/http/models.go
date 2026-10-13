@@ -8,12 +8,12 @@ import (
 
 // User represents a user in the identity service.
 type User struct {
-	ID        string `json:"id"`
-	Email     string `json:"email"`
-	FirstName string `json:"first_name"`
-	LastName  string `json:"last_name"`
+	ID        string     `json:"id"`
+	Email     string     `json:"email"`
+	FirstName string     `json:"first_name"`
+	LastName  string     `json:"last_name"`
 	CreatedAt time.Time  `json:"created_at"`
-	UpdatedAt *time.Time  `json:"updated_at"`
+	UpdatedAt *time.Time `json:"updated_at"`
 }
 
 func ToJSON(u *identityin.UserResponse) *User {
