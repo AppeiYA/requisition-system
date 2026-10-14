@@ -7,7 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	identityout "github.com/AppeiYA/requisition-system/internal/identity/ports/out"
-	"github.com/AppeiYA/requisition-system/internal/shared/response"
+	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/response"
 )
 
 const userIDContextKey = "identity.user_id"

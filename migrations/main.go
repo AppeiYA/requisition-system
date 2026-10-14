@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/AppeiYA/requisition-system/internal/shared/config"
+	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/config"
 	"github.com/golang-migrate/migrate/v4"
 	migratepostgres "github.com/golang-migrate/migrate/v4/database/postgres"
 	"github.com/jmoiron/sqlx"

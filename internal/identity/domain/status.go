@@ -1,6 +1,6 @@
 package domain
 
-import customerrors "github.com/AppeiYA/requisition-system/internal/shared/errors"
+import customerrors "github.com/AppeiYA/requisition-system/internal/shared/infrastructure/errors"
 
 var (
 	ErrInvalidStatus = customerrors.NewBadRequestError("Invalid status")

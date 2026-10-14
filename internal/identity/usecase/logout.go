@@ -5,7 +5,7 @@ import (
 
 	identityin "github.com/AppeiYA/requisition-system/internal/identity/ports/in"
 	identityout "github.com/AppeiYA/requisition-system/internal/identity/ports/out"
-	customerrors "github.com/AppeiYA/requisition-system/internal/shared/errors"
+	customerrors "github.com/AppeiYA/requisition-system/internal/shared/infrastructure/errors"
 )
 
 type LogoutUsecase struct {

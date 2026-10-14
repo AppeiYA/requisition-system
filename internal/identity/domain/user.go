@@ -3,27 +3,28 @@ package domain
 import (
 	"time"
 
-	customerrors "github.com/AppeiYA/requisition-system/internal/shared/errors"
+	shareddomain "github.com/AppeiYA/requisition-system/internal/shared/domain"
+	customerrors "github.com/AppeiYA/requisition-system/internal/shared/infrastructure/errors"
 )
 
 var UserIDPrefix = "usr"
 
 var (
-	ErrInvalidID     = customerrors.NewInternalServerError("empty id in create user")
+	ErrInvalidID = customerrors.NewInternalServerError("empty id in create user")
 )
 
 type User struct {
-	id string
+	id           string
 	firstName    *Username
 	lastName     *Username
-	email        *Email
+	email        *shareddomain.Email
 	passwordHash *PasswordHash
 	status       Status
 	createdAt    time.Time
 	updatedAt    *time.Time
 }
 
-func NewUser(id, firstName, lastName string, email *Email, passwordHash *PasswordHash) (*User, error) {
+func NewUser(id, firstName, lastName string, email *shareddomain.Email, passwordHash *PasswordHash) (*User, error) {
 	if id == "" {
 		return nil, ErrInvalidID
 	}
@@ -61,7 +62,7 @@ func ReconstituteUser(id, firstName, lastName, email, passwordHash, status strin
 		return nil, err
 	}
 
-	emailAddr, err := NewEmail(email)
+	emailAddr, err := shareddomain.NewEmail(email)
 	if err != nil {
 		return nil, err
 	}
@@ -100,7 +101,7 @@ func (u *User) LastName() *Username {
 	return u.lastName
 }
 
-func (u *User) Email() *Email {
+func (u *User) Email() *shareddomain.Email {
 	return u.email
 }
 

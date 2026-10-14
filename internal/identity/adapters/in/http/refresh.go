@@ -6,7 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	identityin "github.com/AppeiYA/requisition-system/internal/identity/ports/in"
-	"github.com/AppeiYA/requisition-system/internal/shared/response"
+	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/response"
 )
 
 type refreshRequest struct {

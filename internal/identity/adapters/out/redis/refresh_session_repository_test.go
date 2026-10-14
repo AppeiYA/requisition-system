@@ -10,7 +10,7 @@ import (
 	"time"
 
 	identityout "github.com/AppeiYA/requisition-system/internal/identity/ports/out"
-	"github.com/AppeiYA/requisition-system/internal/shared/generator"
+	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/generator"
 	"github.com/redis/go-redis/v9"
 )
 

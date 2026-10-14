@@ -4,7 +4,7 @@ import (
 	"strings"
 	"unicode"
 
-	customerrors "github.com/AppeiYA/requisition-system/internal/shared/errors"
+	customerrors "github.com/AppeiYA/requisition-system/internal/shared/infrastructure/errors"
 )
 
 var (
@@ -20,11 +20,11 @@ func NewPassword(value string) (*Password, error) {
 	if value == "" {
 		return nil, ErrPasswordIsRequired
 	}
-	
+
 	if !isValidPassword(value) {
 		return nil, ErrInvalidPassword
 	}
-	
+
 	return &Password{value: value}, nil
 }
 

@@ -7,7 +7,7 @@ import (
 
 	"github.com/AppeiYA/requisition-system/internal/identity/domain"
 	identitymocks "github.com/AppeiYA/requisition-system/internal/identity/mocks"
-	customerrors "github.com/AppeiYA/requisition-system/internal/shared/errors"
+	customerrors "github.com/AppeiYA/requisition-system/internal/shared/infrastructure/errors"
 )
 
 func Test_GetMeUsecase_Success(t *testing.T) {

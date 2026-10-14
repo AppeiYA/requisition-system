@@ -1,0 +1,252 @@
+package usecase
+
+import (
+	"context"
+	"errors"
+	"testing"
+	"time"
+
+	"github.com/AppeiYA/requisition-system/internal/invitation/domain"
+	invitationmocks "github.com/AppeiYA/requisition-system/internal/invitation/mocks"
+	invitationin "github.com/AppeiYA/requisition-system/internal/invitation/ports/in"
+	invitationout "github.com/AppeiYA/requisition-system/internal/invitation/ports/out"
+)
+
+func acceptCmd() invitationin.AcceptInvitationCommand {
+	return invitationin.AcceptInvitationCommand{
+		Token:     testInvitationToken,
+		FirstName: "Jane",
+		LastName:  "Doe",
+		Password:  "Password123$",
+	}
+}
+
+func newAcceptUsecase(
+	repo invitationout.InvitationRepository,
+	identityPort invitationout.InvitationIdentityPort,
+	tx invitationout.TransactionManager,
+) *AcceptInvitationUsecase {
+	return NewAcceptInvitationUsecase(repo, identityPort, tx)
+}
+
+func Test_AcceptInvitationUsecase_Success(t *testing.T) {
+	t.Parallel()
+
+	var registered *invitationout.CreateIdentityRequest
+	var acceptedID string
+	var txUsed bool
+
+	repo := invitationmocks.NewMockInvitationRepository()
+	repo.GetInvitationByTokenHashFunc = func(ctx context.Context, tokenHash string) (*domain.Invitation, error) {
+		if tokenHash != domain.HashInvitationToken(testInvitationToken) {
+			t.Errorf("lookup used wrong token hash")
+		}
+		return pendingInvitation(), nil
+	}
+	repo.MarkInvitationAcceptedFunc = func(ctx context.Context, invitationID string) error {
+		acceptedID = invitationID
+		return nil
+	}
+
+	identityPort := invitationmocks.NewMockInvitationIdentityPort()
+	identityPort.RegisterUserFunc = func(ctx context.Context, req *invitationout.CreateIdentityRequest) error {
+		registered = req
+		return nil
+	}
+
+	tx := invitationmocks.NewMockTransactionManager()
+	tx.WithinTransactionFunc = func(ctx context.Context, fn func(context.Context) error) error {
+		txUsed = true
+		return fn(ctx)
+	}
+
+	uc := newAcceptUsecase(repo, identityPort, tx)
+
+	if err := uc.Execute(context.Background(), acceptCmd()); err != nil {
+		t.Fatalf("expected nil error, got: %v", err)
+	}
+
+	if !txUsed {
+		t.Error("expected registration to run inside a transaction")
+	}
+	if registered == nil {
+		t.Fatal("expected identity registration")
+	}
+	if registered.Email != testInvitationEmail {
+		t.Errorf("expected email %q, got %q", testInvitationEmail, registered.Email)
+	}
+	if registered.FirstName != "Jane" || registered.LastName != "Doe" {
+		t.Errorf("unexpected name: %q %q", registered.FirstName, registered.LastName)
+	}
+	if registered.Password != "Password123$" {
+		t.Error("expected password to be forwarded")
+	}
+	if acceptedID != testInvitationID {
+		t.Errorf("expected invitation %q to be marked accepted, got %q", testInvitationID, acceptedID)
+	}
+}
+
+func Test_AcceptInvitationUsecase_EmptyToken(t *testing.T) {
+	t.Parallel()
+
+	uc := newAcceptUsecase(
+		invitationmocks.NewMockInvitationRepository(),
+		invitationmocks.NewMockInvitationIdentityPort(),
+		invitationmocks.NewMockTransactionManager(),
+	)
+
+	err := uc.Execute(context.Background(), invitationin.AcceptInvitationCommand{})
+	if err != ErrInvitationInvalidToken {
+		t.Fatalf("expected ErrInvitationInvalidToken, got: %v", err)
+	}
+}
+
+func Test_AcceptInvitationUsecase_NotFound(t *testing.T) {
+	t.Parallel()
+
+	repo := invitationmocks.NewMockInvitationRepository()
+	repo.GetInvitationByTokenHashFunc = func(ctx context.Context, tokenHash string) (*domain.Invitation, error) {
+		return nil, domain.ErrInvitationNotFound
+	}
+
+	uc := newAcceptUsecase(repo, invitationmocks.NewMockInvitationIdentityPort(), invitationmocks.NewMockTransactionManager())
+
+	err := uc.Execute(context.Background(), acceptCmd())
+	if err != ErrInvitationNotFound {
+		t.Fatalf("expected ErrInvitationNotFound, got: %v", err)
+	}
+}
+
+func Test_AcceptInvitationUsecase_InvalidStates(t *testing.T) {
+	t.Parallel()
+
+	past := time.Now().Add(-time.Hour)
+	present := time.Now()
+
+	tests := []struct {
+		name        string
+		inv         *domain.Invitation
+		expectedErr error
+	}{
+		{name: "expired", inv: invitationWithState(past, nil, nil), expectedErr: ErrInvitationExpired},
+		{name: "revoked", inv: invitationWithState(time.Now().Add(time.Hour), nil, &present), expectedErr: ErrInvitationRevoked},
+		{name: "accepted", inv: invitationWithState(time.Now().Add(time.Hour), &present, nil), expectedErr: ErrInvitationAlreadyUsed},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			repo := invitationmocks.NewMockInvitationRepository()
+			repo.GetInvitationByTokenHashFunc = func(ctx context.Context, tokenHash string) (*domain.Invitation, error) {
+				return tt.inv, nil
+			}
+
+			tx := invitationmocks.NewMockTransactionManager()
+			tx.WithinTransactionFunc = func(ctx context.Context, fn func(context.Context) error) error {
+				t.Fatal("transaction must not start for an invalid invitation")
+				return nil
+			}
+
+			uc := newAcceptUsecase(repo, invitationmocks.NewMockInvitationIdentityPort(), tx)
+
+			err := uc.Execute(context.Background(), acceptCmd())
+			if err != tt.expectedErr {
+				t.Fatalf("expected %v, got: %v", tt.expectedErr, err)
+			}
+		})
+	}
+}
+
+func Test_AcceptInvitationUsecase_RegisterUserError(t *testing.T) {
+	t.Parallel()
+
+	regErr := errors.New("registration failed")
+	markCalled := false
+
+	repo := invitationmocks.NewMockInvitationRepository()
+	repo.GetInvitationByTokenHashFunc = func(ctx context.Context, tokenHash string) (*domain.Invitation, error) {
+		return pendingInvitation(), nil
+	}
+	repo.MarkInvitationAcceptedFunc = func(ctx context.Context, invitationID string) error {
+		markCalled = true
+		return nil
+	}
+
+	identityPort := invitationmocks.NewMockInvitationIdentityPort()
+	identityPort.RegisterUserFunc = func(ctx context.Context, req *invitationout.CreateIdentityRequest) error {
+		return regErr
+	}
+
+	uc := newAcceptUsecase(repo, identityPort, invitationmocks.NewMockTransactionManager())
+
+	err := uc.Execute(context.Background(), acceptCmd())
+	if !errors.Is(err, regErr) {
+		t.Fatalf("expected regErr, got: %v", err)
+	}
+	if markCalled {
+		t.Error("invitation must not be marked accepted when registration fails")
+	}
+}
+
+func Test_AcceptInvitationUsecase_MarkAcceptedError(t *testing.T) {
+	t.Parallel()
+
+	markErr := errors.New("mark failed")
+
+	repo := invitationmocks.NewMockInvitationRepository()
+	repo.GetInvitationByTokenHashFunc = func(ctx context.Context, tokenHash string) (*domain.Invitation, error) {
+		return pendingInvitation(), nil
+	}
+	repo.MarkInvitationAcceptedFunc = func(ctx context.Context, invitationID string) error {
+		return markErr
+	}
+
+	uc := newAcceptUsecase(repo, invitationmocks.NewMockInvitationIdentityPort(), invitationmocks.NewMockTransactionManager())
+
+	err := uc.Execute(context.Background(), acceptCmd())
+	if !errors.Is(err, markErr) {
+		t.Fatalf("expected markErr, got: %v", err)
+	}
+}
+
+func Test_AcceptInvitationUsecase_TransactionError(t *testing.T) {
+	t.Parallel()
+
+	txErr := errors.New("tx failed")
+
+	repo := invitationmocks.NewMockInvitationRepository()
+	repo.GetInvitationByTokenHashFunc = func(ctx context.Context, tokenHash string) (*domain.Invitation, error) {
+		return pendingInvitation(), nil
+	}
+
+	tx := invitationmocks.NewMockTransactionManager()
+	tx.WithinTransactionFunc = func(ctx context.Context, fn func(context.Context) error) error {
+		return txErr
+	}
+
+	uc := newAcceptUsecase(repo, invitationmocks.NewMockInvitationIdentityPort(), tx)
+
+	err := uc.Execute(context.Background(), acceptCmd())
+	if !errors.Is(err, txErr) {
+		t.Fatalf("expected txErr, got: %v", err)
+	}
+}
+
+func Test_AcceptInvitationUsecase_ContextCancelled(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	uc := newAcceptUsecase(
+		invitationmocks.NewMockInvitationRepository(),
+		invitationmocks.NewMockInvitationIdentityPort(),
+		invitationmocks.NewMockTransactionManager(),
+	)
+
+	err := uc.Execute(ctx, acceptCmd())
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context.Canceled, got: %v", err)
+	}
+}

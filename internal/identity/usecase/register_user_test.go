@@ -8,7 +8,8 @@ import (
 	"github.com/AppeiYA/requisition-system/internal/identity/domain"
 	identitymocks "github.com/AppeiYA/requisition-system/internal/identity/mocks"
 	identityin "github.com/AppeiYA/requisition-system/internal/identity/ports/in"
-	customerrors "github.com/AppeiYA/requisition-system/internal/shared/errors"
+	shareddomain "github.com/AppeiYA/requisition-system/internal/shared/domain"
+	customerrors "github.com/AppeiYA/requisition-system/internal/shared/infrastructure/errors"
 )
 
 func Test_RegisterUserUsecase_Success(t *testing.T) {
@@ -159,7 +160,7 @@ func Test_RegisterUserUsecase_InvalidEmail(t *testing.T) {
 	}
 
 	err := uc.Execute(context.Background(), dto)
-	if err != domain.ErrInvalidEmailFormat {
+	if err != shareddomain.ErrInvalidEmailFormat {
 		t.Fatalf("expected ErrInvalidEmailFormat, got: %v", err)
 	}
 }
@@ -169,7 +170,7 @@ func Test_RegisterUserUsecase_UserAlreadyExists(t *testing.T) {
 
 	existingUser := identitymocks.ValidUser()
 	repo := identitymocks.NewMockUsersRepository()
-	repo.GetUserByEmailFunc = func(ctx context.Context, email *domain.Email) (*domain.User, error) {
+	repo.GetUserByEmailFunc = func(ctx context.Context, email *shareddomain.Email) (*domain.User, error) {
 		return existingUser, nil
 	}
 
@@ -195,7 +196,7 @@ func Test_RegisterUserUsecase_GetUserByEmail_NotFoundErrorIgnored(t *testing.T) 
 	t.Parallel()
 
 	repo := identitymocks.NewMockUsersRepository()
-	repo.GetUserByEmailFunc = func(ctx context.Context, email *domain.Email) (*domain.User, error) {
+	repo.GetUserByEmailFunc = func(ctx context.Context, email *shareddomain.Email) (*domain.User, error) {
 		return nil, customerrors.NewNotFoundError("user not found")
 	}
 
@@ -219,7 +220,7 @@ func Test_RegisterUserUsecase_GetUserByEmail_RepoError(t *testing.T) {
 
 	dbErr := errors.New("db connection failure")
 	repo := identitymocks.NewMockUsersRepository()
-	repo.GetUserByEmailFunc = func(ctx context.Context, email *domain.Email) (*domain.User, error) {
+	repo.GetUserByEmailFunc = func(ctx context.Context, email *shareddomain.Email) (*domain.User, error) {
 		return nil, dbErr
 	}
 

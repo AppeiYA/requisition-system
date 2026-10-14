@@ -5,42 +5,42 @@ import "testing"
 func Test_NewPassword(t *testing.T) {
 	tests := []struct {
 		name    string
-		value string
+		value   string
 		wantErr bool
-	} {
+	}{
 		{
-			name: "valid password",
-			value: "ValidPass1!",
+			name:    "valid password",
+			value:   "ValidPass1!",
 			wantErr: false,
 		},
 		{
-			name: "empty password",
-			value: "",
+			name:    "empty password",
+			value:   "",
 			wantErr: true,
 		},
 		{
-			name: "invalid password - too short",
-			value: "Short1!",
+			name:    "invalid password - too short",
+			value:   "Short1!",
 			wantErr: true,
 		},
 		{
-			name: "invalid password - no uppercase",
-			value: "lowercase1!",
+			name:    "invalid password - no uppercase",
+			value:   "lowercase1!",
 			wantErr: true,
 		},
 		{
-			name: "invalid password - no lowercase",
-			value: "UPPERCASE1!",
+			name:    "invalid password - no lowercase",
+			value:   "UPPERCASE1!",
 			wantErr: true,
 		},
 		{
-			name: "invalid password - no number",
-			value: "NoNumber!",
+			name:    "invalid password - no number",
+			value:   "NoNumber!",
 			wantErr: true,
 		},
 		{
-			name: "invalid password - no special character",
-			value: "NoSpecial1",
+			name:    "invalid password - no special character",
+			value:   "NoSpecial1",
 			wantErr: true,
 		},
 	}
@@ -56,7 +56,7 @@ func Test_NewPassword(t *testing.T) {
 				if password != nil {
 					t.Errorf("NewPassword() expected nil password, got %v", password)
 				}
-			}else {
+			} else {
 				if err != nil {
 					t.Errorf("NewPassword() unexpected error: %v", err)
 				}

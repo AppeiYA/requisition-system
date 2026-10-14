@@ -4,12 +4,14 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	shareddomain "github.com/AppeiYA/requisition-system/internal/shared/domain"
 )
 
 func Test_NewUser(t *testing.T) {
 	t.Parallel()
 
-	email, err := NewEmail("john.doe@example.com")
+	email, err := shareddomain.NewEmail("john.doe@example.com")
 	if err != nil {
 		t.Fatalf("unexpected error creating email: %v", err)
 	}
@@ -240,7 +242,7 @@ func Test_ReconstituteUser(t *testing.T) {
 				in.email = "invalid-email"
 			},
 			wantErr:     true,
-			expectedErr: ErrInvalidEmailFormat,
+			expectedErr: shareddomain.ErrInvalidEmailFormat,
 		},
 		{
 			name: "empty email",
@@ -248,7 +250,7 @@ func Test_ReconstituteUser(t *testing.T) {
 				in.email = ""
 			},
 			wantErr:     true,
-			expectedErr: ErrInvalidEmailFormat,
+			expectedErr: shareddomain.ErrInvalidEmailFormat,
 		},
 		{
 			name: "empty password hash",

@@ -9,7 +9,8 @@ import (
 	identitymocks "github.com/AppeiYA/requisition-system/internal/identity/mocks"
 	identityin "github.com/AppeiYA/requisition-system/internal/identity/ports/in"
 	identityout "github.com/AppeiYA/requisition-system/internal/identity/ports/out"
-	customerrors "github.com/AppeiYA/requisition-system/internal/shared/errors"
+	shareddomain "github.com/AppeiYA/requisition-system/internal/shared/domain"
+	customerrors "github.com/AppeiYA/requisition-system/internal/shared/infrastructure/errors"
 )
 
 func newLoginUsecase(
@@ -31,7 +32,7 @@ func Test_LoginUserUsecase_Success(t *testing.T) {
 	t.Parallel()
 
 	repo := identitymocks.NewMockUsersRepository()
-	repo.GetUserByEmailFunc = func(ctx context.Context, email *domain.Email) (*domain.User, error) {
+	repo.GetUserByEmailFunc = func(ctx context.Context, email *shareddomain.Email) (*domain.User, error) {
 		return identitymocks.ValidUser(), nil
 	}
 
@@ -107,7 +108,7 @@ func Test_LoginUserUsecase_Errors(t *testing.T) {
 				Email:    "invalid-email",
 				Password: identitymocks.DefaultPassword,
 			},
-			expectedErr: domain.ErrInvalidEmailFormat,
+			expectedErr: shareddomain.ErrInvalidEmailFormat,
 		},
 		{
 			name: "user not found",
@@ -140,7 +141,7 @@ func Test_LoginUserUsecase_Errors(t *testing.T) {
 			t.Parallel()
 
 			repo := identitymocks.NewMockUsersRepository()
-			repo.GetUserByEmailFunc = func(ctx context.Context, email *domain.Email) (*domain.User, error) {
+			repo.GetUserByEmailFunc = func(ctx context.Context, email *shareddomain.Email) (*domain.User, error) {
 				if email.Value() == identitymocks.DefaultEmail {
 					return identitymocks.ValidUser(), nil
 				}
@@ -174,7 +175,7 @@ func Test_LoginUserUsecase_AccessTokenError(t *testing.T) {
 	tokenErr := errors.New("token generation failed")
 
 	repo := identitymocks.NewMockUsersRepository()
-	repo.GetUserByEmailFunc = func(ctx context.Context, email *domain.Email) (*domain.User, error) {
+	repo.GetUserByEmailFunc = func(ctx context.Context, email *shareddomain.Email) (*domain.User, error) {
 		return identitymocks.ValidUser(), nil
 	}
 
@@ -205,7 +206,7 @@ func Test_LoginUserUsecase_RefreshTokenGeneratorError(t *testing.T) {
 	genErr := errors.New("entropy source unavailable")
 
 	repo := identitymocks.NewMockUsersRepository()
-	repo.GetUserByEmailFunc = func(ctx context.Context, email *domain.Email) (*domain.User, error) {
+	repo.GetUserByEmailFunc = func(ctx context.Context, email *shareddomain.Email) (*domain.User, error) {
 		return identitymocks.ValidUser(), nil
 	}
 
@@ -246,7 +247,7 @@ func Test_LoginUserUsecase_SessionCreateError(t *testing.T) {
 	storeErr := errors.New("refresh session store unavailable")
 
 	repo := identitymocks.NewMockUsersRepository()
-	repo.GetUserByEmailFunc = func(ctx context.Context, email *domain.Email) (*domain.User, error) {
+	repo.GetUserByEmailFunc = func(ctx context.Context, email *shareddomain.Email) (*domain.User, error) {
 		return identitymocks.ValidUser(), nil
 	}
 
@@ -277,7 +278,7 @@ func Test_LoginUserUsecase_GetUserByEmail_RepoError(t *testing.T) {
 	dbErr := errors.New("db connection failure")
 
 	repo := identitymocks.NewMockUsersRepository()
-	repo.GetUserByEmailFunc = func(ctx context.Context, email *domain.Email) (*domain.User, error) {
+	repo.GetUserByEmailFunc = func(ctx context.Context, email *shareddomain.Email) (*domain.User, error) {
 		return nil, dbErr
 	}
 

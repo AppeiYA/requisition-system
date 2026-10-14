@@ -9,13 +9,14 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
-	
-	"github.com/AppeiYA/requisition-system/internal/shared/config"
-	"github.com/AppeiYA/requisition-system/internal/shared/db"
-	"github.com/AppeiYA/requisition-system/internal/shared/redis"
-	"github.com/AppeiYA/requisition-system/internal/shared/response"
-	"github.com/AppeiYA/requisition-system/internal/shared/server"
-	"github.com/AppeiYA/requisition-system/internal/shared/telemetry"
+
+	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/config"
+	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/db"
+	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/email"
+	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/redis"
+	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/response"
+	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/server"
+	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/telemetry"
 	"github.com/gin-gonic/gin"
 )
 
@@ -73,7 +74,12 @@ func (a *App) Run() error {
 		response.Success(c, "OK", http.StatusOK, nil)
 	})
 
-	NewRouter(api, a.buildIdentityHandler(cfg, database, redisClient))
+	txManager := db.NewTransactionManager(database)
+	identityHandler, registerUserUC, getUserByEmailUC, accessTokenSvc, idGen := a.buildIdentity(cfg, database, redisClient, txManager)
+	invitationHandler, invRepo, saveInvitationUC := a.buildInvitation(database, txManager, registerUserUC, idGen)
+	emailSender := email.NewSender(cfg.Email)
+	adminHandler := a.buildAdminHandler(cfg, txManager, getUserByEmailUC, saveInvitationUC, invRepo, emailSender)
+	NewRouter(api, identityHandler, invitationHandler, adminHandler, accessTokenSvc)
 
 	a.server = server.New(router, &cfg.Server)
 
@@ -111,4 +117,3 @@ func (a *App) Run() error {
 // buildIdentityHandler wires the identity use cases to their adapters. It is
 // the only place that knows the concrete implementations, keeping the inner
 // layers free of infrastructure dependencies.
-

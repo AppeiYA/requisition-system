@@ -6,6 +6,7 @@ import (
 	"github.com/AppeiYA/requisition-system/internal/identity/domain"
 	identityin "github.com/AppeiYA/requisition-system/internal/identity/ports/in"
 	identityout "github.com/AppeiYA/requisition-system/internal/identity/ports/out"
+	shareddomain "github.com/AppeiYA/requisition-system/internal/shared/domain"
 )
 
 type LoginUserUsecase struct {
@@ -34,7 +35,7 @@ func NewLoginUserUsecase(
 
 func (u *LoginUserUsecase) Execute(ctx context.Context, req identityin.LoginUserRequest) (*identityin.TokenResponse, error) {
 	// create new email vo
-	email, err := domain.NewEmail(req.Email)
+	email, err := shareddomain.NewEmail(req.Email)
 	if err != nil {
 		return nil, err
 	}

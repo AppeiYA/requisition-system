@@ -7,14 +7,14 @@ import (
 )
 
 type UserModel struct {
-	ID string `db:"id"`
-	FirstName string `db:"first_name"`
-	LastName string `db:"last_name"`
-	Email string `db:"email"`
-	PasswordHash string `db:"password_hash"`
-	Status string `db:"status"`
-	CreatedAt time.Time `db:"created_at"`
-	UpdatedAt *time.Time `db:"updated_at"`
+	ID           string     `db:"id"`
+	FirstName    string     `db:"first_name"`
+	LastName     string     `db:"last_name"`
+	Email        string     `db:"email"`
+	PasswordHash string     `db:"password_hash"`
+	Status       string     `db:"status"`
+	CreatedAt    time.Time  `db:"created_at"`
+	UpdatedAt    *time.Time `db:"updated_at"`
 }
 
 func (m UserModel) ToDomain() (*domain.User, error) {
@@ -32,13 +32,13 @@ func (m UserModel) ToDomain() (*domain.User, error) {
 
 func FromDomain(user *domain.User) *UserModel {
 	return &UserModel{
-		ID: user.ID(),
-		FirstName: user.FirstName().Value(),
-		LastName: user.LastName().Value(),
-		Email: user.Email().Value(),
+		ID:           user.ID(),
+		FirstName:    user.FirstName().Value(),
+		LastName:     user.LastName().Value(),
+		Email:        user.Email().Value(),
 		PasswordHash: user.PasswordHash().Value(),
-		Status: user.Status().Value(),
-		CreatedAt: user.CreatedAt(),
-		UpdatedAt: user.UpdatedAt(),
+		Status:       user.Status().Value(),
+		CreatedAt:    user.CreatedAt(),
+		UpdatedAt:    user.UpdatedAt(),
 	}
 }

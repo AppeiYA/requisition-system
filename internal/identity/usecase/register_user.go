@@ -8,7 +8,8 @@ import (
 	"github.com/AppeiYA/requisition-system/internal/identity/domain"
 	identityin "github.com/AppeiYA/requisition-system/internal/identity/ports/in"
 	identityout "github.com/AppeiYA/requisition-system/internal/identity/ports/out"
-	customerrors "github.com/AppeiYA/requisition-system/internal/shared/errors"
+	shareddomain "github.com/AppeiYA/requisition-system/internal/shared/domain"
+	customerrors "github.com/AppeiYA/requisition-system/internal/shared/infrastructure/errors"
 )
 
 var (
@@ -38,7 +39,7 @@ func (u *RegisterUserUsecase) Execute(ctx context.Context, dto identityin.Regist
 		return err
 	}
 
-	email, err := domain.NewEmail(dto.Email)
+	email, err := shareddomain.NewEmail(dto.Email)
 	if err != nil {
 		return err
 	}

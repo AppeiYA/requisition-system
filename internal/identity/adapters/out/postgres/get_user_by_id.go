@@ -14,6 +14,7 @@ var getUserByIDQuery = `
 	FROM users
 	WHERE id = $1
 `
+
 func (r *UserRepository) GetUserByID(ctx context.Context, id string) (*domain.User, error) {
 	var userModel models.UserModel
 	var executor = r.repository.Executor(ctx)

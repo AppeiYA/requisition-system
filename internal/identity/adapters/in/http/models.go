@@ -35,3 +35,15 @@ type loginRequest struct {
 type logoutRequest struct {
 	RefreshToken string `json:"refresh_token" binding:"required"`
 }
+
+type AcceptInvitationRequest struct {
+	Token     string `json:"token" binding:"required"`
+	FirstName string `json:"firstName" binding:"required"`
+	LastName  string `json:"lastName" binding:"required"`
+	Password  string `json:"password" binding:"required"`
+}
+
+type ValidateInvitationResponse struct {
+	Valid bool   `json:"valid"`
+	Email string `json:"email,omitempty"`
+}
