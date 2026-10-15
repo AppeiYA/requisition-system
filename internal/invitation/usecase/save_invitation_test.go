@@ -8,8 +8,22 @@ import (
 
 	"github.com/AppeiYA/requisition-system/internal/invitation/domain"
 	invitationmocks "github.com/AppeiYA/requisition-system/internal/invitation/mocks"
+	invitationin "github.com/AppeiYA/requisition-system/internal/invitation/ports/in"
 	shareddomain "github.com/AppeiYA/requisition-system/internal/shared/domain"
 )
+
+func saveCmd() invitationin.SaveInvitationCommand {
+	return invitationin.SaveInvitationCommand{
+		Email:        "invitee@example.com",
+		FirstName:    "Jane",
+		LastName:     "Doe",
+		Phone:        "+14155551234",
+		StaffID:      invitationmocks.DefaultStaffID,
+		DepartmentID: invitationmocks.DefaultDepartmentID,
+		JobTitle:     invitationmocks.DefaultJobTitle,
+		InviterID:    invitationmocks.DefaultInviterID,
+	}
+}
 
 func Test_SaveInvitationUsecase_Success(t *testing.T) {
 	t.Parallel()
@@ -23,7 +37,7 @@ func Test_SaveInvitationUsecase_Success(t *testing.T) {
 
 	uc := NewSaveInvitationUsecase(repo, invitationmocks.NewMockIDGenerator())
 
-	res, err := uc.Execute(context.Background(), "invitee@example.com", invitationmocks.DefaultInviterID)
+	res, err := uc.Execute(context.Background(), saveCmd())
 	if err != nil {
 		t.Fatalf("expected nil error, got: %v", err)
 	}
@@ -46,6 +60,21 @@ func Test_SaveInvitationUsecase_Success(t *testing.T) {
 	if saved.InvitedBy() != invitationmocks.DefaultInviterID {
 		t.Errorf("expected inviter %q, got %q", invitationmocks.DefaultInviterID, saved.InvitedBy())
 	}
+	if saved.FirstName().Value() != "Jane" || saved.LastName().Value() != "Doe" {
+		t.Errorf("expected saved name %q %q, got %q %q", "Jane", "Doe", saved.FirstName().Value(), saved.LastName().Value())
+	}
+	if saved.Phone().Value() != "+14155551234" {
+		t.Errorf("expected saved phone %q, got %q", "+14155551234", saved.Phone().Value())
+	}
+	if saved.StaffID() != invitationmocks.DefaultStaffID {
+		t.Errorf("expected saved staff id %q, got %q", invitationmocks.DefaultStaffID, saved.StaffID())
+	}
+	if saved.DepartmentID() != invitationmocks.DefaultDepartmentID {
+		t.Errorf("expected saved department id %q, got %q", invitationmocks.DefaultDepartmentID, saved.DepartmentID())
+	}
+	if saved.JobTitle() != invitationmocks.DefaultJobTitle {
+		t.Errorf("expected saved job title %q, got %q", invitationmocks.DefaultJobTitle, saved.JobTitle())
+	}
 
 	remaining := time.Until(saved.ExpiresAt())
 	if remaining <= 23*time.Hour || remaining > 24*time.Hour {
@@ -58,9 +87,41 @@ func Test_SaveInvitationUsecase_InvalidEmail(t *testing.T) {
 
 	uc := NewSaveInvitationUsecase(invitationmocks.NewMockInvitationRepository(), invitationmocks.NewMockIDGenerator())
 
-	_, err := uc.Execute(context.Background(), "not-an-email", invitationmocks.DefaultInviterID)
+	cmd := saveCmd()
+	cmd.Email = "not-an-email"
+
+	_, err := uc.Execute(context.Background(), cmd)
 	if err != shareddomain.ErrInvalidEmailFormat {
 		t.Fatalf("expected ErrInvalidEmailFormat, got: %v", err)
+	}
+}
+
+func Test_SaveInvitationUsecase_InvalidName(t *testing.T) {
+	t.Parallel()
+
+	uc := NewSaveInvitationUsecase(invitationmocks.NewMockInvitationRepository(), invitationmocks.NewMockIDGenerator())
+
+	cmd := saveCmd()
+	cmd.FirstName = "J"
+
+	_, err := uc.Execute(context.Background(), cmd)
+	expected := shareddomain.ErrUsernameTooShort(shareddomain.FirstName)
+	if err == nil || err.Error() != expected.Error() {
+		t.Fatalf("expected %v, got: %v", expected, err)
+	}
+}
+
+func Test_SaveInvitationUsecase_InvalidPhone(t *testing.T) {
+	t.Parallel()
+
+	uc := NewSaveInvitationUsecase(invitationmocks.NewMockInvitationRepository(), invitationmocks.NewMockIDGenerator())
+
+	cmd := saveCmd()
+	cmd.Phone = "not-a-phone"
+
+	_, err := uc.Execute(context.Background(), cmd)
+	if err != shareddomain.ErrInvalidPhoneNumber {
+		t.Fatalf("expected ErrInvalidPhoneNumber, got: %v", err)
 	}
 }
 
@@ -75,7 +136,7 @@ func Test_SaveInvitationUsecase_IDGeneratorError(t *testing.T) {
 
 	uc := NewSaveInvitationUsecase(invitationmocks.NewMockInvitationRepository(), idGen)
 
-	_, err := uc.Execute(context.Background(), "invitee@example.com", invitationmocks.DefaultInviterID)
+	_, err := uc.Execute(context.Background(), saveCmd())
 	if !errors.Is(err, idErr) {
 		t.Fatalf("expected idErr, got: %v", err)
 	}
@@ -92,7 +153,7 @@ func Test_SaveInvitationUsecase_SaveError(t *testing.T) {
 
 	uc := NewSaveInvitationUsecase(repo, invitationmocks.NewMockIDGenerator())
 
-	_, err := uc.Execute(context.Background(), "invitee@example.com", invitationmocks.DefaultInviterID)
+	_, err := uc.Execute(context.Background(), saveCmd())
 	if !errors.Is(err, saveErr) {
 		t.Fatalf("expected saveErr, got: %v", err)
 	}

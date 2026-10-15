@@ -37,5 +37,5 @@ func (h *Handler) Register(router *gin.RouterGroup) {
 	auth.POST("/refresh", h.refresh)
 	auth.POST("/logout", h.logout)
 
-	router.GET("/me", AuthMiddleware(h.accessTokens), h.getMe)
+	auth.GET("/me", AuthMiddleware(h.accessTokens), h.getMe)
 }

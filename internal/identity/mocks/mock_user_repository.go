@@ -11,6 +11,8 @@ import (
 var DefaultID = "usr-1234"
 var DefaultFirstName = "John"
 var DefaultLastName = "Doe"
+var DefaultPhone = "+14155551234"
+var DefaultStaffID = "STF-1234"
 var DefaultEmail = "john.doe@example.com"
 var DefaultPassword = "Password123$"
 
@@ -21,7 +23,7 @@ func ValidUser() *domain.User {
 	password, _ := domain.NewPassword(DefaultPassword)
 	passwordHash, _ := domain.NewPasswordHash(password.Value())
 
-	user, _ := domain.NewUser(DefaultID, firstName.Value(), lastName.Value(), email, passwordHash)
+	user, _ := domain.NewUser(DefaultID, firstName.Value(), lastName.Value(), DefaultPhone, DefaultStaffID, email, passwordHash)
 
 	return user
 }

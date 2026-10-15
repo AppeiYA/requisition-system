@@ -30,6 +30,8 @@ func (uc *GetMeUsecase) Execute(ctx context.Context, userID string) (*identityin
 		Email:     user.Email().Value(),
 		FirstName: user.FirstName().Value(),
 		LastName:  user.LastName().Value(),
+		Phone:     user.Phone().Value(),
+		StaffID:   user.StaffID(),
 		CreatedAt: user.CreatedAt(),
 		UpdatedAt: user.UpdatedAt(),
 	}

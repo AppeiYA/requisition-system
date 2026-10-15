@@ -23,7 +23,13 @@ func (h *InvitationHandler) ValidateInvitation(c *gin.Context) {
 	}
 
 	response.Success(c, "invitation validated", http.StatusOK, ValidateInvitationResponse{
-		Valid: result.Valid,
-		Email: result.Email,
+		Valid:        result.Valid,
+		Email:        result.Email,
+		FirstName:    result.FirstName,
+		LastName:     result.LastName,
+		Phone:        result.Phone,
+		StaffID:      result.StaffID,
+		DepartmentID: result.DepartmentID,
+		JobTitle:     result.JobTitle,
 	})
 }

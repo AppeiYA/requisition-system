@@ -1,5 +1,9 @@
 CREATE TABLE IF NOT EXISTS invitations (
-    id UUID PRIMARY KEY,
+    id VARCHAR(36) PRIMARY KEY,
+    first_name VARCHAR(100) NOT NULL,
+    last_name VARCHAR(100) NOT NULL,
+    phone_number VARCHAR(32) NULL,
+    staff_id VARCHAR(64) NULL,
     email VARCHAR(254) NOT NULL,
     token_hash VARCHAR(64) NOT NULL,
     invited_by VARCHAR(36) NOT NULL REFERENCES users(id) ON DELETE RESTRICT,

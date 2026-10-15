@@ -12,6 +12,8 @@ type User struct {
 	Email     string     `json:"email"`
 	FirstName string     `json:"first_name"`
 	LastName  string     `json:"last_name"`
+	Phone     string     `json:"phone,omitempty"`
+	StaffID   string     `json:"staff_id,omitempty"`
 	CreatedAt time.Time  `json:"created_at"`
 	UpdatedAt *time.Time `json:"updated_at"`
 }
@@ -22,6 +24,8 @@ func ToJSON(u *identityin.UserResponse) *User {
 		Email:     u.Email,
 		FirstName: u.FirstName,
 		LastName:  u.LastName,
+		Phone:     u.Phone,
+		StaffID:   u.StaffID,
 		CreatedAt: u.CreatedAt,
 		UpdatedAt: u.UpdatedAt,
 	}

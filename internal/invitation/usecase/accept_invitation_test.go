@@ -14,27 +14,28 @@ import (
 
 func acceptCmd() invitationin.AcceptInvitationCommand {
 	return invitationin.AcceptInvitationCommand{
-		Token:     testInvitationToken,
-		FirstName: "Jane",
-		LastName:  "Doe",
-		Password:  "Password123$",
+		Token:    testInvitationToken,
+		Phone:    "+14155551234",
+		Password: "Password123$",
 	}
 }
 
 func newAcceptUsecase(
 	repo invitationout.InvitationRepository,
 	identityPort invitationout.InvitationIdentityPort,
+	departmentPort invitationout.InvitationDepartmentPort,
 	tx invitationout.TransactionManager,
 ) *AcceptInvitationUsecase {
-	return NewAcceptInvitationUsecase(repo, identityPort, tx)
+	return NewAcceptInvitationUsecase(repo, identityPort, departmentPort, tx)
 }
 
 func Test_AcceptInvitationUsecase_Success(t *testing.T) {
 	t.Parallel()
 
 	var registered *invitationout.CreateIdentityRequest
+	var membership *invitationout.CreateMembershipRequest
 	var acceptedID string
-	var txUsed bool
+	var txUsed, membershipInsideTx bool
 
 	repo := invitationmocks.NewMockInvitationRepository()
 	repo.GetInvitationByTokenHashFunc = func(ctx context.Context, tokenHash string) (*domain.Invitation, error) {
@@ -49,8 +50,15 @@ func Test_AcceptInvitationUsecase_Success(t *testing.T) {
 	}
 
 	identityPort := invitationmocks.NewMockInvitationIdentityPort()
-	identityPort.RegisterUserFunc = func(ctx context.Context, req *invitationout.CreateIdentityRequest) error {
+	identityPort.RegisterUserFunc = func(ctx context.Context, req *invitationout.CreateIdentityRequest) (string, error) {
 		registered = req
+		return testRegisteredUserID, nil
+	}
+
+	departmentPort := invitationmocks.NewMockInvitationDepartmentPort()
+	departmentPort.CreateMembershipFunc = func(ctx context.Context, req *invitationout.CreateMembershipRequest) error {
+		membership = req
+		membershipInsideTx = txUsed
 		return nil
 	}
 
@@ -60,7 +68,7 @@ func Test_AcceptInvitationUsecase_Success(t *testing.T) {
 		return fn(ctx)
 	}
 
-	uc := newAcceptUsecase(repo, identityPort, tx)
+	uc := newAcceptUsecase(repo, identityPort, departmentPort, tx)
 
 	if err := uc.Execute(context.Background(), acceptCmd()); err != nil {
 		t.Fatalf("expected nil error, got: %v", err)
@@ -69,20 +77,81 @@ func Test_AcceptInvitationUsecase_Success(t *testing.T) {
 	if !txUsed {
 		t.Error("expected registration to run inside a transaction")
 	}
+	if !membershipInsideTx {
+		t.Error("expected membership creation to run inside the same transaction")
+	}
 	if registered == nil {
 		t.Fatal("expected identity registration")
 	}
 	if registered.Email != testInvitationEmail {
 		t.Errorf("expected email %q, got %q", testInvitationEmail, registered.Email)
 	}
-	if registered.FirstName != "Jane" || registered.LastName != "Doe" {
-		t.Errorf("unexpected name: %q %q", registered.FirstName, registered.LastName)
+	if registered.FirstName != testInvitationFirstName || registered.LastName != testInvitationLastName {
+		t.Errorf("expected invitation prefill name %q %q, got %q %q", testInvitationFirstName, testInvitationLastName, registered.FirstName, registered.LastName)
+	}
+	if registered.Phone != "+14155551234" {
+		t.Errorf("expected phone to be forwarded, got %q", registered.Phone)
+	}
+	if registered.StaffID != testInvitationStaffID {
+		t.Errorf("expected staff id %q to be forwarded, got %q", testInvitationStaffID, registered.StaffID)
 	}
 	if registered.Password != "Password123$" {
 		t.Error("expected password to be forwarded")
 	}
+	if membership == nil {
+		t.Fatal("expected department membership creation")
+	}
+	if membership.UserID != testRegisteredUserID {
+		t.Errorf("expected membership user id %q, got %q", testRegisteredUserID, membership.UserID)
+	}
+	if membership.DepartmentID != testDepartmentID {
+		t.Errorf("expected membership department id %q, got %q", testDepartmentID, membership.DepartmentID)
+	}
+	if membership.JobTitle != testJobTitle {
+		t.Errorf("expected membership job title %q, got %q", testJobTitle, membership.JobTitle)
+	}
 	if acceptedID != testInvitationID {
 		t.Errorf("expected invitation %q to be marked accepted, got %q", testInvitationID, acceptedID)
+	}
+}
+
+func Test_AcceptInvitationUsecase_UsesPrefillWhenOmitted(t *testing.T) {
+	t.Parallel()
+
+	var registered *invitationout.CreateIdentityRequest
+
+	repo := invitationmocks.NewMockInvitationRepository()
+	repo.GetInvitationByTokenHashFunc = func(ctx context.Context, tokenHash string) (*domain.Invitation, error) {
+		return pendingInvitation(), nil
+	}
+
+	identityPort := invitationmocks.NewMockInvitationIdentityPort()
+	identityPort.RegisterUserFunc = func(ctx context.Context, req *invitationout.CreateIdentityRequest) (string, error) {
+		registered = req
+		return testRegisteredUserID, nil
+	}
+
+	uc := newAcceptUsecase(repo, identityPort, invitationmocks.NewMockInvitationDepartmentPort(), invitationmocks.NewMockTransactionManager())
+
+	cmd := invitationin.AcceptInvitationCommand{
+		Token:    testInvitationToken,
+		Password: "Password123$",
+	}
+
+	if err := uc.Execute(context.Background(), cmd); err != nil {
+		t.Fatalf("expected nil error, got: %v", err)
+	}
+	if registered == nil {
+		t.Fatal("expected identity registration")
+	}
+	if registered.FirstName != testInvitationFirstName || registered.LastName != testInvitationLastName {
+		t.Errorf("expected prefill name %q %q, got %q %q", testInvitationFirstName, testInvitationLastName, registered.FirstName, registered.LastName)
+	}
+	if registered.Phone != testInvitationPhone {
+		t.Errorf("expected prefill phone %q, got %q", testInvitationPhone, registered.Phone)
+	}
+	if registered.StaffID != testInvitationStaffID {
+		t.Errorf("expected prefill staff id %q, got %q", testInvitationStaffID, registered.StaffID)
 	}
 }
 
@@ -92,6 +161,7 @@ func Test_AcceptInvitationUsecase_EmptyToken(t *testing.T) {
 	uc := newAcceptUsecase(
 		invitationmocks.NewMockInvitationRepository(),
 		invitationmocks.NewMockInvitationIdentityPort(),
+		invitationmocks.NewMockInvitationDepartmentPort(),
 		invitationmocks.NewMockTransactionManager(),
 	)
 
@@ -109,7 +179,7 @@ func Test_AcceptInvitationUsecase_NotFound(t *testing.T) {
 		return nil, domain.ErrInvitationNotFound
 	}
 
-	uc := newAcceptUsecase(repo, invitationmocks.NewMockInvitationIdentityPort(), invitationmocks.NewMockTransactionManager())
+	uc := newAcceptUsecase(repo, invitationmocks.NewMockInvitationIdentityPort(), invitationmocks.NewMockInvitationDepartmentPort(), invitationmocks.NewMockTransactionManager())
 
 	err := uc.Execute(context.Background(), acceptCmd())
 	if err != ErrInvitationNotFound {
@@ -148,7 +218,7 @@ func Test_AcceptInvitationUsecase_InvalidStates(t *testing.T) {
 				return nil
 			}
 
-			uc := newAcceptUsecase(repo, invitationmocks.NewMockInvitationIdentityPort(), tx)
+			uc := newAcceptUsecase(repo, invitationmocks.NewMockInvitationIdentityPort(), invitationmocks.NewMockInvitationDepartmentPort(), tx)
 
 			err := uc.Execute(context.Background(), acceptCmd())
 			if err != tt.expectedErr {
@@ -163,6 +233,7 @@ func Test_AcceptInvitationUsecase_RegisterUserError(t *testing.T) {
 
 	regErr := errors.New("registration failed")
 	markCalled := false
+	membershipCalled := false
 
 	repo := invitationmocks.NewMockInvitationRepository()
 	repo.GetInvitationByTokenHashFunc = func(ctx context.Context, tokenHash string) (*domain.Invitation, error) {
@@ -174,18 +245,58 @@ func Test_AcceptInvitationUsecase_RegisterUserError(t *testing.T) {
 	}
 
 	identityPort := invitationmocks.NewMockInvitationIdentityPort()
-	identityPort.RegisterUserFunc = func(ctx context.Context, req *invitationout.CreateIdentityRequest) error {
-		return regErr
+	identityPort.RegisterUserFunc = func(ctx context.Context, req *invitationout.CreateIdentityRequest) (string, error) {
+		return "", regErr
 	}
 
-	uc := newAcceptUsecase(repo, identityPort, invitationmocks.NewMockTransactionManager())
+	departmentPort := invitationmocks.NewMockInvitationDepartmentPort()
+	departmentPort.CreateMembershipFunc = func(ctx context.Context, req *invitationout.CreateMembershipRequest) error {
+		membershipCalled = true
+		return nil
+	}
+
+	uc := newAcceptUsecase(repo, identityPort, departmentPort, invitationmocks.NewMockTransactionManager())
 
 	err := uc.Execute(context.Background(), acceptCmd())
 	if !errors.Is(err, regErr) {
 		t.Fatalf("expected regErr, got: %v", err)
 	}
+	if membershipCalled {
+		t.Error("membership must not be created when registration fails")
+	}
 	if markCalled {
 		t.Error("invitation must not be marked accepted when registration fails")
+	}
+}
+
+func Test_AcceptInvitationUsecase_CreateMembershipError(t *testing.T) {
+	t.Parallel()
+
+	departmentErr := errors.New("membership failed")
+	markCalled := false
+
+	repo := invitationmocks.NewMockInvitationRepository()
+	repo.GetInvitationByTokenHashFunc = func(ctx context.Context, tokenHash string) (*domain.Invitation, error) {
+		return pendingInvitation(), nil
+	}
+	repo.MarkInvitationAcceptedFunc = func(ctx context.Context, invitationID string) error {
+		markCalled = true
+		return nil
+	}
+
+	departmentPort := invitationmocks.NewMockInvitationDepartmentPort()
+	departmentPort.CreateMembershipFunc = func(ctx context.Context, req *invitationout.CreateMembershipRequest) error {
+		return departmentErr
+	}
+
+	uc := newAcceptUsecase(repo, invitationmocks.NewMockInvitationIdentityPort(), departmentPort, invitationmocks.NewMockTransactionManager())
+
+	err := uc.Execute(context.Background(), acceptCmd())
+	if !errors.Is(err, departmentErr) {
+		t.Fatalf("expected departmentErr, got: %v", err)
+	}
+	if markCalled {
+		t.Error("invitation must not be marked accepted when membership creation fails")
 	}
 }
 
@@ -202,7 +313,7 @@ func Test_AcceptInvitationUsecase_MarkAcceptedError(t *testing.T) {
 		return markErr
 	}
 
-	uc := newAcceptUsecase(repo, invitationmocks.NewMockInvitationIdentityPort(), invitationmocks.NewMockTransactionManager())
+	uc := newAcceptUsecase(repo, invitationmocks.NewMockInvitationIdentityPort(), invitationmocks.NewMockInvitationDepartmentPort(), invitationmocks.NewMockTransactionManager())
 
 	err := uc.Execute(context.Background(), acceptCmd())
 	if !errors.Is(err, markErr) {
@@ -225,7 +336,7 @@ func Test_AcceptInvitationUsecase_TransactionError(t *testing.T) {
 		return txErr
 	}
 
-	uc := newAcceptUsecase(repo, invitationmocks.NewMockInvitationIdentityPort(), tx)
+	uc := newAcceptUsecase(repo, invitationmocks.NewMockInvitationIdentityPort(), invitationmocks.NewMockInvitationDepartmentPort(), tx)
 
 	err := uc.Execute(context.Background(), acceptCmd())
 	if !errors.Is(err, txErr) {
@@ -242,6 +353,7 @@ func Test_AcceptInvitationUsecase_ContextCancelled(t *testing.T) {
 	uc := newAcceptUsecase(
 		invitationmocks.NewMockInvitationRepository(),
 		invitationmocks.NewMockInvitationIdentityPort(),
+		invitationmocks.NewMockInvitationDepartmentPort(),
 		invitationmocks.NewMockTransactionManager(),
 	)
 

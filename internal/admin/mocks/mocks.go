@@ -13,6 +13,12 @@ var (
 	DefaultToken        = "raw-invitation-token"
 	DefaultInviterID    = "usr-1234"
 	DefaultEmail        = "invitee@example.com"
+	DefaultFirstName    = "Jane"
+	DefaultLastName     = "Doe"
+	DefaultPhone        = "+14155551234"
+	DefaultStaffID      = "STF-1234"
+	DefaultDepartmentID = "dpt-1234"
+	DefaultJobTitle     = "Software Engineer"
 )
 
 type MockEmailSender struct {
@@ -51,9 +57,27 @@ func (m *MockAdminIdentityPort) CheckUserExists(ctx context.Context, email *shar
 
 var _ adminout.AdminIdentityPort = (*MockAdminIdentityPort)(nil)
 
+type MockAdminDepartmentPort struct {
+	CheckDepartmentExistsFunc func(ctx context.Context, departmentID string) (bool, error)
+}
+
+func NewMockAdminDepartmentPort() *MockAdminDepartmentPort {
+	return &MockAdminDepartmentPort{
+		CheckDepartmentExistsFunc: func(ctx context.Context, departmentID string) (bool, error) {
+			return true, nil
+		},
+	}
+}
+
+func (m *MockAdminDepartmentPort) CheckDepartmentExists(ctx context.Context, departmentID string) (bool, error) {
+	return m.CheckDepartmentExistsFunc(ctx, departmentID)
+}
+
+var _ adminout.AdminDepartmentPort = (*MockAdminDepartmentPort)(nil)
+
 type MockAdminInvitationPort struct {
 	CheckActiveInvitationExistsFunc func(ctx context.Context, email *shareddomain.Email) (bool, error)
-	SaveInvitationFunc              func(ctx context.Context, email *shareddomain.Email, inviterID string) (*adminout.SavedInvitation, error)
+	SaveInvitationFunc              func(ctx context.Context, params adminout.SaveInvitationParams) (*adminout.SavedInvitation, error)
 }
 
 func NewMockAdminInvitationPort() *MockAdminInvitationPort {
@@ -61,7 +85,7 @@ func NewMockAdminInvitationPort() *MockAdminInvitationPort {
 		CheckActiveInvitationExistsFunc: func(ctx context.Context, email *shareddomain.Email) (bool, error) {
 			return false, nil
 		},
-		SaveInvitationFunc: func(ctx context.Context, email *shareddomain.Email, inviterID string) (*adminout.SavedInvitation, error) {
+		SaveInvitationFunc: func(ctx context.Context, params adminout.SaveInvitationParams) (*adminout.SavedInvitation, error) {
 			return &adminout.SavedInvitation{
 				ID:        DefaultInvitationID,
 				Token:     DefaultToken,
@@ -75,8 +99,8 @@ func (m *MockAdminInvitationPort) CheckActiveInvitationExists(ctx context.Contex
 	return m.CheckActiveInvitationExistsFunc(ctx, email)
 }
 
-func (m *MockAdminInvitationPort) SaveInvitation(ctx context.Context, email *shareddomain.Email, inviterID string) (*adminout.SavedInvitation, error) {
-	return m.SaveInvitationFunc(ctx, email, inviterID)
+func (m *MockAdminInvitationPort) SaveInvitation(ctx context.Context, params adminout.SaveInvitationParams) (*adminout.SavedInvitation, error) {
+	return m.SaveInvitationFunc(ctx, params)
 }
 
 var _ adminout.AdminInvitationPort = (*MockAdminInvitationPort)(nil)

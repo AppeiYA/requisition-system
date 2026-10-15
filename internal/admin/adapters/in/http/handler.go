@@ -37,8 +37,14 @@ func (h *Handler) invite(c *gin.Context) {
 	}
 
 	res, err := h.inviteUsecase.Execute(c.Request.Context(), adminin.InviteMemberCommand{
-		InviterID: userID.(string),
-		Email:     req.Email,
+		InviterID:    userID.(string),
+		Email:        req.Email,
+		FirstName:    req.FirstName,
+		LastName:     req.LastName,
+		Phone:        req.Phone,
+		StaffID:      req.StaffID,
+		DepartmentID: req.DepartmentID,
+		JobTitle:     req.JobTitle,
 	})
 	if err != nil {
 		response.ErrorFrom(c, err)

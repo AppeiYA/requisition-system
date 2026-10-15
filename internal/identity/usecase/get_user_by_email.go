@@ -42,6 +42,8 @@ func (uc *GetUserByEmailUsecase) Execute(ctx context.Context, email string) (*id
 		Email:     user.Email().Value(),
 		FirstName: user.FirstName().Value(),
 		LastName:  user.LastName().Value(),
+		Phone:     user.Phone().Value(),
+		StaffID:   user.StaffID(),
 		CreatedAt: user.CreatedAt(),
 		UpdatedAt: user.UpdatedAt(),
 	}

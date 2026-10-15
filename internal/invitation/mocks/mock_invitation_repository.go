@@ -13,6 +13,12 @@ var (
 	DefaultInvitationID = "inv-1234"
 	DefaultInviterID    = "usr-1234"
 	DefaultInviteeEmail = "invitee@example.com"
+	DefaultFirstName    = "Jane"
+	DefaultLastName     = "Doe"
+	DefaultPhone        = "+14155551234"
+	DefaultStaffID      = "STF-1234"
+	DefaultDepartmentID = "dpt-1234"
+	DefaultJobTitle     = "Software Engineer"
 	DefaultToken        = "raw-invitation-token"
 )
 
@@ -20,8 +26,17 @@ var (
 // DefaultToken, so tests can look it up via domain.HashInvitationToken.
 func ValidInvitation() *invitationdomain.Invitation {
 	email, _ := shareddomain.NewEmail(DefaultInviteeEmail)
+	firstName, _ := shareddomain.NewUsername(DefaultFirstName, shareddomain.FirstName)
+	lastName, _ := shareddomain.NewUsername(DefaultLastName, shareddomain.LastName)
+	phone, _ := shareddomain.NewPhoneNumber(DefaultPhone)
 	return invitationdomain.NewInvitation(
 		DefaultInvitationID,
+		firstName,
+		lastName,
+		phone,
+		DefaultStaffID,
+		DefaultDepartmentID,
+		DefaultJobTitle,
 		email,
 		invitationdomain.HashInvitationToken(DefaultToken),
 		DefaultInviterID,

@@ -3,8 +3,14 @@ package adminin
 import "context"
 
 type InviteMemberCommand struct {
-	InviterID string
-	Email     string
+	InviterID    string
+	Email        string
+	FirstName    string
+	LastName     string
+	Phone        string
+	StaffID      string
+	DepartmentID string
+	JobTitle     string
 }
 
 type InviteMemberResult struct {

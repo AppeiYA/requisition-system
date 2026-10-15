@@ -10,6 +10,8 @@ type UserResponse struct {
 	Email     string
 	FirstName string
 	LastName  string
+	Phone     string
+	StaffID   string
 	CreatedAt time.Time
 	UpdatedAt *time.Time
 }

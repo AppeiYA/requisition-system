@@ -5,6 +5,7 @@ import (
 	adminemail "github.com/AppeiYA/requisition-system/internal/admin/adapters/out/email"
 	adminexternal "github.com/AppeiYA/requisition-system/internal/admin/adapters/out/external"
 	adminusecase "github.com/AppeiYA/requisition-system/internal/admin/usecase"
+	departmentin "github.com/AppeiYA/requisition-system/internal/department/ports/in"
 	identityin "github.com/AppeiYA/requisition-system/internal/identity/ports/in"
 	invitationin "github.com/AppeiYA/requisition-system/internal/invitation/ports/in"
 	invitationout "github.com/AppeiYA/requisition-system/internal/invitation/ports/out"
@@ -19,13 +20,15 @@ func (a *App) buildAdminHandler(
 	getUserByEmailUC identityin.GetUserByEmailUsecaseInt,
 	saveInvitationUC invitationin.SaveInvitationUsecaseInt,
 	invRepo invitationout.InvitationRepository,
+	getDepartmentByIDUC departmentin.GetDepartmentByIDUsecaseInt,
 	emailSender *email.Sender,
 ) *adminhttp.Handler {
 	emailPort := adminemail.NewInvitationSender(emailSender, cfg.Frontend)
 	identityPort := adminexternal.NewAdminIdentityAdapter(getUserByEmailUC)
 	invitationPort := adminexternal.NewAdminInvitationAdapter(saveInvitationUC, invRepo)
+	departmentPort := adminexternal.NewAdminDepartmentAdapter(getDepartmentByIDUC)
 
-	inviteUC := adminusecase.NewInviteMemberUsecase(emailPort, identityPort, invitationPort, txManager)
+	inviteUC := adminusecase.NewInviteMemberUsecase(emailPort, identityPort, invitationPort, departmentPort, txManager)
 
 	return adminhttp.NewHandler(inviteUC)
 }

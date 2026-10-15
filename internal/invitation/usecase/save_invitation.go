@@ -32,11 +32,27 @@ func generateInvitationToken() (string, error) {
 	return base64.RawURLEncoding.EncodeToString(b), nil
 }
 
-func (uc *SaveInvitationUsecase) Execute(ctx context.Context, email string, inviterID string) (*invitationin.SaveInvitationResponse, error) {
-	validEmail, err := shareddomain.NewEmail(email)
+func (uc *SaveInvitationUsecase) Execute(ctx context.Context, cmd invitationin.SaveInvitationCommand) (*invitationin.SaveInvitationResponse, error) {
+	validEmail, err := shareddomain.NewEmail(cmd.Email)
 	if err != nil {
 		return nil, err
 	}
+
+	firstName, err := shareddomain.NewUsername(cmd.FirstName, shareddomain.FirstName)
+	if err != nil {
+		return nil, err
+	}
+
+	lastName, err := shareddomain.NewUsername(cmd.LastName, shareddomain.LastName)
+	if err != nil {
+		return nil, err
+	}
+
+	phone, err := shareddomain.NewOptionalPhoneNumber(cmd.Phone)
+	if err != nil {
+		return nil, err
+	}
+
 	token, err := generateInvitationToken()
 	if err != nil {
 		return nil, err
@@ -52,7 +68,7 @@ func (uc *SaveInvitationUsecase) Execute(ctx context.Context, email string, invi
 	now := time.Now()
 	expiresAt := now.Add(domain.InvitationExpirationDuration)
 
-	invitation := domain.NewInvitation(invitationID, validEmail, tokenHash, inviterID, expiresAt, now)
+	invitation := domain.NewInvitation(invitationID, firstName, lastName, phone, cmd.StaffID, cmd.DepartmentID, cmd.JobTitle, validEmail, tokenHash, cmd.InviterID, expiresAt, now)
 
 	err = uc.invitationRepo.SaveInvitation(ctx, invitation)
 	if err != nil {

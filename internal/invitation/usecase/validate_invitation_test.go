@@ -32,6 +32,21 @@ func Test_ValidateInvitationUsecase_Valid(t *testing.T) {
 	if res.Email != testInvitationEmail {
 		t.Errorf("expected email %q, got %q", testInvitationEmail, res.Email)
 	}
+	if res.FirstName != testInvitationFirstName || res.LastName != testInvitationLastName {
+		t.Errorf("expected prefill name %q %q, got %q %q", testInvitationFirstName, testInvitationLastName, res.FirstName, res.LastName)
+	}
+	if res.Phone != testInvitationPhone {
+		t.Errorf("expected prefill phone %q, got %q", testInvitationPhone, res.Phone)
+	}
+	if res.StaffID != testInvitationStaffID {
+		t.Errorf("expected prefill staff id %q, got %q", testInvitationStaffID, res.StaffID)
+	}
+	if res.DepartmentID != testDepartmentID {
+		t.Errorf("expected department id %q, got %q", testDepartmentID, res.DepartmentID)
+	}
+	if res.JobTitle != testJobTitle {
+		t.Errorf("expected job title %q, got %q", testJobTitle, res.JobTitle)
+	}
 	if gotHash != domain.HashInvitationToken(testInvitationToken) {
 		t.Errorf("lookup used wrong token hash")
 	}

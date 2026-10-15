@@ -19,10 +19,12 @@ func NewInviteIdentityAdapter(registerUC identityin.RegisterUserUseCaseInt) *Inv
 	}
 }
 
-func (a *InviteIdentityAdapter) RegisterUser(ctx context.Context, dto *invitationout.CreateIdentityRequest) error {
+func (a *InviteIdentityAdapter) RegisterUser(ctx context.Context, dto *invitationout.CreateIdentityRequest) (string, error) {
 	req := identityin.RegisterUserDTO{
 		FirstName: dto.FirstName,
 		LastName:  dto.LastName,
+		Phone:     dto.Phone,
+		StaffID:   dto.StaffID,
 		Email:     dto.Email,
 		Password:  dto.Password,
 	}

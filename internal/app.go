@@ -18,6 +18,11 @@ import (
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/server"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/telemetry"
 	"github.com/gin-gonic/gin"
+	// swaggerFiles "github.com/swaggo/files"
+	// ginSwagger "github.com/swaggo/gin-swagger"
+
+	// Registers the generated swagger spec with the swag registry.
+	_ "github.com/AppeiYA/requisition-system/docs"
 )
 
 type App struct {
@@ -74,12 +79,16 @@ func (a *App) Run() error {
 		response.Success(c, "OK", http.StatusOK, nil)
 	})
 
+	// Swagger UI is served at http://<host>/swagger/index.html.
+	// router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+
 	txManager := db.NewTransactionManager(database)
 	identityHandler, registerUserUC, getUserByEmailUC, accessTokenSvc, idGen := a.buildIdentity(cfg, database, redisClient, txManager)
-	invitationHandler, invRepo, saveInvitationUC := a.buildInvitation(database, txManager, registerUserUC, idGen)
+	departmentHandler, getDepartmentByIDUC, createMembershipUC := a.buildDepartment(database, idGen)
+	invitationHandler, invRepo, saveInvitationUC := a.buildInvitation(database, txManager, registerUserUC, createMembershipUC, idGen)
 	emailSender := email.NewSender(cfg.Email)
-	adminHandler := a.buildAdminHandler(cfg, txManager, getUserByEmailUC, saveInvitationUC, invRepo, emailSender)
-	NewRouter(api, identityHandler, invitationHandler, adminHandler, accessTokenSvc)
+	adminHandler := a.buildAdminHandler(cfg, txManager, getUserByEmailUC, saveInvitationUC, invRepo, getDepartmentByIDUC, emailSender)
+	NewRouter(api, identityHandler, invitationHandler, adminHandler, departmentHandler, accessTokenSvc)
 
 	a.server = server.New(router, &cfg.Server)
 

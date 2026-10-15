@@ -1,6 +1,7 @@
 package app
 
 import (
+	departmentin "github.com/AppeiYA/requisition-system/internal/department/ports/in"
 	identityin "github.com/AppeiYA/requisition-system/internal/identity/ports/in"
 	identityout "github.com/AppeiYA/requisition-system/internal/identity/ports/out"
 	invitationhttp "github.com/AppeiYA/requisition-system/internal/invitation/adapters/in/http"
@@ -16,6 +17,7 @@ func (a *App) buildInvitation(
 	database *db.DB,
 	txManager *db.TransactionManager,
 	registerUserUC identityin.RegisterUserUseCaseInt,
+	createMembershipUC departmentin.CreateMembershipUsecaseInt,
 	idGen identityout.IDGenerator,
 ) (
 	*invitationhttp.InvitationHandler,
@@ -30,9 +32,14 @@ func (a *App) buildInvitation(
 	// without depending on the identity module's concrete use cases.
 	identityPort := invitationexternal.NewInviteIdentityAdapter(registerUserUC)
 
+	// The department port lets the invitation module create the membership on
+	// acceptance without depending on the department module's domain.
+	departmentPort := invitationexternal.NewInviteDepartmentAdapter(createMembershipUC)
+
 	acceptInvitationUsecase := invitationusecase.NewAcceptInvitationUsecase(
 		invitationRepo,
 		identityPort,
+		departmentPort,
 		txManager,
 	)
 	validateInvitationUsecase := invitationusecase.NewValidateInvitationUsecase(invitationRepo)

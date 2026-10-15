@@ -1,36 +1,15 @@
 package domain
 
-import customerrors "github.com/AppeiYA/requisition-system/internal/shared/infrastructure/errors"
+import shareddomain "github.com/AppeiYA/requisition-system/internal/shared/domain"
+
+// Username is the identity value object for first/last names. It now lives in
+// shared/domain so other contexts (e.g. invitation) can reuse the same
+// validation. The alias keeps the identity package's public API stable.
+type Username = shareddomain.Username
 
 var (
-	ErrUsernameTooShort = func(nameType UsernameType) error {
-		return customerrors.NewBadRequestError(string(nameType) + " is too short")
-	}
-	ErrUsernameTooLong = func(nameType UsernameType) error {
-		return customerrors.NewBadRequestError(string(nameType) + " is too long")
-	}
-	ErrInvalidUsername = func(nameType UsernameType) error {
-		return customerrors.NewBadRequestError("Invalid " + string(nameType))
-	}
+	ErrUsernameTooShort = shareddomain.ErrUsernameTooShort
+	ErrUsernameTooLong  = shareddomain.ErrUsernameTooLong
+	ErrInvalidUsername  = shareddomain.ErrInvalidUsername
+	NewUsername         = shareddomain.NewUsername
 )
-
-type Username struct {
-	value string
-}
-
-func NewUsername(value string, nameType UsernameType) (*Username, error) {
-	if len(value) < 2 {
-		return nil, ErrUsernameTooShort(nameType)
-	}
-	if len(value) > 100 {
-		return nil, ErrUsernameTooLong(nameType)
-	}
-	if !nameType.isValid() {
-		return nil, ErrInvalidUsername(nameType)
-	}
-	return &Username{value: value}, nil
-}
-
-func (u *Username) Value() string {
-	return u.value
-}

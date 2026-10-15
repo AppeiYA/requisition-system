@@ -44,5 +44,14 @@ func (u *ValidateInvitationUsecase) Execute(ctx context.Context, token string) (
 		return &invitationin.ValidateInvitationResult{Valid: false, Email: inv.Email().Value()}, nil
 	}
 
-	return &invitationin.ValidateInvitationResult{Valid: true, Email: inv.Email().Value()}, nil
+	return &invitationin.ValidateInvitationResult{
+		Valid:        true,
+		Email:        inv.Email().Value(),
+		FirstName:    inv.FirstName().Value(),
+		LastName:     inv.LastName().Value(),
+		Phone:        inv.Phone().Value(),
+		StaffID:      inv.StaffID(),
+		DepartmentID: inv.DepartmentID(),
+		JobTitle:     inv.JobTitle(),
+	}, nil
 }

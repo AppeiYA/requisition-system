@@ -6,19 +6,21 @@ import (
 	invitationout "github.com/AppeiYA/requisition-system/internal/invitation/ports/out"
 )
 
+var DefaultRegisteredUserID = "usr-5678"
+
 type MockInvitationIdentityPort struct {
-	RegisterUserFunc func(ctx context.Context, req *invitationout.CreateIdentityRequest) error
+	RegisterUserFunc func(ctx context.Context, req *invitationout.CreateIdentityRequest) (string, error)
 }
 
 func NewMockInvitationIdentityPort() *MockInvitationIdentityPort {
 	return &MockInvitationIdentityPort{
-		RegisterUserFunc: func(ctx context.Context, req *invitationout.CreateIdentityRequest) error {
-			return nil
+		RegisterUserFunc: func(ctx context.Context, req *invitationout.CreateIdentityRequest) (string, error) {
+			return DefaultRegisteredUserID, nil
 		},
 	}
 }
 
-func (m *MockInvitationIdentityPort) RegisterUser(ctx context.Context, req *invitationout.CreateIdentityRequest) error {
+func (m *MockInvitationIdentityPort) RegisterUser(ctx context.Context, req *invitationout.CreateIdentityRequest) (string, error) {
 	return m.RegisterUserFunc(ctx, req)
 }
 

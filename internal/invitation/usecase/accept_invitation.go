@@ -24,13 +24,20 @@ var (
 type AcceptInvitationUsecase struct {
 	invitationRepo invitationout.InvitationRepository
 	identityPort   invitationout.InvitationIdentityPort
+	departmentPort invitationout.InvitationDepartmentPort
 	txManager      invitationout.TransactionManager
 }
 
-func NewAcceptInvitationUsecase(invitationRepo invitationout.InvitationRepository, identityPort invitationout.InvitationIdentityPort, txManager invitationout.TransactionManager) *AcceptInvitationUsecase {
+func NewAcceptInvitationUsecase(
+	invitationRepo invitationout.InvitationRepository,
+	identityPort invitationout.InvitationIdentityPort,
+	departmentPort invitationout.InvitationDepartmentPort,
+	txManager invitationout.TransactionManager,
+) *AcceptInvitationUsecase {
 	return &AcceptInvitationUsecase{
 		invitationRepo: invitationRepo,
 		identityPort:   identityPort,
+		departmentPort: departmentPort,
 		txManager:      txManager,
 	}
 }
@@ -67,14 +74,35 @@ func (uc *AcceptInvitationUsecase) Execute(ctx context.Context, cmd invitationin
 	}
 
 	err = uc.txManager.WithinTransaction(ctx, func(ctx context.Context) error {
+		// Names are set by the admin in the invitation and cannot be changed by
+		// the invitee. The invitee may override the prefilled phone number.
+		phone := cmd.Phone
+		if phone == "" {
+			phone = inv.Phone().Value()
+		}
+
 		regCmd := &invitationout.CreateIdentityRequest{
-			FirstName: cmd.FirstName,
-			LastName:  cmd.LastName,
+			FirstName: inv.FirstName().Value(),
+			LastName:  inv.LastName().Value(),
+			Phone:     phone,
+			StaffID:   inv.StaffID(),
 			Email:     inv.Email().Value(),
 			Password:  cmd.Password,
 		}
 
-		if err := uc.identityPort.RegisterUser(ctx, regCmd); err != nil {
+		userID, err := uc.identityPort.RegisterUser(ctx, regCmd)
+		if err != nil {
+			return err
+		}
+
+		// The user and their department membership are created together: if
+		// either insert fails the whole transaction rolls back.
+		membershipCmd := &invitationout.CreateMembershipRequest{
+			UserID:       userID,
+			DepartmentID: inv.DepartmentID(),
+			JobTitle:     inv.JobTitle(),
+		}
+		if err := uc.departmentPort.CreateMembership(ctx, membershipCmd); err != nil {
 			return err
 		}
 

@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	adminout "github.com/AppeiYA/requisition-system/internal/admin/ports/out"
 	invitationdomain "github.com/AppeiYA/requisition-system/internal/invitation/domain"
 	invitationmocks "github.com/AppeiYA/requisition-system/internal/invitation/mocks"
 	invitationin "github.com/AppeiYA/requisition-system/internal/invitation/ports/in"
@@ -14,9 +15,11 @@ import (
 type stubSaveInvitation struct {
 	res *invitationin.SaveInvitationResponse
 	err error
+	got invitationin.SaveInvitationCommand
 }
 
-func (s *stubSaveInvitation) Execute(ctx context.Context, email string, inviterID string) (*invitationin.SaveInvitationResponse, error) {
+func (s *stubSaveInvitation) Execute(ctx context.Context, cmd invitationin.SaveInvitationCommand) (*invitationin.SaveInvitationResponse, error) {
+	s.got = cmd
 	return s.res, s.err
 }
 
@@ -87,7 +90,16 @@ func Test_AdminInvitationAdapter_SaveInvitation(t *testing.T) {
 
 	adapter := NewAdminInvitationAdapter(save, invitationmocks.NewMockInvitationRepository())
 
-	res, err := adapter.SaveInvitation(context.Background(), mustEmail(t, "invitee@example.com"), "usr-1")
+	res, err := adapter.SaveInvitation(context.Background(), adminout.SaveInvitationParams{
+		Email:        mustEmail(t, "invitee@example.com"),
+		FirstName:    "Jane",
+		LastName:     "Doe",
+		Phone:        "+14155551234",
+		StaffID:      "STF-1234",
+		DepartmentID: "dpt-1",
+		JobTitle:     "Engineer",
+		InviterID:    "usr-1",
+	})
 	if err != nil {
 		t.Fatalf("expected nil error, got: %v", err)
 	}
@@ -97,6 +109,21 @@ func Test_AdminInvitationAdapter_SaveInvitation(t *testing.T) {
 	if !res.ExpiresAt.Equal(expiresAt) {
 		t.Errorf("expected expiry %v, got %v", expiresAt, res.ExpiresAt)
 	}
+	if save.got.Email != "invitee@example.com" {
+		t.Errorf("expected email to be forwarded, got %q", save.got.Email)
+	}
+	if save.got.FirstName != "Jane" || save.got.LastName != "Doe" || save.got.Phone != "+14155551234" {
+		t.Errorf("expected prefill to be forwarded, got %+v", save.got)
+	}
+	if save.got.StaffID != "STF-1234" {
+		t.Errorf("expected staff id to be forwarded, got %q", save.got.StaffID)
+	}
+	if save.got.DepartmentID != "dpt-1" {
+		t.Errorf("expected department id to be forwarded, got %q", save.got.DepartmentID)
+	}
+	if save.got.JobTitle != "Engineer" {
+		t.Errorf("expected job title to be forwarded, got %q", save.got.JobTitle)
+	}
 }
 
 func Test_AdminInvitationAdapter_SaveInvitation_Error(t *testing.T) {
@@ -105,7 +132,10 @@ func Test_AdminInvitationAdapter_SaveInvitation_Error(t *testing.T) {
 	saveErr := errors.New("save failed")
 	adapter := NewAdminInvitationAdapter(&stubSaveInvitation{err: saveErr}, invitationmocks.NewMockInvitationRepository())
 
-	_, err := adapter.SaveInvitation(context.Background(), mustEmail(t, "invitee@example.com"), "usr-1")
+	_, err := adapter.SaveInvitation(context.Background(), adminout.SaveInvitationParams{
+		Email:     mustEmail(t, "invitee@example.com"),
+		InviterID: "usr-1",
+	})
 	if !errors.Is(err, saveErr) {
 		t.Fatalf("expected saveErr, got: %v", err)
 	}

@@ -31,46 +31,132 @@ func HashInvitationToken(token string) string {
 }
 
 type Invitation struct {
-	id         string
-	email      *shareddomain.Email
-	tokenHash  string
-	invitedBy  string
-	expiresAt  time.Time
-	acceptedAt *time.Time
-	revokedAt  *time.Time
-	createdAt  time.Time
+	id           string
+	firstName    *shareddomain.Username
+	lastName     *shareddomain.Username
+	phone        *shareddomain.PhoneNumber
+	staffID      string
+	departmentID string
+	jobTitle     string
+	email        *shareddomain.Email
+	tokenHash    string
+	invitedBy    string
+	expiresAt    time.Time
+	acceptedAt   *time.Time
+	revokedAt    *time.Time
+	createdAt    time.Time
 }
 
-func NewInvitation(id string, email *shareddomain.Email, tokenHash string, invitedBy string, expiresAt time.Time, createdAt time.Time) *Invitation {
+func NewInvitation(
+	id string,
+	firstName *shareddomain.Username,
+	lastName *shareddomain.Username,
+	phone *shareddomain.PhoneNumber,
+	staffID string,
+	departmentID string,
+	jobTitle string,
+	email *shareddomain.Email,
+	tokenHash string,
+	invitedBy string,
+	expiresAt time.Time,
+	createdAt time.Time,
+) *Invitation {
 	return &Invitation{
-		id:        id,
-		email:     email,
-		tokenHash: tokenHash,
-		invitedBy: invitedBy,
-		expiresAt: expiresAt,
-		createdAt: createdAt,
+		id:           id,
+		firstName:    firstName,
+		lastName:     lastName,
+		phone:        phone,
+		staffID:      staffID,
+		departmentID: departmentID,
+		jobTitle:     jobTitle,
+		email:        email,
+		tokenHash:    tokenHash,
+		invitedBy:    invitedBy,
+		expiresAt:    expiresAt,
+		createdAt:    createdAt,
 	}
 }
 
-func ReconstituteInvitation(id string, email string, tokenHash string, invitedBy string, expiresAt time.Time, acceptedAt *time.Time, revokedAt *time.Time, createdAt time.Time) (*Invitation, error) {
+func ReconstituteInvitation(
+	id string,
+	firstName string,
+	lastName string,
+	phone string,
+	staffID string,
+	departmentID string,
+	jobTitle string,
+	email string,
+	tokenHash string,
+	invitedBy string,
+	expiresAt time.Time,
+	acceptedAt *time.Time,
+	revokedAt *time.Time,
+	createdAt time.Time,
+) (*Invitation, error) {
+	validFirstName, err := shareddomain.NewUsername(firstName, shareddomain.FirstName)
+	if err != nil {
+		return nil, err
+	}
+	validLastName, err := shareddomain.NewUsername(lastName, shareddomain.LastName)
+	if err != nil {
+		return nil, err
+	}
+	validPhone, err := shareddomain.NewOptionalPhoneNumber(phone)
+	if err != nil {
+		return nil, err
+	}
 	validEmail, err := shareddomain.NewEmail(email)
 	if err != nil {
 		return nil, err
 	}
 	return &Invitation{
-		id:         id,
-		email:      validEmail,
-		tokenHash:  tokenHash,
-		invitedBy:  invitedBy,
-		expiresAt:  expiresAt,
-		acceptedAt: acceptedAt,
-		revokedAt:  revokedAt,
-		createdAt:  createdAt,
+		id:           id,
+		firstName:    validFirstName,
+		lastName:     validLastName,
+		phone:        validPhone,
+		staffID:      staffID,
+		departmentID: departmentID,
+		jobTitle:     jobTitle,
+		email:        validEmail,
+		tokenHash:    tokenHash,
+		invitedBy:    invitedBy,
+		expiresAt:    expiresAt,
+		acceptedAt:   acceptedAt,
+		revokedAt:    revokedAt,
+		createdAt:    createdAt,
 	}, nil
 }
 
 func (i *Invitation) ID() string {
 	return i.id
+}
+
+func (i *Invitation) FirstName() *shareddomain.Username {
+	return i.firstName
+}
+
+func (i *Invitation) LastName() *shareddomain.Username {
+	return i.lastName
+}
+
+func (i *Invitation) Phone() *shareddomain.PhoneNumber {
+	return i.phone
+}
+
+func (i *Invitation) StaffID() string {
+	return i.staffID
+}
+
+// DepartmentID is the department the invitee will be assigned to. It is fixed
+// when the invitation is created and is immutable afterwards.
+func (i *Invitation) DepartmentID() string {
+	return i.departmentID
+}
+
+// JobTitle is the invitee's role in the assigned department. It is fixed when
+// the invitation is created and is immutable afterwards.
+func (i *Invitation) JobTitle() string {
+	return i.jobTitle
 }
 
 func (i *Invitation) Email() *shareddomain.Email {

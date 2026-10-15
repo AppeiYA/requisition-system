@@ -23,10 +23,9 @@ func (h *InvitationHandler) AcceptInvitation(c *gin.Context) {
 	}
 
 	err := h.acceptInvitationUC.Execute(c.Request.Context(), invitationin.AcceptInvitationCommand{
-		Token:     token,
-		FirstName: req.FirstName,
-		LastName:  req.LastName,
-		Password:  req.Password,
+		Token:    token,
+		Phone:    req.Phone,
+		Password: req.Password,
 	})
 	if err != nil {
 		response.ErrorFrom(c, err)

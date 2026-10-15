@@ -61,15 +61,15 @@ func Test_AcceptInvitation_Success(t *testing.T) {
 	accept := &stubAcceptInvitation{}
 	router := newTestRouter(accept, &stubValidateInvitation{})
 
-	rec := doJSON(t, router, http.MethodPost, "/api/v1/invitations/token-123/accept", `{"firstName":"Jane","lastName":"Doe","password":"Password123$"}`)
+	rec := doJSON(t, router, http.MethodPost, "/api/v1/invitations/token-123/accept", `{"phone":"+14155551234","password":"Password123$"}`)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
 	}
 	if accept.got.Token != "token-123" {
 		t.Errorf("expected token %q, got %q", "token-123", accept.got.Token)
 	}
-	if accept.got.FirstName != "Jane" || accept.got.LastName != "Doe" {
-		t.Errorf("unexpected command: %+v", accept.got)
+	if accept.got.Phone != "+14155551234" {
+		t.Errorf("expected phone to be forwarded, got %q", accept.got.Phone)
 	}
 }
 
@@ -99,7 +99,12 @@ func Test_AcceptInvitation_UsecaseError(t *testing.T) {
 func Test_ValidateInvitation_Valid(t *testing.T) {
 	t.Parallel()
 
-	validate := &stubValidateInvitation{res: &invitationin.ValidateInvitationResult{Valid: true, Email: "invitee@example.com"}}
+	validate := &stubValidateInvitation{res: &invitationin.ValidateInvitationResult{
+		Valid:        true,
+		Email:        "invitee@example.com",
+		DepartmentID: "dpt-1",
+		JobTitle:     "Engineer",
+	}}
 	router := newTestRouter(&stubAcceptInvitation{}, validate)
 
 	rec := doJSON(t, router, http.MethodGet, "/api/v1/invitations/token-123/validate", "")
@@ -118,6 +123,9 @@ func Test_ValidateInvitation_Valid(t *testing.T) {
 	}
 	if !body.Data.Valid || body.Data.Email != "invitee@example.com" {
 		t.Errorf("unexpected data: %+v", body.Data)
+	}
+	if body.Data.DepartmentID != "dpt-1" || body.Data.JobTitle != "Engineer" {
+		t.Errorf("expected department and job title in response, got: %+v", body.Data)
 	}
 }
 

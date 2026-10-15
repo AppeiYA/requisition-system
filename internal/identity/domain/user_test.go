@@ -25,6 +25,8 @@ func Test_NewUser(t *testing.T) {
 		defaultID        = "usr_12345"
 		defaultFirstName = "John"
 		defaultLastName  = "Doe"
+		defaultPhone     = "+14155551234"
+		defaultStaffID   = "STF-1234"
 	)
 
 	tests := []struct {
@@ -32,6 +34,7 @@ func Test_NewUser(t *testing.T) {
 		id          string
 		firstName   string
 		lastName    string
+		phone       string
 		wantErr     bool
 		expectedErr error
 	}{
@@ -98,14 +101,28 @@ func Test_NewUser(t *testing.T) {
 			wantErr:     true,
 			expectedErr: ErrUsernameTooLong(LastName),
 		},
+		{
+			name:        "invalid phone number",
+			id:          defaultID,
+			firstName:   defaultFirstName,
+			lastName:    defaultLastName,
+			phone:       "not-a-phone",
+			wantErr:     true,
+			expectedErr: shareddomain.ErrInvalidPhoneNumber,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
+			phone := tt.phone
+			if phone == "" {
+				phone = defaultPhone
+			}
+
 			before := time.Now()
-			user, err := NewUser(tt.id, tt.firstName, tt.lastName, email, passwordHash)
+			user, err := NewUser(tt.id, tt.firstName, tt.lastName, phone, defaultStaffID, email, passwordHash)
 			after := time.Now()
 
 			if tt.wantErr {
@@ -133,6 +150,12 @@ func Test_NewUser(t *testing.T) {
 			}
 			if user.LastName().Value() != tt.lastName {
 				t.Errorf("user.LastName().Value() = %v, want %v", user.LastName().Value(), tt.lastName)
+			}
+			if user.Phone().Value() != phone {
+				t.Errorf("user.Phone().Value() = %v, want %v", user.Phone().Value(), phone)
+			}
+			if user.StaffID() != defaultStaffID {
+				t.Errorf("user.StaffID() = %v, want %v", user.StaffID(), defaultStaffID)
 			}
 			if user.Email() != email {
 				t.Errorf("user.Email() = %v, want %v", user.Email(), email)
@@ -164,6 +187,8 @@ func Test_ReconstituteUser(t *testing.T) {
 		id           string
 		firstName    string
 		lastName     string
+		phone        string
+		staffID      string
 		email        string
 		passwordHash string
 		status       string
@@ -176,6 +201,8 @@ func Test_ReconstituteUser(t *testing.T) {
 			id:           "usr_12345",
 			firstName:    "John",
 			lastName:     "Doe",
+			phone:        "+14155551234",
+			staffID:      "STF-1234",
 			email:        "john.doe@example.com",
 			passwordHash: "hashed_password",
 			status:       "active",
@@ -245,6 +272,14 @@ func Test_ReconstituteUser(t *testing.T) {
 			expectedErr: shareddomain.ErrInvalidEmailFormat,
 		},
 		{
+			name: "invalid phone number",
+			mutate: func(in *reconstituteInput) {
+				in.phone = "not-a-phone"
+			},
+			wantErr:     true,
+			expectedErr: shareddomain.ErrInvalidPhoneNumber,
+		},
+		{
 			name: "empty email",
 			mutate: func(in *reconstituteInput) {
 				in.email = ""
@@ -291,6 +326,8 @@ func Test_ReconstituteUser(t *testing.T) {
 				in.id,
 				in.firstName,
 				in.lastName,
+				in.phone,
+				in.staffID,
 				in.email,
 				in.passwordHash,
 				in.status,
@@ -323,6 +360,12 @@ func Test_ReconstituteUser(t *testing.T) {
 			}
 			if user.LastName().Value() != in.lastName {
 				t.Errorf("user.LastName().Value() = %v, want %v", user.LastName().Value(), in.lastName)
+			}
+			if user.Phone().Value() != in.phone {
+				t.Errorf("user.Phone().Value() = %v, want %v", user.Phone().Value(), in.phone)
+			}
+			if user.StaffID() != in.staffID {
+				t.Errorf("user.StaffID() = %v, want %v", user.StaffID(), in.staffID)
 			}
 			if user.Email().Value() != in.email {
 				t.Errorf("user.Email().Value() = %v, want %v", user.Email().Value(), in.email)
@@ -402,6 +445,8 @@ func Test_User_UpdateStatus(t *testing.T) {
 				"usr_12345",
 				"John",
 				"Doe",
+				"+14155551234",
+				"STF-1234",
 				"john.doe@example.com",
 				"hashed_password",
 				string(tt.initialStatus),

@@ -1,0 +1,509 @@
+basePath: /api/v1
+definitions:
+  adminhttp.InviteRequest:
+    properties:
+      departmentId:
+        type: string
+      email:
+        type: string
+      firstName:
+        type: string
+      jobTitle:
+        maxLength: 60
+        type: string
+      lastName:
+        type: string
+      phone:
+        type: string
+      staffId:
+        type: string
+    required:
+    - departmentId
+    - email
+    - firstName
+    - jobTitle
+    - lastName
+    type: object
+  adminin.InviteMemberResult:
+    properties:
+      invitationID:
+        type: string
+    type: object
+  departmenthttp.CreateDepartmentRequest:
+    properties:
+      code:
+        type: string
+      description:
+        type: string
+      name:
+        type: string
+    required:
+    - code
+    - description
+    - name
+    type: object
+  departmentin.CreateDepartmentResult:
+    properties:
+      code:
+        type: string
+      createdAt:
+        type: string
+      description:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      status:
+        type: string
+    type: object
+  departmentin.DepartmentResult:
+    properties:
+      code:
+        type: string
+      createdAt:
+        type: string
+      description:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      status:
+        type: string
+    type: object
+  identityhttp.User:
+    properties:
+      created_at:
+        type: string
+      email:
+        type: string
+      first_name:
+        type: string
+      id:
+        type: string
+      last_name:
+        type: string
+      phone:
+        type: string
+      staff_id:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  identityhttp.loginRequest:
+    properties:
+      email:
+        type: string
+      password:
+        type: string
+    required:
+    - email
+    - password
+    type: object
+  identityhttp.logoutRequest:
+    properties:
+      refresh_token:
+        type: string
+    required:
+    - refresh_token
+    type: object
+  identityhttp.refreshRequest:
+    properties:
+      refresh_token:
+        type: string
+    required:
+    - refresh_token
+    type: object
+  identityin.TokenResponse:
+    properties:
+      access_token:
+        type: string
+      expires_in:
+        type: integer
+      refresh_token:
+        type: string
+      token_type:
+        type: string
+    type: object
+  invitationhttp.AcceptInvitationRequest:
+    properties:
+      password:
+        type: string
+      phone:
+        type: string
+    required:
+    - password
+    type: object
+  invitationhttp.ValidateInvitationResponse:
+    properties:
+      departmentId:
+        type: string
+      email:
+        type: string
+      firstName:
+        type: string
+      jobTitle:
+        type: string
+      lastName:
+        type: string
+      phone:
+        type: string
+      staffId:
+        type: string
+      valid:
+        type: boolean
+    type: object
+  response.ErrorResponse:
+    properties:
+      data: {}
+      details:
+        items:
+          $ref: '#/definitions/response.FieldError'
+        type: array
+      error:
+        type: string
+      message:
+        type: string
+      success:
+        type: boolean
+    type: object
+  response.FieldError:
+    properties:
+      field:
+        type: string
+      message:
+        type: string
+    type: object
+  response.Response:
+    properties:
+      data: {}
+      message:
+        type: string
+      success:
+        type: boolean
+    type: object
+info:
+  contact: {}
+  description: Requisition System REST API.
+  title: Requisition System API
+  version: "1.0"
+paths:
+  /admin/departments:
+    post:
+      consumes:
+      - application/json
+      description: Creates a new department with the given name, description and code.
+      parameters:
+      - description: Department details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/departmenthttp.CreateDepartmentRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/departmentin.CreateDepartmentResult'
+              type: object
+        "400":
+          description: Validation error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Missing or invalid access token
+          schema:
+            $ref: '#/definitions/response.Response'
+        "409":
+          description: Department already exists
+          schema:
+            $ref: '#/definitions/response.Response'
+      security:
+      - BearerAuth: []
+      summary: Create a department
+      tags:
+      - department
+  /admin/departments/{id}:
+    get:
+      description: Returns a single department by its id.
+      parameters:
+      - description: Department id
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/departmentin.DepartmentResult'
+              type: object
+        "401":
+          description: Missing or invalid access token
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: Department not found
+          schema:
+            $ref: '#/definitions/response.Response'
+      security:
+      - BearerAuth: []
+      summary: Get a department
+      tags:
+      - department
+  /admin/invitations:
+    post:
+      consumes:
+      - application/json
+      description: Creates a pending invitation for the given email and department
+        and emails the invitation link.
+      parameters:
+      - description: Invitation details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/adminhttp.InviteRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/adminin.InviteMemberResult'
+              type: object
+        "400":
+          description: Validation error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Missing or invalid access token
+          schema:
+            $ref: '#/definitions/response.Response'
+        "409":
+          description: Invitation already exists
+          schema:
+            $ref: '#/definitions/response.Response'
+      security:
+      - BearerAuth: []
+      summary: Invite a member
+      tags:
+      - admin
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Validates the given credentials and returns a new access/refresh
+        token pair.
+      parameters:
+      - description: Login credentials
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/identityhttp.loginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/identityin.TokenResponse'
+              type: object
+        "400":
+          description: Validation error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Invalid credentials
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: Authenticate a user
+      tags:
+      - identity
+  /auth/logout:
+    post:
+      consumes:
+      - application/json
+      description: Revokes the session associated with the given refresh token.
+      parameters:
+      - description: Refresh token to revoke
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/identityhttp.logoutRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+        "400":
+          description: Validation error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Invalid or expired refresh token
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: Log out a user
+      tags:
+      - identity
+  /auth/me:
+    get:
+      description: Returns the profile of the user identified by the bearer token.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/identityhttp.User'
+              type: object
+        "401":
+          description: Missing or invalid access token
+          schema:
+            $ref: '#/definitions/response.Response'
+      security:
+      - BearerAuth: []
+      summary: Get the authenticated user
+      tags:
+      - identity
+  /auth/refresh:
+    post:
+      consumes:
+      - application/json
+      description: Exchanges a valid refresh token for a new access/refresh token
+        pair.
+      parameters:
+      - description: Refresh token
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/identityhttp.refreshRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/identityin.TokenResponse'
+              type: object
+        "400":
+          description: Validation error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Invalid or expired refresh token
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: Refresh an access token
+      tags:
+      - identity
+  /v1/invitations/{token}/accept:
+    post:
+      consumes:
+      - application/json
+      description: Completes registration for the invitee using the invitation token.
+      parameters:
+      - description: Invitation token
+        in: path
+        name: token
+        required: true
+        type: string
+      - description: Registration details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/invitationhttp.AcceptInvitationRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+        "400":
+          description: Validation error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Invitation not found
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: Accept an invitation
+      tags:
+      - invitation
+  /v1/invitations/{token}/validate:
+    get:
+      description: Checks whether an invitation token is still valid and returns the
+        prefilled registration details for the invitee.
+      parameters:
+      - description: Invitation token
+        in: path
+        name: token
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/invitationhttp.ValidateInvitationResponse'
+              type: object
+        "400":
+          description: Token is missing
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Invitation not found
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: Validate an invitation token
+      tags:
+      - invitation
+securityDefinitions:
+  BearerAuth:
+    description: Type "Bearer" followed by a space and the access token.
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

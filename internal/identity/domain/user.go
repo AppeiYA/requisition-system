@@ -17,6 +17,8 @@ type User struct {
 	id           string
 	firstName    *Username
 	lastName     *Username
+	phone        *shareddomain.PhoneNumber
+	staffID      string
 	email        *shareddomain.Email
 	passwordHash *PasswordHash
 	status       Status
@@ -24,7 +26,7 @@ type User struct {
 	updatedAt    *time.Time
 }
 
-func NewUser(id, firstName, lastName string, email *shareddomain.Email, passwordHash *PasswordHash) (*User, error) {
+func NewUser(id, firstName, lastName, phone, staffID string, email *shareddomain.Email, passwordHash *PasswordHash) (*User, error) {
 	if id == "" {
 		return nil, ErrInvalidID
 	}
@@ -40,10 +42,16 @@ func NewUser(id, firstName, lastName string, email *shareddomain.Email, password
 	if err != nil {
 		return nil, err
 	}
+	phoneNumber, err := shareddomain.NewOptionalPhoneNumber(phone)
+	if err != nil {
+		return nil, err
+	}
 	return &User{
 		id:           id,
 		firstName:    first_name,
 		lastName:     last_name,
+		phone:        phoneNumber,
+		staffID:      staffID,
 		email:        email,
 		passwordHash: passwordHash,
 		status:       status,
@@ -51,13 +59,18 @@ func NewUser(id, firstName, lastName string, email *shareddomain.Email, password
 	}, nil
 }
 
-func ReconstituteUser(id, firstName, lastName, email, passwordHash, status string, createdAt time.Time, updatedAt *time.Time) (*User, error) {
+func ReconstituteUser(id, firstName, lastName, phone, staffID, email, passwordHash, status string, createdAt time.Time, updatedAt *time.Time) (*User, error) {
 	first_name, err := NewUsername(firstName, FirstName)
 	if err != nil {
 		return nil, err
 	}
 
 	last_name, err := NewUsername(lastName, LastName)
+	if err != nil {
+		return nil, err
+	}
+
+	phoneNumber, err := shareddomain.NewOptionalPhoneNumber(phone)
 	if err != nil {
 		return nil, err
 	}
@@ -81,6 +94,8 @@ func ReconstituteUser(id, firstName, lastName, email, passwordHash, status strin
 		id:           id,
 		firstName:    first_name,
 		lastName:     last_name,
+		phone:        phoneNumber,
+		staffID:      staffID,
 		email:        emailAddr,
 		passwordHash: password,
 		status:       statusVal,
@@ -99,6 +114,14 @@ func (u *User) FirstName() *Username {
 
 func (u *User) LastName() *Username {
 	return u.lastName
+}
+
+func (u *User) Phone() *shareddomain.PhoneNumber {
+	return u.phone
+}
+
+func (u *User) StaffID() string {
+	return u.staffID
 }
 
 func (u *User) Email() *shareddomain.Email {

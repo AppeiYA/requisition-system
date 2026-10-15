@@ -24,8 +24,8 @@ func NewInvitationRepository(repository db.Repository) *InvitationRepository {
 }
 
 var saveInvitationQuery = `
-	INSERT INTO invitations (id, email, token_hash, invited_by, expires_at, accepted_at, revoked_at, created_at)
-	VALUES (:id, :email, :token_hash, :invited_by, :expires_at, :accepted_at, :revoked_at, :created_at)
+	INSERT INTO invitations (id, first_name, last_name, phone_number, staff_id, department_id, job_title, email, token_hash, invited_by, expires_at, accepted_at, revoked_at, created_at)
+	VALUES (:id, :first_name, :last_name, :phone_number, :staff_id, :department_id, :job_title, :email, :token_hash, :invited_by, :expires_at, :accepted_at, :revoked_at, :created_at)
 `
 
 func (r *InvitationRepository) SaveInvitation(ctx context.Context, invitation *invitationdomain.Invitation) error {
@@ -37,7 +37,7 @@ func (r *InvitationRepository) SaveInvitation(ctx context.Context, invitation *i
 }
 
 var getByTokenHashQuery = `
-	SELECT id, email, token_hash, invited_by, expires_at, accepted_at, revoked_at, created_at
+	SELECT id, first_name, last_name, phone_number, staff_id, department_id, job_title, email, token_hash, invited_by, expires_at, accepted_at, revoked_at, created_at
 	FROM invitations
 	WHERE token_hash = $1
 `
@@ -55,7 +55,7 @@ func (r *InvitationRepository) GetInvitationByTokenHash(ctx context.Context, tok
 }
 
 var getActiveByEmailQuery = `
-	SELECT id, email, token_hash, invited_by, expires_at, accepted_at, revoked_at, created_at
+	SELECT id, first_name, last_name, phone_number, staff_id, department_id, job_title, email, token_hash, invited_by, expires_at, accepted_at, revoked_at, created_at
 	FROM invitations
 	WHERE LOWER(email) = LOWER($1)
 	  AND accepted_at IS NULL

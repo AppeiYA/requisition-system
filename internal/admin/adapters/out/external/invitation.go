@@ -43,8 +43,17 @@ func (a *AdminInvitationAdapter) CheckActiveInvitationExists(ctx context.Context
 	return true, nil
 }
 
-func (a *AdminInvitationAdapter) SaveInvitation(ctx context.Context, email *shareddomain.Email, inviterID string) (*adminout.SavedInvitation, error) {
-	res, err := a.saveInvitation.Execute(ctx, email.Value(), inviterID)
+func (a *AdminInvitationAdapter) SaveInvitation(ctx context.Context, params adminout.SaveInvitationParams) (*adminout.SavedInvitation, error) {
+	res, err := a.saveInvitation.Execute(ctx, invitationin.SaveInvitationCommand{
+		Email:        params.Email.Value(),
+		FirstName:    params.FirstName,
+		LastName:     params.LastName,
+		Phone:        params.Phone,
+		StaffID:      params.StaffID,
+		DepartmentID: params.DepartmentID,
+		JobTitle:     params.JobTitle,
+		InviterID:    params.InviterID,
+	})
 	if err != nil {
 		return nil, err
 	}
