@@ -42,7 +42,11 @@ func newTestRouter(create departmentin.CreateDepartmentUsecaseInt, get departmen
 	gin.SetMode(gin.TestMode)
 
 	router := gin.New()
-	NewDepartmentHandler(create, get).Register(router.Group("/api/v1"), withNoAuth())
+	port := &departmentin.DepartmentPortIn{
+		CreateDepartmentUsecase:   create,
+		GetDepartmentByIDUsecase:  get,
+	}
+	NewDepartmentHandler(port).Register(router.Group("/api/v1"), withNoAuth())
 
 	return router
 }

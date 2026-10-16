@@ -22,7 +22,7 @@ func (h *InvitationHandler) AcceptInvitation(c *gin.Context) {
 		return
 	}
 
-	err := h.acceptInvitationUC.Execute(c.Request.Context(), invitationin.AcceptInvitationCommand{
+	err := h.invitationPortIn.AcceptInvitationUsecase.Execute(c.Request.Context(), invitationin.AcceptInvitationCommand{
 		Token:    token,
 		Phone:    req.Phone,
 		Password: req.Password,

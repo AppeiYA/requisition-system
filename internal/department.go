@@ -1,6 +1,7 @@
 package app
 
 import (
+	"github.com/AppeiYA/requisition-system/internal/department"
 	departmenthttp "github.com/AppeiYA/requisition-system/internal/department/adapters/in/http"
 	departmentpostgres "github.com/AppeiYA/requisition-system/internal/department/adapters/out/postgres"
 	departmentin "github.com/AppeiYA/requisition-system/internal/department/ports/in"
@@ -13,9 +14,7 @@ func (a *App) buildDepartment(
 	database *db.DB,
 	idGen identityout.IDGenerator,
 ) (
-	*departmenthttp.DepartmentHandler,
-	departmentin.GetDepartmentByIDUsecaseInt,
-	departmentin.CreateMembershipUsecaseInt,
+	*department.DepartmentModule,
 ) {
 	departmentRepo := departmentpostgres.NewDepartmentRepository(db.NewRepository(database))
 	membershipRepo := departmentpostgres.NewMembershipRepository(db.NewRepository(database))
@@ -24,7 +23,12 @@ func (a *App) buildDepartment(
 	getDepartmentByIDUC := departmentusecase.NewGetDepartmentByIDUsecase(departmentRepo)
 	createMembershipUC := departmentusecase.NewCreateMembershipUsecase(membershipRepo)
 
-	handler := departmenthttp.NewDepartmentHandler(createDepartmentUC, getDepartmentByIDUC)
+	departmentPortIn := departmentin.NewDepartmentPortIn(createMembershipUC, createDepartmentUC, getDepartmentByIDUC)
 
-	return handler, getDepartmentByIDUC, createMembershipUC
+	handler := departmenthttp.NewDepartmentHandler(departmentPortIn)
+
+	return department.NewDepartmentModule(
+		departmentPortIn,
+		handler,
+	)
 }

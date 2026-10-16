@@ -8,7 +8,6 @@ import (
 
 	adminout "github.com/AppeiYA/requisition-system/internal/admin/ports/out"
 	invitationdomain "github.com/AppeiYA/requisition-system/internal/invitation/domain"
-	invitationmocks "github.com/AppeiYA/requisition-system/internal/invitation/mocks"
 	invitationin "github.com/AppeiYA/requisition-system/internal/invitation/ports/in"
 )
 
@@ -23,15 +22,23 @@ func (s *stubSaveInvitation) Execute(ctx context.Context, cmd invitationin.SaveI
 	return s.res, s.err
 }
 
+type stubGetInvitation struct {
+	res      *invitationin.GetInvitationOutput
+	err      error
+	gotEmail string
+}
+
+func (s *stubGetInvitation) ByEmail(ctx context.Context, email string) (*invitationin.GetInvitationOutput, error) {
+	s.gotEmail = email
+	return s.res, s.err
+}
+
 func Test_AdminInvitationAdapter_CheckActiveInvitationExists(t *testing.T) {
 	t.Parallel()
 
-	repo := invitationmocks.NewMockInvitationRepository()
-	repo.GetActiveInvitationByEmailFunc = func(ctx context.Context, email string) (*invitationdomain.Invitation, error) {
-		return invitationmocks.ValidInvitation(), nil
-	}
+	get := &stubGetInvitation{res: &invitationin.GetInvitationOutput{ID: "inv-1", Email: "invitee@example.com"}}
 
-	adapter := NewAdminInvitationAdapter(&stubSaveInvitation{}, repo)
+	adapter := NewAdminInvitationAdapter(&stubSaveInvitation{}, get)
 
 	exists, err := adapter.CheckActiveInvitationExists(context.Background(), mustEmail(t, "invitee@example.com"))
 	if err != nil {
@@ -40,17 +47,17 @@ func Test_AdminInvitationAdapter_CheckActiveInvitationExists(t *testing.T) {
 	if !exists {
 		t.Fatal("expected an active invitation to exist")
 	}
+	if get.gotEmail != "invitee@example.com" {
+		t.Errorf("expected lookup of %q, got %q", "invitee@example.com", get.gotEmail)
+	}
 }
 
 func Test_AdminInvitationAdapter_CheckActiveInvitationExists_NotFound(t *testing.T) {
 	t.Parallel()
 
-	repo := invitationmocks.NewMockInvitationRepository()
-	repo.GetActiveInvitationByEmailFunc = func(ctx context.Context, email string) (*invitationdomain.Invitation, error) {
-		return nil, invitationdomain.ErrInvitationNotFound
-	}
+	get := &stubGetInvitation{err: invitationdomain.ErrInvitationNotFound}
 
-	adapter := NewAdminInvitationAdapter(&stubSaveInvitation{}, repo)
+	adapter := NewAdminInvitationAdapter(&stubSaveInvitation{}, get)
 
 	exists, err := adapter.CheckActiveInvitationExists(context.Background(), mustEmail(t, "invitee@example.com"))
 	if err != nil {
@@ -65,12 +72,9 @@ func Test_AdminInvitationAdapter_CheckActiveInvitationExists_Error(t *testing.T)
 	t.Parallel()
 
 	dbErr := errors.New("db down")
-	repo := invitationmocks.NewMockInvitationRepository()
-	repo.GetActiveInvitationByEmailFunc = func(ctx context.Context, email string) (*invitationdomain.Invitation, error) {
-		return nil, dbErr
-	}
+	get := &stubGetInvitation{err: dbErr}
 
-	adapter := NewAdminInvitationAdapter(&stubSaveInvitation{}, repo)
+	adapter := NewAdminInvitationAdapter(&stubSaveInvitation{}, get)
 
 	_, err := adapter.CheckActiveInvitationExists(context.Background(), mustEmail(t, "invitee@example.com"))
 	if !errors.Is(err, dbErr) {
@@ -88,7 +92,7 @@ func Test_AdminInvitationAdapter_SaveInvitation(t *testing.T) {
 		ExpiresAt: expiresAt,
 	}}
 
-	adapter := NewAdminInvitationAdapter(save, invitationmocks.NewMockInvitationRepository())
+	adapter := NewAdminInvitationAdapter(save, &stubGetInvitation{})
 
 	res, err := adapter.SaveInvitation(context.Background(), adminout.SaveInvitationParams{
 		Email:        mustEmail(t, "invitee@example.com"),
@@ -130,7 +134,7 @@ func Test_AdminInvitationAdapter_SaveInvitation_Error(t *testing.T) {
 	t.Parallel()
 
 	saveErr := errors.New("save failed")
-	adapter := NewAdminInvitationAdapter(&stubSaveInvitation{err: saveErr}, invitationmocks.NewMockInvitationRepository())
+	adapter := NewAdminInvitationAdapter(&stubSaveInvitation{err: saveErr}, &stubGetInvitation{})
 
 	_, err := adapter.SaveInvitation(context.Background(), adminout.SaveInvitationParams{
 		Email:     mustEmail(t, "invitee@example.com"),

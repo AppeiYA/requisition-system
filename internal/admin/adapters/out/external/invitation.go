@@ -7,7 +7,6 @@ import (
 
 	adminout "github.com/AppeiYA/requisition-system/internal/admin/ports/out"
 	invitationin "github.com/AppeiYA/requisition-system/internal/invitation/ports/in"
-	invitationout "github.com/AppeiYA/requisition-system/internal/invitation/ports/out"
 	shareddomain "github.com/AppeiYA/requisition-system/internal/shared/domain"
 	customerrors "github.com/AppeiYA/requisition-system/internal/shared/infrastructure/errors"
 )
@@ -19,21 +18,21 @@ var _ adminout.AdminInvitationPort = (*AdminInvitationAdapter)(nil)
 // reads pending invitations through the invitation repository.
 type AdminInvitationAdapter struct {
 	saveInvitation invitationin.SaveInvitationUsecaseInt
-	invitationRepo invitationout.InvitationRepository
+	getInvitation invitationin.GetInvitationUsecaseInt
 }
 
 func NewAdminInvitationAdapter(
 	saveInvitation invitationin.SaveInvitationUsecaseInt,
-	invitationRepo invitationout.InvitationRepository,
+	getInvitation invitationin.GetInvitationUsecaseInt,
 ) *AdminInvitationAdapter {
 	return &AdminInvitationAdapter{
 		saveInvitation: saveInvitation,
-		invitationRepo: invitationRepo,
+		getInvitation: getInvitation,
 	}
 }
 
 func (a *AdminInvitationAdapter) CheckActiveInvitationExists(ctx context.Context, email *shareddomain.Email) (bool, error) {
-	_, err := a.invitationRepo.GetActiveInvitationByEmail(ctx, email.Value())
+	_, err := a.getInvitation.ByEmail(ctx, email.Value())
 	if err != nil {
 		if isNotFound(err) {
 			return false, nil

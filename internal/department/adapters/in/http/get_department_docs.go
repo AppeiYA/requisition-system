@@ -23,5 +23,5 @@ var (
 //	@Success		200	{object}	response.Response{data=departmentin.DepartmentResult}
 //	@Failure		401	{object}	response.Response	"Missing or invalid access token"
 //	@Failure		404	{object}	response.Response	"Department not found"
-//	@Router			/admin/departments/{id} [get]
+//	@Router			/departments/{_id} [get]
 func getDepartmentDoc() {}

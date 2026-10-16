@@ -26,7 +26,7 @@ func (h *Handler) refresh(c *gin.Context) {
 		return
 	}
 
-	tokens, err := h.refreshUsecase.Execute(c.Request.Context(), identityin.RefreshTokenRequest{
+	tokens, err := h.identityPortIn.RefreshTokenUsecase.Execute(c.Request.Context(), identityin.RefreshTokenRequest{
 		RefreshToken: req.RefreshToken,
 	})
 	if err != nil {

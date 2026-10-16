@@ -12,9 +12,19 @@ import (
 
 const userIDContextKey = "identity.user_id"
 
+type AuthMiddleware struct {
+	accessTokens identityout.AccessTokenService
+}
+
+func NewAuthMiddleware(accessTokens identityout.AccessTokenService) *AuthMiddleware {
+	return &AuthMiddleware{
+		accessTokens: accessTokens,
+	}
+}
+
 // AuthMiddleware validates the bearer access token and stores the authenticated
 // user id in the request context.
-func AuthMiddleware(accessTokens identityout.AccessTokenService) gin.HandlerFunc {
+func(m *AuthMiddleware) Handle() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		token, ok := bearerToken(c.GetHeader("Authorization"))
 		if !ok {
@@ -23,7 +33,7 @@ func AuthMiddleware(accessTokens identityout.AccessTokenService) gin.HandlerFunc
 			return
 		}
 
-		model, err := accessTokens.ValidateAccessToken(c.Request.Context(), token)
+		model, err := m.accessTokens.ValidateAccessToken(c.Request.Context(), token)
 		if err != nil {
 			response.ErrorFrom(c, err)
 			c.Abort()

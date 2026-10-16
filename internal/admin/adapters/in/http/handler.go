@@ -1,58 +1,21 @@
 package adminhttp
 
 import (
-	"net/http"
-
 	"github.com/gin-gonic/gin"
 
 	adminin "github.com/AppeiYA/requisition-system/internal/admin/ports/in"
-	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/response"
 )
 
 type Handler struct {
-	inviteUsecase adminin.InviteMemberUseCase
+	adminPortIn *adminin.AdminPortIn
 }
 
 func NewHandler(
-	inviteUsecase adminin.InviteMemberUseCase,
+	adminPortIn *adminin.AdminPortIn,
 ) *Handler {
 	return &Handler{
-		inviteUsecase: inviteUsecase,
+		adminPortIn: adminPortIn,
 	}
-}
-
-func (h *Handler) invite(c *gin.Context) {
-	userID, ok := c.Get("identity.user_id")
-	if !ok {
-		response.Error(c, "unauthorized", http.StatusUnauthorized, nil)
-		c.Abort()
-		return
-	}
-
-	var req InviteRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.ErrorWithDetails(c, "validation_error", "invalid request body", http.StatusBadRequest, response.ValidationErrors(err))
-		c.Abort()
-		return
-	}
-
-	res, err := h.inviteUsecase.Execute(c.Request.Context(), adminin.InviteMemberCommand{
-		InviterID:    userID.(string),
-		Email:        req.Email,
-		FirstName:    req.FirstName,
-		LastName:     req.LastName,
-		Phone:        req.Phone,
-		StaffID:      req.StaffID,
-		DepartmentID: req.DepartmentID,
-		JobTitle:     req.JobTitle,
-	})
-	if err != nil {
-		response.ErrorFrom(c, err)
-		c.Abort()
-		return
-	}
-
-	response.Success(c, "invitation sent", http.StatusCreated, res)
 }
 
 func (h *Handler) Register(router *gin.RouterGroup, authMiddleware gin.HandlerFunc) {

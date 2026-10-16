@@ -22,7 +22,7 @@ func (h *Handler) logout(c *gin.Context) {
 		return
 	}
 
-	if err := h.logoutUsecase.Execute(c.Request.Context(), identityin.LogoutRequest{
+	if err := h.identityPortIn.LogoutUserUsecase.Execute(c.Request.Context(), identityin.LogoutRequest{
 		RefreshToken: req.RefreshToken,
 	}); err != nil {
 		response.ErrorFrom(c, err)

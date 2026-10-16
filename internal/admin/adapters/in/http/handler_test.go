@@ -35,7 +35,10 @@ func newTestRouter(invite adminin.InviteMemberUseCase, auth gin.HandlerFunc) *gi
 	gin.SetMode(gin.TestMode)
 
 	router := gin.New()
-	NewHandler(invite).Register(router.Group("/api/v1"), auth)
+	port := &adminin.AdminPortIn{
+		InviteMember: invite,
+	}
+	NewHandler(port).Register(router.Group("/api/v1"), auth)
 
 	return router
 }

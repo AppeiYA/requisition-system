@@ -15,7 +15,7 @@ func (h *InvitationHandler) ValidateInvitation(c *gin.Context) {
 		return
 	}
 
-	result, err := h.validateInvitationUC.Execute(c.Request.Context(), token)
+	result, err := h.invitationPortIn.ValidateInvitationUsecase.Execute(c.Request.Context(), token)
 	if err != nil {
 		response.ErrorFrom(c, err)
 		c.Abort()

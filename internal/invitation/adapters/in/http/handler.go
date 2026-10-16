@@ -6,17 +6,14 @@ import (
 )
 
 type InvitationHandler struct {
-	acceptInvitationUC   invitationin.AcceptInvitationUseCaseInt
-	validateInvitationUC invitationin.ValidateInvitationUseCaseInt
+	invitationPortIn   *invitationin.InvitationPortIn
 }
 
 func NewInvitationHandler(
-	acceptInvitationUC invitationin.AcceptInvitationUseCaseInt,
-	validateInvitationUC invitationin.ValidateInvitationUseCaseInt,
+	invitationPortIn *invitationin.InvitationPortIn,
 ) *InvitationHandler {
 	return &InvitationHandler{
-		acceptInvitationUC:   acceptInvitationUC,
-		validateInvitationUC: validateInvitationUC,
+		invitationPortIn:   invitationPortIn,
 	}
 }
 

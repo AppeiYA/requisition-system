@@ -1,12 +1,12 @@
 package app
 
 import (
+	"github.com/AppeiYA/requisition-system/internal/identity"
 	identityhttp "github.com/AppeiYA/requisition-system/internal/identity/adapters/in/http"
 	jwtadapter "github.com/AppeiYA/requisition-system/internal/identity/adapters/out/jwt"
 	identitypostgres "github.com/AppeiYA/requisition-system/internal/identity/adapters/out/postgres"
 	identityredis "github.com/AppeiYA/requisition-system/internal/identity/adapters/out/redis"
 	identityin "github.com/AppeiYA/requisition-system/internal/identity/ports/in"
-	identityout "github.com/AppeiYA/requisition-system/internal/identity/ports/out"
 	identityusecase "github.com/AppeiYA/requisition-system/internal/identity/usecase"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/config"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/db"
@@ -20,23 +20,20 @@ func (a *App) buildIdentity(
 	database *db.DB,
 	redisClient *redis.Redis,
 	txManager *db.TransactionManager,
+	accessTokenService *jwtadapter.JWTService,
+	idGen *generator.IDGenerator,
 ) (
-	*identityhttp.Handler,
-	identityin.RegisterUserUseCaseInt,
-	identityin.GetUserByEmailUsecaseInt,
-	identityout.AccessTokenService,
-	identityout.IDGenerator,
+	*identity.IdentityModule,
 ) {
 	userRepository := identitypostgres.NewUserRepository(db.NewRepository(database))
 
-	accessTokenService := jwtadapter.NewJWTService(cfg.JWT)
 	refreshSessionRepository := identityredis.NewRefreshSessionRepository(
 		redisClient.Client(),
 		cfg.JWT.RefreshTokenTTL,
 	)
 	refreshTokenGenerator := &generator.TokenGenerator{}
 	passwordHasher := hasher.NewPasswordHasher()
-	idGen := &generator.IDGenerator{}
+	authMiddleware := identityhttp.NewAuthMiddleware(accessTokenService)
 
 	loginUsecase := identityusecase.NewLoginUserUsecase(
 		userRepository,
@@ -58,13 +55,23 @@ func (a *App) buildIdentity(
 	registerUsecase := identityusecase.NewRegisterUserUsecase(userRepository, passwordHasher, idGen)
 	getUserByEmailUsecase := identityusecase.NewGetUserByEmailUsecase(userRepository)
 
-	handler := identityhttp.NewHandler(
+	identityPortIn := identityin.NewIdentityPortIn(
+		registerUsecase,
+		getUserByEmailUsecase,
 		loginUsecase,
-		refreshUsecase,
 		logoutUsecase,
 		getMeUsecase,
-		accessTokenService,
+		refreshUsecase,
 	)
 
-	return handler, registerUsecase, getUserByEmailUsecase, accessTokenService, idGen
+	handler := identityhttp.NewHandler(
+		identityPortIn,
+		authMiddleware,
+	)
+
+	return identity.NewIdentityModule(
+		identityPortIn,
+		handler,
+		authMiddleware,
+	)
 }

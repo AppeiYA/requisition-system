@@ -10,14 +10,17 @@ import (
 	"syscall"
 	"time"
 
+	jwtadapter "github.com/AppeiYA/requisition-system/internal/identity/adapters/out/jwt"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/config"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/db"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/email"
+	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/generator"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/redis"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/response"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/server"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/telemetry"
 	"github.com/gin-gonic/gin"
+
 	// swaggerFiles "github.com/swaggo/files"
 	// ginSwagger "github.com/swaggo/gin-swagger"
 
@@ -83,12 +86,40 @@ func (a *App) Run() error {
 	// router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	txManager := db.NewTransactionManager(database)
-	identityHandler, registerUserUC, getUserByEmailUC, accessTokenSvc, idGen := a.buildIdentity(cfg, database, redisClient, txManager)
-	departmentHandler, getDepartmentByIDUC, createMembershipUC := a.buildDepartment(database, idGen)
-	invitationHandler, invRepo, saveInvitationUC := a.buildInvitation(database, txManager, registerUserUC, createMembershipUC, idGen)
+	accessTokenService := jwtadapter.NewJWTService(cfg.JWT)
+	idGen := &generator.IDGenerator{}
+	
+	identityModule := a.buildIdentity(cfg, database, redisClient, txManager, accessTokenService, idGen)
+
+	departmentModule := a.buildDepartment(database, idGen)
+
+	invitationModule := a.buildInvitation(
+		database, 
+		txManager, 
+		identityModule.PortIn().RegisterUserUseCase, 
+		departmentModule.PortIn().CreateMembershipUsecase, 
+		idGen,
+	)
+
 	emailSender := email.NewSender(cfg.Email)
-	adminHandler := a.buildAdminHandler(cfg, txManager, getUserByEmailUC, saveInvitationUC, invRepo, getDepartmentByIDUC, emailSender)
-	NewRouter(api, identityHandler, invitationHandler, adminHandler, departmentHandler, accessTokenSvc)
+	
+	adminModule := a.buildAdminHandler(
+		cfg, 
+		txManager, 
+		identityModule.PortIn().GetUserByEmailUsecase, 
+		invitationModule.PortIn().SaveInvitationUsecase, 
+		invitationModule.PortIn().GetInvitationUsecase,
+		departmentModule.PortIn().GetDepartmentByIDUsecase, 
+		emailSender)
+
+	NewRouter(
+		api, 
+		identityModule.Handler(), 
+		invitationModule.Handler(), 
+		adminModule.Handler(), 
+		departmentModule.Handler(), 
+		identityModule.AuthMiddleware(),
+	)
 
 	a.server = server.New(router, &cfg.Server)
 

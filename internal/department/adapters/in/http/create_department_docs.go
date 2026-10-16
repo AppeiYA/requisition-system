@@ -25,5 +25,5 @@ var (
 //	@Failure		400		{object}	response.ErrorResponse	"Validation error"
 //	@Failure		401		{object}	response.Response		"Missing or invalid access token"
 //	@Failure		409		{object}	response.Response		"Department already exists"
-//	@Router			/admin/departments [post]
+//	@Router			/departments [post]
 func createDepartmentDoc() {}

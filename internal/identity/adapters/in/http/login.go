@@ -22,7 +22,7 @@ func (h *Handler) login(c *gin.Context) {
 		return
 	}
 
-	tokens, err := h.loginUsecase.Execute(c.Request.Context(), identityin.LoginUserRequest{
+	tokens, err := h.identityPortIn.LoginUserUsecase.Execute(c.Request.Context(), identityin.LoginUserRequest{
 		Email:    req.Email,
 		Password: req.Password,
 	})

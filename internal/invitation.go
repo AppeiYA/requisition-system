@@ -4,11 +4,11 @@ import (
 	departmentin "github.com/AppeiYA/requisition-system/internal/department/ports/in"
 	identityin "github.com/AppeiYA/requisition-system/internal/identity/ports/in"
 	identityout "github.com/AppeiYA/requisition-system/internal/identity/ports/out"
+	"github.com/AppeiYA/requisition-system/internal/invitation"
 	invitationhttp "github.com/AppeiYA/requisition-system/internal/invitation/adapters/in/http"
 	invitationexternal "github.com/AppeiYA/requisition-system/internal/invitation/adapters/out/external"
 	invitationpostgres "github.com/AppeiYA/requisition-system/internal/invitation/adapters/out/postgres"
 	invitationin "github.com/AppeiYA/requisition-system/internal/invitation/ports/in"
-	invitationout "github.com/AppeiYA/requisition-system/internal/invitation/ports/out"
 	invitationusecase "github.com/AppeiYA/requisition-system/internal/invitation/usecase"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/db"
 )
@@ -20,31 +20,34 @@ func (a *App) buildInvitation(
 	createMembershipUC departmentin.CreateMembershipUsecaseInt,
 	idGen identityout.IDGenerator,
 ) (
-	*invitationhttp.InvitationHandler,
-	invitationout.InvitationRepository,
-	invitationin.SaveInvitationUsecaseInt,
+	*invitation.InvitationModule,
 ) {
 	invitationRepo := invitationpostgres.NewInvitationRepository(db.NewRepository(database))
 
-	saveInvitationUsecase := invitationusecase.NewSaveInvitationUsecase(invitationRepo, idGen)
-
 	// The identity port lets the invitation module register the invited user
 	// without depending on the identity module's concrete use cases.
-	identityPort := invitationexternal.NewInviteIdentityAdapter(registerUserUC)
+	invitationIdentityPort := invitationexternal.NewInviteIdentityAdapter(registerUserUC)
 
 	// The department port lets the invitation module create the membership on
 	// acceptance without depending on the department module's domain.
-	departmentPort := invitationexternal.NewInviteDepartmentAdapter(createMembershipUC)
+	invitationDepartmentPort := invitationexternal.NewInviteDepartmentAdapter(createMembershipUC)
 
 	acceptInvitationUsecase := invitationusecase.NewAcceptInvitationUsecase(
 		invitationRepo,
-		identityPort,
-		departmentPort,
+		invitationIdentityPort,
+		invitationDepartmentPort,
 		txManager,
 	)
 	validateInvitationUsecase := invitationusecase.NewValidateInvitationUsecase(invitationRepo)
+	saveInvitationUsecase := invitationusecase.NewSaveInvitationUsecase(invitationRepo, idGen)
+	getInvitationUsecase := invitationusecase.NewGetInvitationUsecase(invitationRepo)
 
-	handler := invitationhttp.NewInvitationHandler(acceptInvitationUsecase, validateInvitationUsecase)
+	invitationPortIn := invitationin.NewInvitationPortIn(saveInvitationUsecase, validateInvitationUsecase, acceptInvitationUsecase, getInvitationUsecase)
 
-	return handler, invitationRepo, saveInvitationUsecase
+	handler := invitationhttp.NewInvitationHandler(invitationPortIn)
+
+	return invitation.NewInvitationModule(
+		invitationPortIn,
+		handler,
+	)
 }

@@ -6,7 +6,6 @@ import (
 	adminhttp "github.com/AppeiYA/requisition-system/internal/admin/adapters/in/http"
 	departmenthttp "github.com/AppeiYA/requisition-system/internal/department/adapters/in/http"
 	identityhttp "github.com/AppeiYA/requisition-system/internal/identity/adapters/in/http"
-	identityout "github.com/AppeiYA/requisition-system/internal/identity/ports/out"
 	invitationhttp "github.com/AppeiYA/requisition-system/internal/invitation/adapters/in/http"
 	"github.com/gin-gonic/gin"
 	swaggerFiles "github.com/swaggo/files"
@@ -19,7 +18,7 @@ func NewRouter(
 	invitationHandler *invitationhttp.InvitationHandler,
 	adminHandler *adminhttp.Handler,
 	departmentHandler *departmenthttp.DepartmentHandler,
-	accessTokenService identityout.AccessTokenService,
+	authMiddleware *identityhttp.AuthMiddleware,
 ) {
 	v1 := router.Group("/v1")
 
@@ -31,6 +30,6 @@ func NewRouter(
 
 	identityHandler.Register(v1)
 	invitationHandler.Register(v1)
-	adminHandler.Register(v1, identityhttp.AuthMiddleware(accessTokenService))
-	departmentHandler.Register(v1, identityhttp.AuthMiddleware(accessTokenService))
+	adminHandler.Register(v1, authMiddleware.Handle())
+	departmentHandler.Register(v1, authMiddleware.Handle())
 }

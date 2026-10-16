@@ -38,7 +38,11 @@ func newTestRouter(accept invitationin.AcceptInvitationUseCaseInt, validate invi
 	gin.SetMode(gin.TestMode)
 
 	router := gin.New()
-	NewInvitationHandler(accept, validate).Register(router.Group("/api/v1"))
+	port := &invitationin.InvitationPortIn{
+		AcceptInvitationUsecase: accept,
+		ValidateInvitationUsecase: validate,
+	}
+	NewInvitationHandler(port).Register(router.Group("/api/v1"))
 
 	return router
 }
