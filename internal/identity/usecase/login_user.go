@@ -58,7 +58,11 @@ func (u *LoginUserUsecase) Execute(ctx context.Context, req identityin.LoginUser
 	}
 
 	// issue a short-lived access token
-	access, err := u.accessTokenService.GenerateAccessToken(ctx, &identityout.TokenModel{ID: user.ID()})
+	access, err := u.accessTokenService.GenerateAccessToken(ctx, &identityout.TokenModel{
+		ID:    user.ID(),
+		Role:  user.Role().String(),
+		Email: user.Email().Value(),
+	})
 	if err != nil {
 		return nil, err
 	}

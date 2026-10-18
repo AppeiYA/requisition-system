@@ -6,6 +6,8 @@ import "context"
 // token.
 type TokenModel struct {
 	ID string
+	Role string
+	Email string
 }
 
 // AccessToken is a signed, short-lived JWT together with its lifetime in

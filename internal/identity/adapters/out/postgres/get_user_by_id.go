@@ -10,7 +10,7 @@ import (
 )
 
 var getUserByIDQuery = `
-	SELECT id, first_name, last_name, phone_number, staff_id, email, password_hash, status, created_at, updated_at
+	SELECT id, first_name, last_name, phone_number, staff_id, email, password_hash, status, role, created_at, updated_at
 	FROM users
 	WHERE id = $1
 `

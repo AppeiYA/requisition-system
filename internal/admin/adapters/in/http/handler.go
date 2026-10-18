@@ -18,7 +18,8 @@ func NewHandler(
 	}
 }
 
-func (h *Handler) Register(router *gin.RouterGroup, authMiddleware gin.HandlerFunc) {
+func (h *Handler) Register(router *gin.RouterGroup, middlewares ...gin.HandlerFunc) {
 	admin := router.Group("/admin")
-	admin.POST("/invitations", authMiddleware, h.invite)
+	admin.Use(middlewares...)
+	admin.POST("/invitations", h.invite)
 }

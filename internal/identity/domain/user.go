@@ -22,6 +22,7 @@ type User struct {
 	email        *shareddomain.Email
 	passwordHash *PasswordHash
 	status       Status
+	role 	   shareddomain.Role
 	createdAt    time.Time
 	updatedAt    *time.Time
 }
@@ -46,6 +47,10 @@ func NewUser(id, firstName, lastName, phone, staffID string, email *shareddomain
 	if err != nil {
 		return nil, err
 	}
+	role, err := shareddomain.NewRole("user")
+	if err != nil {
+		return nil, err
+	}
 	return &User{
 		id:           id,
 		firstName:    first_name,
@@ -55,11 +60,12 @@ func NewUser(id, firstName, lastName, phone, staffID string, email *shareddomain
 		email:        email,
 		passwordHash: passwordHash,
 		status:       status,
+		role:         role,
 		createdAt:    time.Now(),
 	}, nil
 }
 
-func ReconstituteUser(id, firstName, lastName, phone, staffID, email, passwordHash, status string, createdAt time.Time, updatedAt *time.Time) (*User, error) {
+func ReconstituteUser(id, firstName, lastName, phone, staffID, email, passwordHash, status, role string, createdAt time.Time, updatedAt *time.Time) (*User, error) {
 	first_name, err := NewUsername(firstName, FirstName)
 	if err != nil {
 		return nil, err
@@ -90,6 +96,11 @@ func ReconstituteUser(id, firstName, lastName, phone, staffID, email, passwordHa
 		return nil, err
 	}
 
+	validRole, err := shareddomain.NewRole(role)
+	if err != nil {
+		return nil, err
+	}
+
 	return &User{
 		id:           id,
 		firstName:    first_name,
@@ -99,6 +110,7 @@ func ReconstituteUser(id, firstName, lastName, phone, staffID, email, passwordHa
 		email:        emailAddr,
 		passwordHash: password,
 		status:       statusVal,
+		role:         validRole,
 		createdAt:    createdAt,
 		updatedAt:    updatedAt,
 	}, nil
@@ -142,6 +154,10 @@ func (u *User) CreatedAt() time.Time {
 
 func (u *User) UpdatedAt() *time.Time {
 	return u.updatedAt
+}
+
+func (u *User) Role() shareddomain.Role {
+	return u.role
 }
 
 func (u *User) UpdateStatus(newStatus Status) error {

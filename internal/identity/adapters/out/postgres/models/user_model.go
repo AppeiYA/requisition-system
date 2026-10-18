@@ -15,6 +15,7 @@ type UserModel struct {
 	Email        string     `db:"email"`
 	PasswordHash string     `db:"password_hash"`
 	Status       string     `db:"status"`
+	Role		 string     `db:"role"`
 	CreatedAt    time.Time  `db:"created_at"`
 	UpdatedAt    *time.Time `db:"updated_at"`
 }
@@ -39,6 +40,7 @@ func (m UserModel) ToDomain() (*domain.User, error) {
 		m.Email,
 		m.PasswordHash,
 		m.Status,
+		m.Role,
 		m.CreatedAt,
 		m.UpdatedAt,
 	)
@@ -64,6 +66,7 @@ func FromDomain(user *domain.User) *UserModel {
 		Email:        user.Email().Value(),
 		PasswordHash: user.PasswordHash().Value(),
 		Status:       user.Status().Value(),
+		Role:         user.Role().String(),
 		CreatedAt:    user.CreatedAt(),
 		UpdatedAt:    user.UpdatedAt(),
 	}

@@ -192,6 +192,7 @@ func Test_ReconstituteUser(t *testing.T) {
 		email        string
 		passwordHash string
 		status       string
+		role         string
 		createdAt    time.Time
 		updatedAt    *time.Time
 	}
@@ -206,6 +207,7 @@ func Test_ReconstituteUser(t *testing.T) {
 			email:        "john.doe@example.com",
 			passwordHash: "hashed_password",
 			status:       "active",
+			role:         "user",
 			createdAt:    past,
 			updatedAt:    nil,
 		}
@@ -331,6 +333,7 @@ func Test_ReconstituteUser(t *testing.T) {
 				in.email,
 				in.passwordHash,
 				in.status,
+				in.role,
 				in.createdAt,
 				in.updatedAt,
 			)
@@ -450,6 +453,7 @@ func Test_User_UpdateStatus(t *testing.T) {
 				"john.doe@example.com",
 				"hashed_password",
 				string(tt.initialStatus),
+				"user",
 				time.Now(),
 				nil,
 			)

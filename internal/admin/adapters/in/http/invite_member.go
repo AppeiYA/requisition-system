@@ -4,12 +4,13 @@ import (
 	"net/http"
 
 	adminin "github.com/AppeiYA/requisition-system/internal/admin/ports/in"
+	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/authcontext"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/response"
 	"github.com/gin-gonic/gin"
 )
 
 func (h *Handler) invite(c *gin.Context) {
-	userID, ok := c.Get("identity.user_id")
+	userID, ok := authcontext.GetUserID(c)
 	if !ok {
 		response.Error(c, "unauthorized", http.StatusUnauthorized, nil)
 		c.Abort()
@@ -24,7 +25,7 @@ func (h *Handler) invite(c *gin.Context) {
 	}
 
 	res, err := h.adminPortIn.InviteMember.Execute(c.Request.Context(), adminin.InviteMemberCommand{
-		InviterID:    userID.(string),
+		InviterID:    userID,
 		Email:        req.Email,
 		FirstName:    req.FirstName,
 		LastName:     req.LastName,

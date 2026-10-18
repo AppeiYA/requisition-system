@@ -30,6 +30,6 @@ func NewRouter(
 
 	identityHandler.Register(v1)
 	invitationHandler.Register(v1)
-	adminHandler.Register(v1, authMiddleware.Handle())
+	adminHandler.Register(v1, authMiddleware.Handle(), authMiddleware.RequireRole("admin"))
 	departmentHandler.Register(v1, authMiddleware.Handle())
 }

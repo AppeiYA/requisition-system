@@ -14,7 +14,7 @@ import (
 var ErrUserNotFound = customerrors.NewNotFoundError("user not found")
 
 var getUserByEmailQuery = `
-	SELECT id, first_name, last_name, phone_number, staff_id, email, password_hash, status, created_at, updated_at
+	SELECT id, first_name, last_name, phone_number, staff_id, email, password_hash, status, role, created_at, updated_at
 	FROM users
 	WHERE email = $1
 `

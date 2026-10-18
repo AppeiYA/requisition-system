@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	adminin "github.com/AppeiYA/requisition-system/internal/admin/ports/in"
+	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/authcontext"
 	customerrors "github.com/AppeiYA/requisition-system/internal/shared/infrastructure/errors"
 	"github.com/gin-gonic/gin"
 )
@@ -26,7 +27,7 @@ func (s *stubInvite) Execute(ctx context.Context, cmd adminin.InviteMemberComman
 
 func withUserID(userID string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		c.Set("identity.user_id", userID)
+		authcontext.SetUser(c, userID, "admin")
 		c.Next()
 	}
 }
