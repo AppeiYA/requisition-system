@@ -8,7 +8,8 @@ import (
 	"github.com/AppeiYA/requisition-system/internal/identity/domain"
 	identitymocks "github.com/AppeiYA/requisition-system/internal/identity/mocks"
 	identityin "github.com/AppeiYA/requisition-system/internal/identity/ports/in"
-	customerrors "github.com/AppeiYA/requisition-system/internal/shared/errors"
+	shareddomain "github.com/AppeiYA/requisition-system/internal/shared/domain"
+	customerrors "github.com/AppeiYA/requisition-system/internal/shared/infrastructure/errors"
 )
 
 func Test_RegisterUserUsecase_Success(t *testing.T) {
@@ -29,11 +30,13 @@ func Test_RegisterUserUsecase_Success(t *testing.T) {
 	dto := identityin.RegisterUserDTO{
 		FirstName: identitymocks.DefaultFirstName,
 		LastName:  identitymocks.DefaultLastName,
+		Phone:     identitymocks.DefaultPhone,
+		StaffID:   identitymocks.DefaultStaffID,
 		Email:     identitymocks.DefaultEmail,
 		Password:  identitymocks.DefaultPassword,
 	}
 
-	err := uc.Execute(context.Background(), dto)
+	gotID, err := uc.Execute(context.Background(), dto)
 	if err != nil {
 		t.Fatalf("expected nil error, got: %v", err)
 	}
@@ -42,11 +45,21 @@ func Test_RegisterUserUsecase_Success(t *testing.T) {
 		t.Fatal("expected user to be saved, got nil")
 	}
 
+	if gotID == "" || gotID != savedUser.ID() {
+		t.Errorf("expected returned id %q to match saved user id", gotID)
+	}
+
 	if savedUser.FirstName().Value() != identitymocks.DefaultFirstName {
 		t.Errorf("expected first name '%s', got '%s'", identitymocks.DefaultFirstName, savedUser.FirstName().Value())
 	}
 	if savedUser.LastName().Value() != identitymocks.DefaultLastName {
 		t.Errorf("expected last name '%s', got '%s'", identitymocks.DefaultLastName, savedUser.LastName().Value())
+	}
+	if savedUser.Phone().Value() != identitymocks.DefaultPhone {
+		t.Errorf("expected phone '%s', got '%s'", identitymocks.DefaultPhone, savedUser.Phone().Value())
+	}
+	if savedUser.StaffID() != identitymocks.DefaultStaffID {
+		t.Errorf("expected staff id '%s', got '%s'", identitymocks.DefaultStaffID, savedUser.StaffID())
 	}
 	if savedUser.Email().Value() != identitymocks.DefaultEmail {
 		t.Errorf("expected email '%s', got '%s'", identitymocks.DefaultEmail, savedUser.Email().Value())
@@ -71,7 +84,7 @@ func Test_RegisterUserUsecase_ContextCancelled(t *testing.T) {
 		Password:  identitymocks.DefaultPassword,
 	}
 
-	err := uc.Execute(ctx, dto)
+	_, err := uc.Execute(ctx, dto)
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("expected context.Canceled, got: %v", err)
 	}
@@ -135,7 +148,7 @@ func Test_RegisterUserUsecase_PasswordValidation(t *testing.T) {
 				Password:  tt.password,
 			}
 
-			err := uc.Execute(context.Background(), dto)
+			_, err := uc.Execute(context.Background(), dto)
 			if err == nil {
 				t.Fatalf("expected error, got nil")
 			}
@@ -158,8 +171,8 @@ func Test_RegisterUserUsecase_InvalidEmail(t *testing.T) {
 		Password:  identitymocks.DefaultPassword,
 	}
 
-	err := uc.Execute(context.Background(), dto)
-	if err != domain.ErrInvalidEmailFormat {
+	_, err := uc.Execute(context.Background(), dto)
+	if err != shareddomain.ErrInvalidEmailFormat {
 		t.Fatalf("expected ErrInvalidEmailFormat, got: %v", err)
 	}
 }
@@ -169,7 +182,7 @@ func Test_RegisterUserUsecase_UserAlreadyExists(t *testing.T) {
 
 	existingUser := identitymocks.ValidUser()
 	repo := identitymocks.NewMockUsersRepository()
-	repo.GetUserByEmailFunc = func(ctx context.Context, email *domain.Email) (*domain.User, error) {
+	repo.GetUserByEmailFunc = func(ctx context.Context, email *shareddomain.Email) (*domain.User, error) {
 		return existingUser, nil
 	}
 
@@ -182,7 +195,7 @@ func Test_RegisterUserUsecase_UserAlreadyExists(t *testing.T) {
 		Password:  identitymocks.DefaultPassword,
 	}
 
-	err := uc.Execute(context.Background(), dto)
+	_, err := uc.Execute(context.Background(), dto)
 	if err == nil {
 		t.Fatal("expected ErrUserAlreadyExists, got nil")
 	}
@@ -195,7 +208,7 @@ func Test_RegisterUserUsecase_GetUserByEmail_NotFoundErrorIgnored(t *testing.T) 
 	t.Parallel()
 
 	repo := identitymocks.NewMockUsersRepository()
-	repo.GetUserByEmailFunc = func(ctx context.Context, email *domain.Email) (*domain.User, error) {
+	repo.GetUserByEmailFunc = func(ctx context.Context, email *shareddomain.Email) (*domain.User, error) {
 		return nil, customerrors.NewNotFoundError("user not found")
 	}
 
@@ -208,7 +221,7 @@ func Test_RegisterUserUsecase_GetUserByEmail_NotFoundErrorIgnored(t *testing.T) 
 		Password:  identitymocks.DefaultPassword,
 	}
 
-	err := uc.Execute(context.Background(), dto)
+	_, err := uc.Execute(context.Background(), dto)
 	if err != nil {
 		t.Fatalf("expected nil error when repo returns NotFound, got: %v", err)
 	}
@@ -219,7 +232,7 @@ func Test_RegisterUserUsecase_GetUserByEmail_RepoError(t *testing.T) {
 
 	dbErr := errors.New("db connection failure")
 	repo := identitymocks.NewMockUsersRepository()
-	repo.GetUserByEmailFunc = func(ctx context.Context, email *domain.Email) (*domain.User, error) {
+	repo.GetUserByEmailFunc = func(ctx context.Context, email *shareddomain.Email) (*domain.User, error) {
 		return nil, dbErr
 	}
 
@@ -232,7 +245,7 @@ func Test_RegisterUserUsecase_GetUserByEmail_RepoError(t *testing.T) {
 		Password:  identitymocks.DefaultPassword,
 	}
 
-	err := uc.Execute(context.Background(), dto)
+	_, err := uc.Execute(context.Background(), dto)
 	if !errors.Is(err, dbErr) {
 		t.Fatalf("expected dbErr, got: %v", err)
 	}
@@ -256,7 +269,7 @@ func Test_RegisterUserUsecase_IDGeneratorError(t *testing.T) {
 		Password:  identitymocks.DefaultPassword,
 	}
 
-	err := uc.Execute(context.Background(), dto)
+	_, err := uc.Execute(context.Background(), dto)
 	if !errors.Is(err, idGenErr) {
 		t.Fatalf("expected idGenErr, got: %v", err)
 	}
@@ -280,7 +293,7 @@ func Test_RegisterUserUsecase_PasswordHasherError(t *testing.T) {
 		Password:  identitymocks.DefaultPassword,
 	}
 
-	err := uc.Execute(context.Background(), dto)
+	_, err := uc.Execute(context.Background(), dto)
 	if !errors.Is(err, hasherErr) {
 		t.Fatalf("expected hasherErr, got: %v", err)
 	}
@@ -322,7 +335,7 @@ func Test_RegisterUserUsecase_DomainValidationFailure(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			err := uc.Execute(context.Background(), tt.dto)
+			_, err := uc.Execute(context.Background(), tt.dto)
 			if err == nil {
 				t.Fatalf("expected error, got nil")
 			}
@@ -351,7 +364,7 @@ func Test_RegisterUserUsecase_SaveUserError(t *testing.T) {
 		Password:  identitymocks.DefaultPassword,
 	}
 
-	err := uc.Execute(context.Background(), dto)
+	_, err := uc.Execute(context.Background(), dto)
 	if !errors.Is(err, saveErr) {
 		t.Fatalf("expected saveErr, got: %v", err)
 	}

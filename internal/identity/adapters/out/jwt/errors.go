@@ -3,7 +3,7 @@ package jwtadapter
 import (
 	"fmt"
 
-	customerrors "github.com/AppeiYA/requisition-system/internal/shared/errors"
+	customerrors "github.com/AppeiYA/requisition-system/internal/shared/infrastructure/errors"
 )
 
 // Sentinel errors returned by the access-token service. They are

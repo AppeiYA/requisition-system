@@ -5,13 +5,13 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/AppeiYA/requisition-system/internal/shared/response"
+	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/response"
 )
 
 func (h *Handler) getMe(c *gin.Context) {
 	userID := c.GetString(userIDContextKey)
 
-	user, err := h.getMeUsecase.Execute(c.Request.Context(), userID)
+	user, err := h.identityPortIn.GetMeUsecase.Execute(c.Request.Context(), userID)
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return

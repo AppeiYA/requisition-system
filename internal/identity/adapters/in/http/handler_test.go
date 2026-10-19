@@ -12,7 +12,7 @@ import (
 	identitymocks "github.com/AppeiYA/requisition-system/internal/identity/mocks"
 	identityin "github.com/AppeiYA/requisition-system/internal/identity/ports/in"
 	identityout "github.com/AppeiYA/requisition-system/internal/identity/ports/out"
-	customerrors "github.com/AppeiYA/requisition-system/internal/shared/errors"
+	customerrors "github.com/AppeiYA/requisition-system/internal/shared/infrastructure/errors"
 	"github.com/gin-gonic/gin"
 )
 
@@ -108,7 +108,14 @@ func decodeEnvelope(t *testing.T, rec *httptest.ResponseRecorder) envelope {
 }
 
 func newHandler(login *stubLogin, refresh *stubRefresh, logout *stubLogout, me *stubGetMe, accessTokens identityout.AccessTokenService) *Handler {
-	return NewHandler(login, refresh, logout, me, accessTokens)
+	port := &identityin.IdentityPortIn{
+		LoginUserUsecase:    login,
+		LogoutUserUsecase:   logout,
+		GetMeUsecase:        me,
+		RefreshTokenUsecase: refresh,
+	}
+	mw := NewAuthMiddleware(accessTokens)
+	return NewHandler(port, mw)
 }
 
 func TestHandler_Login_Success(t *testing.T) {
@@ -226,18 +233,18 @@ func TestHandler_Me_RequiresValidToken(t *testing.T) {
 	router := newTestRouter(newHandler(&stubLogin{}, &stubRefresh{}, &stubLogout{}, me, accessTokens))
 
 	// missing header
-	if rec := doJSON(t, router, http.MethodGet, "/api/v1/me", "", nil); rec.Code != http.StatusUnauthorized {
+	if rec := doJSON(t, router, http.MethodGet, "/api/v1/auth/me", "", nil); rec.Code != http.StatusUnauthorized {
 		t.Fatalf("missing header: status = %d, want 401", rec.Code)
 	}
 
 	// invalid token
-	rec := doJSON(t, router, http.MethodGet, "/api/v1/me", "", map[string]string{"Authorization": "Bearer bad"})
+	rec := doJSON(t, router, http.MethodGet, "/api/v1/auth/me", "", map[string]string{"Authorization": "Bearer bad"})
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("invalid token: status = %d, want 401", rec.Code)
 	}
 
 	// valid token
-	rec = doJSON(t, router, http.MethodGet, "/api/v1/me", "", map[string]string{"Authorization": "Bearer good-token"})
+	rec = doJSON(t, router, http.MethodGet, "/api/v1/auth/me", "", map[string]string{"Authorization": "Bearer good-token"})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("valid token: status = %d, want 200: %s", rec.Code, rec.Body.String())
 	}

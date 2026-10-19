@@ -9,13 +9,16 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
-	
-	"github.com/AppeiYA/requisition-system/internal/shared/config"
-	"github.com/AppeiYA/requisition-system/internal/shared/db"
-	"github.com/AppeiYA/requisition-system/internal/shared/redis"
-	"github.com/AppeiYA/requisition-system/internal/shared/response"
-	"github.com/AppeiYA/requisition-system/internal/shared/server"
-	"github.com/AppeiYA/requisition-system/internal/shared/telemetry"
+
+	jwtadapter "github.com/AppeiYA/requisition-system/internal/identity/adapters/out/jwt"
+	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/config"
+	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/db"
+	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/email"
+	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/generator"
+	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/redis"
+	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/response"
+	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/server"
+	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/telemetry"
 	"github.com/gin-gonic/gin"
 )
 
@@ -73,7 +76,43 @@ func (a *App) Run() error {
 		response.Success(c, "OK", http.StatusOK, nil)
 	})
 
-	NewRouter(api, a.buildIdentityHandler(cfg, database, redisClient))
+	txManager := db.NewTransactionManager(database)
+	accessTokenService := jwtadapter.NewJWTService(cfg.JWT)
+	idGen := &generator.IDGenerator{}
+	
+	identityModule := a.buildIdentity(cfg, database, redisClient, txManager, accessTokenService, idGen)
+
+	departmentModule := a.buildDepartment(database, idGen)
+
+	invitationModule := a.buildInvitation(
+		database, 
+		txManager, 
+		identityModule.PortIn().RegisterUserUseCase, 
+		departmentModule.PortIn().CreateMembershipUsecase, 
+		idGen,
+	)
+
+	emailSender := email.NewSender(cfg.Email)
+	
+	adminModule := a.buildAdminHandler(
+		cfg, 
+		txManager, 
+		identityModule.PortIn().GetUserByEmailUsecase, 
+		invitationModule.PortIn().SaveInvitationUsecase, 
+		invitationModule.PortIn().GetInvitationUsecase,
+		departmentModule.PortIn().GetDepartmentByIDUsecase, 
+		emailSender)
+
+	if err := NewRouter(
+		api, 
+		identityModule.Handler(), 
+		invitationModule.Handler(), 
+		adminModule.Handler(), 
+		departmentModule.Handler(), 
+		identityModule.AuthMiddleware(),
+	); err != nil {
+		return err
+	}
 
 	a.server = server.New(router, &cfg.Server)
 
@@ -111,4 +150,3 @@ func (a *App) Run() error {
 // buildIdentityHandler wires the identity use cases to their adapters. It is
 // the only place that knows the concrete implementations, keeping the inner
 // layers free of infrastructure dependencies.
-

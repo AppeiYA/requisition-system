@@ -6,7 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	identityin "github.com/AppeiYA/requisition-system/internal/identity/ports/in"
-	"github.com/AppeiYA/requisition-system/internal/shared/response"
+	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/response"
 )
 
 func (h *Handler) login(c *gin.Context) {
@@ -22,7 +22,7 @@ func (h *Handler) login(c *gin.Context) {
 		return
 	}
 
-	tokens, err := h.loginUsecase.Execute(c.Request.Context(), identityin.LoginUserRequest{
+	tokens, err := h.identityPortIn.LoginUserUsecase.Execute(c.Request.Context(), identityin.LoginUserRequest{
 		Email:    req.Email,
 		Password: req.Password,
 	})

@@ -3,7 +3,7 @@ package identityout
 import (
 	"context"
 
-	customerrors "github.com/AppeiYA/requisition-system/internal/shared/errors"
+	customerrors "github.com/AppeiYA/requisition-system/internal/shared/infrastructure/errors"
 )
 
 // Application-level errors returned by RefreshSessionRepository. They are

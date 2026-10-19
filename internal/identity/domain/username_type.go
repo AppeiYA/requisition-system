@@ -1,31 +1,16 @@
 package domain
 
-import customerrors "github.com/AppeiYA/requisition-system/internal/shared/errors"
+import shareddomain "github.com/AppeiYA/requisition-system/internal/shared/domain"
 
-type UsernameType string
+// UsernameType is re-exported from shared/domain for backward compatibility.
+type UsernameType = shareddomain.UsernameType
 
 const (
-	FirstName UsernameType = "first_name"
-	LastName  UsernameType = "last_name"
+	FirstName = shareddomain.FirstName
+	LastName  = shareddomain.LastName
 )
-
-func (u UsernameType) isValid() bool {
-	switch u {
-	case FirstName, LastName:
-		return true
-	default:
-		return false
-	}
-}
 
 var (
-	ErrInvalidUsernameType = customerrors.NewInternalServerError("invalid username type")
+	ErrInvalidUsernameType = shareddomain.ErrInvalidUsernameType
+	NewUsernameType        = shareddomain.NewUsernameType
 )
-
-func NewUsernameType(value string) (UsernameType, error) {
-	nameType := UsernameType(value)
-	if !nameType.isValid() {
-		return "", ErrInvalidUsernameType
-	}
-	return nameType, nil
-}

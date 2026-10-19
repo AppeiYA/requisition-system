@@ -6,7 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	identityin "github.com/AppeiYA/requisition-system/internal/identity/ports/in"
-	"github.com/AppeiYA/requisition-system/internal/shared/response"
+	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/response"
 )
 
 type refreshRequest struct {
@@ -26,7 +26,7 @@ func (h *Handler) refresh(c *gin.Context) {
 		return
 	}
 
-	tokens, err := h.refreshUsecase.Execute(c.Request.Context(), identityin.RefreshTokenRequest{
+	tokens, err := h.identityPortIn.RefreshTokenUsecase.Execute(c.Request.Context(), identityin.RefreshTokenRequest{
 		RefreshToken: req.RefreshToken,
 	})
 	if err != nil {

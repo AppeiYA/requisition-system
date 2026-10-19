@@ -8,7 +8,7 @@ import (
 	"time"
 
 	identityout "github.com/AppeiYA/requisition-system/internal/identity/ports/out"
-	"github.com/AppeiYA/requisition-system/internal/shared/config"
+	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/config"
 )
 
 const (

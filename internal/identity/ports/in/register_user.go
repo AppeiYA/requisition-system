@@ -5,10 +5,13 @@ import "context"
 type RegisterUserDTO struct {
 	FirstName string
 	LastName  string
+	Phone     string
+	StaffID   string
 	Email     string
 	Password  string
 }
 
 type RegisterUserUseCaseInt interface {
-	Execute(ctx context.Context, dto RegisterUserDTO) error
+	// Execute registers the user and returns the generated user ID.
+	Execute(ctx context.Context, dto RegisterUserDTO) (string, error)
 }

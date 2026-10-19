@@ -6,9 +6,15 @@ import (
 	"time"
 
 	identityout "github.com/AppeiYA/requisition-system/internal/identity/ports/out"
-	"github.com/AppeiYA/requisition-system/internal/shared/config"
+	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/config"
 	"github.com/golang-jwt/jwt/v5"
 )
+
+type AccessTokenClaims struct {
+	Email string `json:"email"`
+	Role string `json:"role"`
+	jwt.RegisteredClaims
+}
 
 func NewJWTService(cfg config.JWTConfig) *JWTService {
 	return &JWTService{
@@ -33,13 +39,17 @@ func (s *JWTService) GenerateAccessToken(
 
 	now := time.Now()
 
-	claims := jwt.RegisteredClaims{
-		Subject:   user.ID,
-		Issuer:    s.issuer,
-		Audience:  jwt.ClaimStrings{s.audience},
-		IssuedAt:  jwt.NewNumericDate(now),
-		NotBefore: jwt.NewNumericDate(now),
-		ExpiresAt: jwt.NewNumericDate(now.Add(s.ttl)),
+	claims := AccessTokenClaims{
+		Email: user.Email,
+		Role: user.Role,
+		RegisteredClaims: jwt.RegisteredClaims{	
+			Subject:   user.ID,
+			Issuer:    s.issuer,
+			Audience:  jwt.ClaimStrings{s.audience},
+			IssuedAt:  jwt.NewNumericDate(now),
+			NotBefore: jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(now.Add(s.ttl)),
+		},
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
@@ -59,7 +69,7 @@ func (s *JWTService) ValidateAccessToken(
 	ctx context.Context,
 	token string,
 ) (*identityout.TokenModel, error) {
-	claims := &jwt.RegisteredClaims{}
+	claims := &AccessTokenClaims{}
 
 	parsedToken, err := jwt.ParseWithClaims(
 		token,
@@ -85,7 +95,11 @@ func (s *JWTService) ValidateAccessToken(
 		return nil, ErrInvalidToken
 	}
 
-	return &identityout.TokenModel{ID: claims.Subject}, nil
+	return &identityout.TokenModel{
+		ID:    claims.Subject,
+		Role:  claims.Role,
+		Email: claims.Email,
+	}, nil
 }
 
 func mapValidationError(err error) error {

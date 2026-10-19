@@ -6,10 +6,12 @@ import (
 )
 
 type UserResponse struct {
-	ID    string 
-	Email string 
+	ID        string
+	Email     string
 	FirstName string
-	LastName string
+	LastName  string
+	Phone     string
+	StaffID   string
 	CreatedAt time.Time
 	UpdatedAt *time.Time
 }

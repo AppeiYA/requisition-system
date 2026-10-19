@@ -8,7 +8,8 @@ import (
 	"github.com/AppeiYA/requisition-system/internal/identity/domain"
 	identityin "github.com/AppeiYA/requisition-system/internal/identity/ports/in"
 	identityout "github.com/AppeiYA/requisition-system/internal/identity/ports/out"
-	customerrors "github.com/AppeiYA/requisition-system/internal/shared/errors"
+	shareddomain "github.com/AppeiYA/requisition-system/internal/shared/domain"
+	customerrors "github.com/AppeiYA/requisition-system/internal/shared/infrastructure/errors"
 )
 
 var (
@@ -33,51 +34,58 @@ func NewRegisterUserUsecase(
 	}
 }
 
-func (u *RegisterUserUsecase) Execute(ctx context.Context, dto identityin.RegisterUserDTO) error {
+func (u *RegisterUserUsecase) Execute(ctx context.Context, dto identityin.RegisterUserDTO) (string, error) {
 	if err := ctx.Err(); err != nil {
-		return err
+		return "", err
 	}
 
-	email, err := domain.NewEmail(dto.Email)
+	email, err := shareddomain.NewEmail(dto.Email)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	existingUser, err := u.userRepo.GetUserByEmail(ctx, email)
 	if err != nil {
 		var custErr *customerrors.CustomError
 		if !errors.As(err, &custErr) || custErr.Code != http.StatusNotFound {
-			return err
+			return "", err
 		}
 	}
 	if existingUser != nil {
-		return ErrUserAlreadyExists
+		return "", ErrUserAlreadyExists
 	}
 
 	userID, err := u.idGenerator.GenerateID(domain.UserIDPrefix)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	validPass, err := domain.NewPassword(dto.Password)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	hashedPassword, err := u.passwordHasher.HashPassword(validPass.Value())
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	passHash, err := domain.NewPasswordHash(hashedPassword)
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	user, err := domain.NewUser(userID, dto.FirstName, dto.LastName, email, passHash)
+	user, err := domain.NewUser(userID, dto.FirstName, dto.LastName, dto.Phone, dto.StaffID, email, passHash)
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	return u.userRepo.SaveUser(ctx, user)
+	if err := u.userRepo.SaveUser(ctx, user); err != nil {
+		return "", err
+	}
+
+	// The ID is handed back so the caller (invitation acceptance) can link
+	// ancillary records — such as the department membership — to this user
+	// within the same transaction.
+	return userID, nil
 }
