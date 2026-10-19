@@ -17,5 +17,5 @@ var _ = response.Response{}
 //	@Success		200		{object}	response.Response{data=ValidateInvitationResponse}
 //	@Failure		400		{object}	response.ErrorResponse	"Token is missing"
 //	@Failure		404		{object}	response.Response		"Invitation not found"
-//	@Router			/v1/invitations/{token}/validate [get]
+//	@Router			/invitations/{token}/validate [get]
 func validateInvitationDoc() {}

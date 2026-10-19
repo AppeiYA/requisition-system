@@ -19,5 +19,5 @@ var _ = response.Response{}
 //	@Success		200		{object}	response.Response
 //	@Failure		400		{object}	response.ErrorResponse	"Validation error"
 //	@Failure		404		{object}	response.Response		"Invitation not found"
-//	@Router			/v1/invitations/{token}/accept [post]
+//	@Router			/invitations/{token}/accept [post]
 func acceptInvitationDoc() {}

@@ -1,3 +1,5 @@
 .env
 
-docs
+docs/*
+!docs/openapi.yaml
+!docs/embed.go

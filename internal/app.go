@@ -20,12 +20,6 @@ import (
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/server"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/telemetry"
 	"github.com/gin-gonic/gin"
-
-	// swaggerFiles "github.com/swaggo/files"
-	// ginSwagger "github.com/swaggo/gin-swagger"
-
-	// Registers the generated swagger spec with the swag registry.
-	_ "github.com/AppeiYA/requisition-system/docs"
 )
 
 type App struct {
@@ -82,9 +76,6 @@ func (a *App) Run() error {
 		response.Success(c, "OK", http.StatusOK, nil)
 	})
 
-	// Swagger UI is served at http://<host>/swagger/index.html.
-	// router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
-
 	txManager := db.NewTransactionManager(database)
 	accessTokenService := jwtadapter.NewJWTService(cfg.JWT)
 	idGen := &generator.IDGenerator{}
@@ -112,14 +103,16 @@ func (a *App) Run() error {
 		departmentModule.PortIn().GetDepartmentByIDUsecase, 
 		emailSender)
 
-	NewRouter(
+	if err := NewRouter(
 		api, 
 		identityModule.Handler(), 
 		invitationModule.Handler(), 
 		adminModule.Handler(), 
 		departmentModule.Handler(), 
 		identityModule.AuthMiddleware(),
-	)
+	); err != nil {
+		return err
+	}
 
 	a.server = server.New(router, &cfg.Server)
 

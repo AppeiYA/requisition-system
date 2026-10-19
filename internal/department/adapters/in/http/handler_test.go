@@ -69,7 +69,7 @@ func Test_CreateDepartment_Success(t *testing.T) {
 	create := &stubCreateDepartment{res: &departmentin.CreateDepartmentResult{ID: "dpt-1", Name: "Finance", Code: "FIN", Status: "active"}}
 	router := newTestRouter(create, &stubGetDepartmentByID{})
 
-	rec := doJSON(t, router, http.MethodPost, "/api/v1/admin/departments", `{"name":"Finance","description":"Handles payments","code":"FIN"}`)
+	rec := doJSON(t, router, http.MethodPost, "/api/v1/departments", `{"name":"Finance","description":"Handles payments","code":"FIN"}`)
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("status = %d, want 201: %s", rec.Code, rec.Body.String())
 	}
@@ -83,7 +83,7 @@ func Test_CreateDepartment_InvalidBody(t *testing.T) {
 
 	router := newTestRouter(&stubCreateDepartment{}, &stubGetDepartmentByID{})
 
-	rec := doJSON(t, router, http.MethodPost, "/api/v1/admin/departments", `{"name":"Finance"}`)
+	rec := doJSON(t, router, http.MethodPost, "/api/v1/departments", `{"name":"Finance"}`)
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400: %s", rec.Code, rec.Body.String())
 	}
@@ -95,7 +95,7 @@ func Test_CreateDepartment_Conflict(t *testing.T) {
 	create := &stubCreateDepartment{err: customerrors.NewConflictError("department with this code already exists")}
 	router := newTestRouter(create, &stubGetDepartmentByID{})
 
-	rec := doJSON(t, router, http.MethodPost, "/api/v1/admin/departments", `{"name":"Finance","description":"Handles payments","code":"FIN"}`)
+	rec := doJSON(t, router, http.MethodPost, "/api/v1/departments", `{"name":"Finance","description":"Handles payments","code":"FIN"}`)
 	if rec.Code != http.StatusConflict {
 		t.Fatalf("status = %d, want 409: %s", rec.Code, rec.Body.String())
 	}
@@ -107,7 +107,7 @@ func Test_GetDepartment_Success(t *testing.T) {
 	get := &stubGetDepartmentByID{res: &departmentin.DepartmentResult{ID: "dpt-1", Name: "Finance", Status: "active"}}
 	router := newTestRouter(&stubCreateDepartment{}, get)
 
-	rec := doJSON(t, router, http.MethodGet, "/api/v1/admin/departments/dpt-1", "")
+	rec := doJSON(t, router, http.MethodGet, "/api/v1/departments/dpt-1", "")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
 	}
@@ -122,7 +122,7 @@ func Test_GetDepartment_NotFound(t *testing.T) {
 	get := &stubGetDepartmentByID{err: customerrors.NewNotFoundError("department not found")}
 	router := newTestRouter(&stubCreateDepartment{}, get)
 
-	rec := doJSON(t, router, http.MethodGet, "/api/v1/admin/departments/dpt-missing", "")
+	rec := doJSON(t, router, http.MethodGet, "/api/v1/departments/dpt-missing", "")
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want 404: %s", rec.Code, rec.Body.String())
 	}

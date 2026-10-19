@@ -8,7 +8,7 @@ import (
 )
 
 func (h *DepartmentHandler) getByID(c *gin.Context) {
-	res, err := h.departmentPortIn.GetDepartmentByIDUsecase.Execute(c.Request.Context(), c.Param("_id"))
+	res, err := h.departmentPortIn.GetDepartmentByIDUsecase.Execute(c.Request.Context(), c.Param("id"))
 	if err != nil {
 		response.ErrorFrom(c, err)
 		c.Abort()

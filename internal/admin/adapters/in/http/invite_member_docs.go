@@ -15,7 +15,7 @@ var (
 // inviteMemberDoc documents the invite handler in handler.go.
 //
 //	@Summary		Invite a member
-//	@Description	Creates a pending invitation for the given email and department and emails the invitation link.
+//	@Description	Creates a pending invitation for the given email and department and emails the invitation link. Requires the admin role.
 //	@Tags			admin
 //	@Accept			json
 //	@Produce		json
@@ -24,6 +24,7 @@ var (
 //	@Success		201		{object}	response.Response{data=adminin.InviteMemberResult}
 //	@Failure		400		{object}	response.ErrorResponse	"Validation error"
 //	@Failure		401		{object}	response.Response		"Missing or invalid access token"
+//	@Failure		403		{object}	response.Response		"Authenticated user is not an admin"
 //	@Failure		409		{object}	response.Response		"Invitation already exists"
 //	@Router			/admin/invitations [post]
 func inviteMemberDoc() {}
