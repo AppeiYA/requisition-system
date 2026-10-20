@@ -13,11 +13,11 @@ import (
 	jwtadapter "github.com/AppeiYA/requisition-system/internal/identity/adapters/out/jwt"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/config"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/db"
-	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/email"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/generator"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/redis"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/response"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/server"
+	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/taskqueue"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/telemetry"
 	"github.com/gin-gonic/gin"
 )
@@ -92,8 +92,10 @@ func (a *App) Run() error {
 		idGen,
 	)
 
-	emailSender := email.NewSender(cfg.Email)
-	
+	// The asynq client shares the Redis pool above; redisClient.Close()
+	// owns tearing it down, so the client is not closed separately.
+	asynqClient := taskqueue.NewClient(redisClient)
+
 	adminModule := a.buildAdminHandler(
 		cfg, 
 		txManager, 
@@ -101,7 +103,7 @@ func (a *App) Run() error {
 		invitationModule.PortIn().SaveInvitationUsecase, 
 		invitationModule.PortIn().GetInvitationUsecase,
 		departmentModule.PortIn().GetDepartmentByIDUsecase, 
-		emailSender)
+		asynqClient)
 
 	if err := NewRouter(
 		api, 

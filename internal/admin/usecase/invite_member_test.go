@@ -9,6 +9,7 @@ import (
 	adminmocks "github.com/AppeiYA/requisition-system/internal/admin/mocks"
 	adminin "github.com/AppeiYA/requisition-system/internal/admin/ports/in"
 	adminout "github.com/AppeiYA/requisition-system/internal/admin/ports/out"
+	"github.com/AppeiYA/requisition-system/internal/admin/tasks"
 	shareddomain "github.com/AppeiYA/requisition-system/internal/shared/domain"
 )
 
@@ -26,13 +27,13 @@ func inviteCmd() adminin.InviteMemberCommand {
 }
 
 func newInviteUsecase(
-	sender adminout.EmailSender,
+	taskQueue adminout.TaskQueue,
 	identity adminout.AdminIdentityPort,
 	invitations adminout.AdminInvitationPort,
 	department adminout.AdminDepartmentPort,
 	tx adminout.TransactionManager,
 ) *InviteMemberUsecase {
-	return NewInviteMemberUsecase(sender, identity, invitations, department, tx)
+	return NewInviteMemberUsecase(taskQueue, identity, invitations, department, tx)
 }
 
 func Test_InviteMemberUsecase_Success(t *testing.T) {
@@ -42,8 +43,9 @@ func Test_InviteMemberUsecase_Success(t *testing.T) {
 	var savedInviter string
 	var savedFirstName, savedLastName, savedPhone, savedStaffID string
 	var savedDepartmentID, savedJobTitle string
-	var checkedDepartmentID string
-	var sentTo, sentToken string
+	var lookedUpDepartmentID string
+	var queuedTo, queuedInvitedBy, queuedToken, queuedExpiresAt string
+	var queuedDepartmentName, queuedJobTitle string
 	var txUsed bool
 
 	identity := adminmocks.NewMockAdminIdentityPort()
@@ -52,9 +54,9 @@ func Test_InviteMemberUsecase_Success(t *testing.T) {
 	}
 
 	department := adminmocks.NewMockAdminDepartmentPort()
-	department.CheckDepartmentExistsFunc = func(ctx context.Context, departmentID string) (bool, error) {
-		checkedDepartmentID = departmentID
-		return true, nil
+	department.GetDepartmentByIDFunc = func(ctx context.Context, departmentID string) (*adminout.DepartmentResponse, error) {
+		lookedUpDepartmentID = departmentID
+		return &adminout.DepartmentResponse{ID: departmentID, Name: adminmocks.DefaultDepartmentName}, nil
 	}
 
 	invitations := adminmocks.NewMockAdminInvitationPort()
@@ -77,10 +79,14 @@ func Test_InviteMemberUsecase_Success(t *testing.T) {
 		}, nil
 	}
 
-	sender := adminmocks.NewMockEmailSender()
-	sender.SendInvitationFunc = func(ctx context.Context, to string, invitedBy string, token string, expiresAt string) error {
-		sentTo = to
-		sentToken = token
+	queue := adminmocks.NewMockTaskQueue()
+	queue.EnqueueInvitationEmailFunc = func(ctx context.Context, payload tasks.InvitationEmailPayload) error {
+		queuedTo = payload.To
+		queuedInvitedBy = payload.InvitedBy
+		queuedToken = payload.Token
+		queuedExpiresAt = payload.ExpiresAt
+		queuedDepartmentName = payload.DepartmentName
+		queuedJobTitle = payload.JobTitle
 		return nil
 	}
 
@@ -90,7 +96,7 @@ func Test_InviteMemberUsecase_Success(t *testing.T) {
 		return fn(ctx)
 	}
 
-	uc := newInviteUsecase(sender, identity, invitations, department, tx)
+	uc := newInviteUsecase(queue, identity, invitations, department, tx)
 
 	res, err := uc.Execute(context.Background(), inviteCmd())
 	if err != nil {
@@ -100,8 +106,8 @@ func Test_InviteMemberUsecase_Success(t *testing.T) {
 	if !txUsed {
 		t.Error("expected invitation to be saved inside a transaction")
 	}
-	if checkedDepartmentID != adminmocks.DefaultDepartmentID {
-		t.Errorf("expected department check for %q, got %q", adminmocks.DefaultDepartmentID, checkedDepartmentID)
+	if lookedUpDepartmentID != adminmocks.DefaultDepartmentID {
+		t.Errorf("expected department lookup for %q, got %q", adminmocks.DefaultDepartmentID, lookedUpDepartmentID)
 	}
 	if res.InvitationID != adminmocks.DefaultInvitationID {
 		t.Errorf("expected invitation id %q, got %q", adminmocks.DefaultInvitationID, res.InvitationID)
@@ -127,11 +133,23 @@ func Test_InviteMemberUsecase_Success(t *testing.T) {
 	if savedJobTitle != adminmocks.DefaultJobTitle {
 		t.Errorf("expected saved job title %q, got %q", adminmocks.DefaultJobTitle, savedJobTitle)
 	}
-	if sentTo != adminmocks.DefaultEmail {
-		t.Errorf("expected email sent to %q, got %q", adminmocks.DefaultEmail, sentTo)
+	if queuedTo != adminmocks.DefaultEmail {
+		t.Errorf("expected email queued for %q, got %q", adminmocks.DefaultEmail, queuedTo)
 	}
-	if sentToken != adminmocks.DefaultToken {
-		t.Errorf("expected token %q, got %q", adminmocks.DefaultToken, sentToken)
+	if queuedInvitedBy != adminmocks.DefaultInviterID {
+		t.Errorf("expected queued inviter %q, got %q", adminmocks.DefaultInviterID, queuedInvitedBy)
+	}
+	if queuedToken != adminmocks.DefaultToken {
+		t.Errorf("expected queued token %q, got %q", adminmocks.DefaultToken, queuedToken)
+	}
+	if queuedExpiresAt == "" {
+		t.Error("expected invitation expiry to be queued with the task")
+	}
+	if queuedDepartmentName != adminmocks.DefaultDepartmentName {
+		t.Errorf("expected queued department name %q, got %q", adminmocks.DefaultDepartmentName, queuedDepartmentName)
+	}
+	if queuedJobTitle != adminmocks.DefaultJobTitle {
+		t.Errorf("expected queued job title %q, got %q", adminmocks.DefaultJobTitle, queuedJobTitle)
 	}
 }
 
@@ -139,7 +157,7 @@ func Test_InviteMemberUsecase_InvalidEmail(t *testing.T) {
 	t.Parallel()
 
 	uc := newInviteUsecase(
-		adminmocks.NewMockEmailSender(),
+		adminmocks.NewMockTaskQueue(),
 		adminmocks.NewMockAdminIdentityPort(),
 		adminmocks.NewMockAdminInvitationPort(),
 		adminmocks.NewMockAdminDepartmentPort(),
@@ -157,8 +175,8 @@ func Test_InviteMemberUsecase_DepartmentNotFound(t *testing.T) {
 
 	saveCalled := false
 	department := adminmocks.NewMockAdminDepartmentPort()
-	department.CheckDepartmentExistsFunc = func(ctx context.Context, departmentID string) (bool, error) {
-		return false, nil
+	department.GetDepartmentByIDFunc = func(ctx context.Context, departmentID string) (*adminout.DepartmentResponse, error) {
+		return nil, nil
 	}
 
 	invitations := adminmocks.NewMockAdminInvitationPort()
@@ -167,7 +185,7 @@ func Test_InviteMemberUsecase_DepartmentNotFound(t *testing.T) {
 		return &adminout.SavedInvitation{ID: adminmocks.DefaultInvitationID, Token: adminmocks.DefaultToken, ExpiresAt: time.Now()}, nil
 	}
 
-	uc := newInviteUsecase(adminmocks.NewMockEmailSender(), adminmocks.NewMockAdminIdentityPort(), invitations, department, adminmocks.NewMockTransactionManager())
+	uc := newInviteUsecase(adminmocks.NewMockTaskQueue(), adminmocks.NewMockAdminIdentityPort(), invitations, department, adminmocks.NewMockTransactionManager())
 
 	_, err := uc.Execute(context.Background(), inviteCmd())
 	if err != ErrDepartmentNotFound {
@@ -178,20 +196,30 @@ func Test_InviteMemberUsecase_DepartmentNotFound(t *testing.T) {
 	}
 }
 
-func Test_InviteMemberUsecase_DepartmentCheckError(t *testing.T) {
+func Test_InviteMemberUsecase_DepartmentLookupError(t *testing.T) {
 	t.Parallel()
 
-	checkErr := errors.New("department check failed")
+	lookupErr := errors.New("department lookup failed")
 	department := adminmocks.NewMockAdminDepartmentPort()
-	department.CheckDepartmentExistsFunc = func(ctx context.Context, departmentID string) (bool, error) {
-		return false, checkErr
+	department.GetDepartmentByIDFunc = func(ctx context.Context, departmentID string) (*adminout.DepartmentResponse, error) {
+		return nil, lookupErr
 	}
 
-	uc := newInviteUsecase(adminmocks.NewMockEmailSender(), adminmocks.NewMockAdminIdentityPort(), adminmocks.NewMockAdminInvitationPort(), department, adminmocks.NewMockTransactionManager())
+	saveCalled := false
+	invitations := adminmocks.NewMockAdminInvitationPort()
+	invitations.SaveInvitationFunc = func(ctx context.Context, params adminout.SaveInvitationParams) (*adminout.SavedInvitation, error) {
+		saveCalled = true
+		return &adminout.SavedInvitation{ID: adminmocks.DefaultInvitationID, Token: adminmocks.DefaultToken, ExpiresAt: time.Now()}, nil
+	}
+
+	uc := newInviteUsecase(adminmocks.NewMockTaskQueue(), adminmocks.NewMockAdminIdentityPort(), invitations, department, adminmocks.NewMockTransactionManager())
 
 	_, err := uc.Execute(context.Background(), inviteCmd())
-	if !errors.Is(err, checkErr) {
-		t.Fatalf("expected checkErr, got: %v", err)
+	if !errors.Is(err, lookupErr) {
+		t.Fatalf("expected lookupErr, got: %v", err)
+	}
+	if saveCalled {
+		t.Error("invitation must not be saved when the department cannot be resolved")
 	}
 }
 
@@ -203,7 +231,7 @@ func Test_InviteMemberUsecase_UserAlreadyExists(t *testing.T) {
 		return true, nil
 	}
 
-	uc := newInviteUsecase(adminmocks.NewMockEmailSender(), identity, adminmocks.NewMockAdminInvitationPort(), adminmocks.NewMockAdminDepartmentPort(), adminmocks.NewMockTransactionManager())
+	uc := newInviteUsecase(adminmocks.NewMockTaskQueue(), identity, adminmocks.NewMockAdminInvitationPort(), adminmocks.NewMockAdminDepartmentPort(), adminmocks.NewMockTransactionManager())
 
 	_, err := uc.Execute(context.Background(), inviteCmd())
 	if err != ErrUserAlreadyExists {
@@ -219,7 +247,7 @@ func Test_InviteMemberUsecase_PendingInvitation(t *testing.T) {
 		return true, nil
 	}
 
-	uc := newInviteUsecase(adminmocks.NewMockEmailSender(), adminmocks.NewMockAdminIdentityPort(), invitations, adminmocks.NewMockAdminDepartmentPort(), adminmocks.NewMockTransactionManager())
+	uc := newInviteUsecase(adminmocks.NewMockTaskQueue(), adminmocks.NewMockAdminIdentityPort(), invitations, adminmocks.NewMockAdminDepartmentPort(), adminmocks.NewMockTransactionManager())
 
 	_, err := uc.Execute(context.Background(), inviteCmd())
 	if err != ErrPendingInvitation {
@@ -236,7 +264,7 @@ func Test_InviteMemberUsecase_IdentityCheckError(t *testing.T) {
 		return false, checkErr
 	}
 
-	uc := newInviteUsecase(adminmocks.NewMockEmailSender(), identity, adminmocks.NewMockAdminInvitationPort(), adminmocks.NewMockAdminDepartmentPort(), adminmocks.NewMockTransactionManager())
+	uc := newInviteUsecase(adminmocks.NewMockTaskQueue(), identity, adminmocks.NewMockAdminInvitationPort(), adminmocks.NewMockAdminDepartmentPort(), adminmocks.NewMockTransactionManager())
 
 	_, err := uc.Execute(context.Background(), inviteCmd())
 	if !errors.Is(err, checkErr) {
@@ -253,7 +281,7 @@ func Test_InviteMemberUsecase_InvitationCheckError(t *testing.T) {
 		return false, checkErr
 	}
 
-	uc := newInviteUsecase(adminmocks.NewMockEmailSender(), adminmocks.NewMockAdminIdentityPort(), invitations, adminmocks.NewMockAdminDepartmentPort(), adminmocks.NewMockTransactionManager())
+	uc := newInviteUsecase(adminmocks.NewMockTaskQueue(), adminmocks.NewMockAdminIdentityPort(), invitations, adminmocks.NewMockAdminDepartmentPort(), adminmocks.NewMockTransactionManager())
 
 	_, err := uc.Execute(context.Background(), inviteCmd())
 	if !errors.Is(err, checkErr) {
@@ -270,21 +298,21 @@ func Test_InviteMemberUsecase_SaveError(t *testing.T) {
 		return nil, saveErr
 	}
 
-	emailSent := false
-	sender := adminmocks.NewMockEmailSender()
-	sender.SendInvitationFunc = func(ctx context.Context, to string, invitedBy string, token string, expiresAt string) error {
-		emailSent = true
+	taskQueued := false
+	queue := adminmocks.NewMockTaskQueue()
+	queue.EnqueueInvitationEmailFunc = func(ctx context.Context, payload tasks.InvitationEmailPayload) error {
+		taskQueued = true
 		return nil
 	}
 
-	uc := newInviteUsecase(sender, adminmocks.NewMockAdminIdentityPort(), invitations, adminmocks.NewMockAdminDepartmentPort(), adminmocks.NewMockTransactionManager())
+	uc := newInviteUsecase(queue, adminmocks.NewMockAdminIdentityPort(), invitations, adminmocks.NewMockAdminDepartmentPort(), adminmocks.NewMockTransactionManager())
 
 	_, err := uc.Execute(context.Background(), inviteCmd())
 	if !errors.Is(err, saveErr) {
 		t.Fatalf("expected saveErr, got: %v", err)
 	}
-	if emailSent {
-		t.Error("email must not be sent when the invitation cannot be saved")
+	if taskQueued {
+		t.Error("no task must be queued when the invitation cannot be saved")
 	}
 }
 
@@ -297,7 +325,7 @@ func Test_InviteMemberUsecase_TransactionError(t *testing.T) {
 		return txErr
 	}
 
-	uc := newInviteUsecase(adminmocks.NewMockEmailSender(), adminmocks.NewMockAdminIdentityPort(), adminmocks.NewMockAdminInvitationPort(), adminmocks.NewMockAdminDepartmentPort(), tx)
+	uc := newInviteUsecase(adminmocks.NewMockTaskQueue(), adminmocks.NewMockAdminIdentityPort(), adminmocks.NewMockAdminInvitationPort(), adminmocks.NewMockAdminDepartmentPort(), tx)
 
 	_, err := uc.Execute(context.Background(), inviteCmd())
 	if !errors.Is(err, txErr) {
@@ -305,20 +333,20 @@ func Test_InviteMemberUsecase_TransactionError(t *testing.T) {
 	}
 }
 
-func Test_InviteMemberUsecase_EmailError(t *testing.T) {
+func Test_InviteMemberUsecase_EnqueueError(t *testing.T) {
 	t.Parallel()
 
-	sendErr := errors.New("send failed")
-	sender := adminmocks.NewMockEmailSender()
-	sender.SendInvitationFunc = func(ctx context.Context, to string, invitedBy string, token string, expiresAt string) error {
-		return sendErr
+	enqueueErr := errors.New("enqueue failed")
+	queue := adminmocks.NewMockTaskQueue()
+	queue.EnqueueInvitationEmailFunc = func(ctx context.Context, payload tasks.InvitationEmailPayload) error {
+		return enqueueErr
 	}
 
-	uc := newInviteUsecase(sender, adminmocks.NewMockAdminIdentityPort(), adminmocks.NewMockAdminInvitationPort(), adminmocks.NewMockAdminDepartmentPort(), adminmocks.NewMockTransactionManager())
+	uc := newInviteUsecase(queue, adminmocks.NewMockAdminIdentityPort(), adminmocks.NewMockAdminInvitationPort(), adminmocks.NewMockAdminDepartmentPort(), adminmocks.NewMockTransactionManager())
 
 	_, err := uc.Execute(context.Background(), inviteCmd())
-	if !errors.Is(err, sendErr) {
-		t.Fatalf("expected sendErr, got: %v", err)
+	if !errors.Is(err, enqueueErr) {
+		t.Fatalf("expected enqueueErr, got: %v", err)
 	}
 }
 
@@ -329,7 +357,7 @@ func Test_InviteMemberUsecase_ContextCancelled(t *testing.T) {
 	cancel()
 
 	uc := newInviteUsecase(
-		adminmocks.NewMockEmailSender(),
+		adminmocks.NewMockTaskQueue(),
 		adminmocks.NewMockAdminIdentityPort(),
 		adminmocks.NewMockAdminInvitationPort(),
 		adminmocks.NewMockAdminDepartmentPort(),

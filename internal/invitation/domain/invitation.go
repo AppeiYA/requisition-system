@@ -23,6 +23,20 @@ var InvitationIDPrefix = "inv"
 const InvitationTokenBytes = 32
 const InvitationExpirationDuration = 24 * time.Hour
 
+// InvitationStatus is the lifecycle state of an invitation. It advances
+// pending -> delivered (or failed) -> accepted/revoked, and 'expired' is
+// applied lazily when a stale invitation is found. Expiry itself stays a
+// timestamp check: an invitation can be past its deadline long before
+// anything flips its status.
+const (
+	InvitationStatusPending = "pending"
+	InvitationStatusDelivered = "delivered"
+	InvitationStatusFailed   = "failed"
+	InvitationStatusAccepted = "accepted"
+	InvitationStatusRevoked  = "revoked"
+	InvitationStatusExpired  = "expired"
+)
+
 type InvitationToken string
 
 func HashInvitationToken(token string) string {
@@ -41,6 +55,7 @@ type Invitation struct {
 	email        *shareddomain.Email
 	tokenHash    string
 	invitedBy    string
+	status       string
 	expiresAt    time.Time
 	acceptedAt   *time.Time
 	revokedAt    *time.Time

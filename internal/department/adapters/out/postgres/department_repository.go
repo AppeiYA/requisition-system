@@ -62,3 +62,31 @@ func (r *DepartmentRepository) GetDepartmentByID(ctx context.Context, id string)
 	}
 	return model.ToDomain()
 }
+
+var getDepartmentsQuery = `
+	SELECT id, name, description, code, status, created_at, updated_at
+	FROM departments
+	ORDER BY name ASC
+`
+
+func (r *DepartmentRepository) GetDepartments(ctx context.Context) ([]*departmentdomain.Department, error) {
+	var modelsList []models.DepartmentModel
+
+	err := r.repository.Executor(ctx).SelectContext(ctx, &modelsList, getDepartmentsQuery)
+	if err != nil {
+		return nil, err
+	}
+
+	departments := make([]*departmentdomain.Department, 0, len(modelsList))
+
+	for _, model := range modelsList {
+		department, err := model.ToDomain()
+		if err != nil {
+			return nil, err
+		}
+
+		departments = append(departments, department)
+	}
+
+	return departments, nil
+}

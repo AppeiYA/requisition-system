@@ -63,3 +63,14 @@ jobs:
                 tags: |
                     ${{env.REGISTRY}}/${{env.IMAGE_NAME}}:latest
                     ${{env.REGISTRY}}/${{env.IMAGE_NAME}}:${{github.sha}}
+
+            - name: Build and push worker docker image
+              uses: docker/build-push-action@v6
+              with:
+                context: .
+                file: ./dockerfile
+                target: worker
+                push: true
+                tags: |
+                    ${{env.REGISTRY}}/${{env.IMAGE_NAME}}-worker:latest
+                    ${{env.REGISTRY}}/${{env.IMAGE_NAME}}-worker:${{github.sha}}

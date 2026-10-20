@@ -26,12 +26,14 @@ func main() {
 	seedFile := flag.String("seed-file", "", "Run a specific seed file")
 	flag.Parse()
 
-	cfg, err := config.Load()
+	// Migrations only need the database, so they deliberately skip the full
+	// config (which also requires credentials such as the Resend API key).
+	dbConfig, err := config.LoadDBConfig()
 	if err != nil {
-		log.Fatalf("Failed to load config: %v", err)
+		log.Fatalf("Failed to load database config: %v", err)
 	}
 
-	db, err := sqlx.Connect("postgres", cfg.DB.DSN())
+	db, err := sqlx.Connect("postgres", dbConfig.DSN())
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
@@ -49,7 +51,7 @@ func main() {
 
 	// Migration actions
 	driver, err := migratepostgres.WithInstance(db.DB, &migratepostgres.Config{
-		DatabaseName: cfg.DB.Name,
+		DatabaseName: dbConfig.Name,
 	})
 	if err != nil {
 		log.Fatal(err)
@@ -57,7 +59,7 @@ func main() {
 
 	m, err := migrate.NewWithDatabaseInstance(
 		"file://migrations",
-		cfg.DB.Name,
+		dbConfig.Name,
 		driver,
 	)
 	if err != nil {

@@ -11,6 +11,7 @@ type Config struct {
 	JWT      JWTConfig
 	Email    EmailConfig
 	Frontend FrontendConfig
+	Worker   WorkerConfig
 }
 
 type AppConfig struct {
@@ -58,15 +59,21 @@ type JWTConfig struct {
 }
 
 type EmailConfig struct {
-	Host     string
-	Port     int
-	Username string
-	Password string
-	From     string
+	APIKey   string // Resend API key
+	From     string // verified sender address, e.g. "onboarding@resend.dev"
 	FromName string
-	SSL      bool
 }
 
 type FrontendConfig struct {
 	BaseURL string
+}
+
+// WorkerConfig configures the asynq worker process and the tasks enqueued
+// for it.
+type WorkerConfig struct {
+	Concurrency     int           // parallel task handlers
+	Queue           string        // queue the worker drains and tasks are pushed to
+	TaskMaxRetry    int           // delivery attempts before a task is given up on
+	TaskTimeout     time.Duration // per-attempt processing timeout
+	ShutdownTimeout time.Duration // grace period for in-flight tasks on shutdown
 }

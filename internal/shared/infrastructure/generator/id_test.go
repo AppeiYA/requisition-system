@@ -24,7 +24,7 @@ func Test_IDGenerator_GenerateID(t *testing.T) {
 	}
 
 	suffix := strings.TrimPrefix(id, expectedPrefix)
-	if len(suffix) != 8 {
-		t.Errorf("expected suffix length of 8, got %d (id: %s)", len(suffix), id)
+	if len(suffix) != 16 {
+		t.Errorf("expected suffix length of 16, got %d (id: %s)", len(suffix), id)
 	}
 }

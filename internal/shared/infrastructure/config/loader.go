@@ -57,6 +57,11 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 
+	workerConfig, err := LoadWorkerConfig()
+	if err != nil {
+		return nil, err
+	}
+
 	return &Config{
 		App:      *appConfig,
 		API:      *apiConfig,
@@ -66,6 +71,7 @@ func Load() (*Config, error) {
 		JWT:      *jwtConfig,
 		Email:    *emailConfig,
 		Frontend: *frontendConfig,
+		Worker:   *workerConfig,
 	}, nil
 }
 
@@ -94,6 +100,7 @@ func LoadServerConfig() (*ServerConfig, error) {
 }
 
 func LoadDBConfig() (*DBConfig, error) {
+	_ = godotenv.Load()
 	dbHost, err := requireEnv("DB_HOST")
 	if err != nil {
 		return nil, err
@@ -219,25 +226,55 @@ func LoadRedisConfig() (*RedisConfig, error) {
 	}, nil
 }
 
+// LoadEmailConfig loads the Resend (https://resend.com) credentials. The API
+// key is required: invitations cannot be delivered without it.
 func LoadEmailConfig() (*EmailConfig, error) {
-	host := getEnv("EMAIL_HOST", "localhost")
-	port, err := getIntEnv("EMAIL_PORT", 1025)
+	apiKey, err := requireEnv("RESEND_API_KEY")
 	if err != nil {
 		return nil, err
 	}
+
 	return &EmailConfig{
-		Host:     host,
-		Port:     port,
-		Username: getEnv("EMAIL_USERNAME", ""),
-		Password: getEnv("EMAIL_PASSWORD", ""),
-		From:     getEnv("EMAIL_FROM", "noreply@requisition-system.local"),
+		APIKey:   apiKey,
+		From:     getEnv("EMAIL_FROM", "onboarding@resend.dev"),
 		FromName: getEnv("EMAIL_FROM_NAME", "Requisition System"),
-		SSL:      getEnv("EMAIL_SSL", "false") == "true",
 	}, nil
 }
 
 func LoadFrontendConfig() (*FrontendConfig, error) {
 	return &FrontendConfig{
 		BaseURL: getEnv("FRONTEND_BASE_URL", "http://localhost:3000"),
+	}, nil
+}
+
+// LoadWorkerConfig loads the background worker settings. Defaults keep a
+// single-queue setup running out of the box.
+func LoadWorkerConfig() (*WorkerConfig, error) {
+	concurrency, err := getIntEnv("WORKER_CONCURRENCY", 10)
+	if err != nil {
+		return nil, err
+	}
+
+	taskMaxRetry, err := getIntEnv("WORKER_TASK_MAX_RETRY", 5)
+	if err != nil {
+		return nil, err
+	}
+
+	taskTimeout, err := getTimeDurationEnv("WORKER_TASK_TIMEOUT", 30*time.Second)
+	if err != nil {
+		return nil, err
+	}
+
+	shutdownTimeout, err := getTimeDurationEnv("WORKER_SHUTDOWN_TIMEOUT", 8*time.Second)
+	if err != nil {
+		return nil, err
+	}
+
+	return &WorkerConfig{
+		Concurrency:     concurrency,
+		Queue:           getEnv("WORKER_QUEUE", "default"),
+		TaskMaxRetry:    taskMaxRetry,
+		TaskTimeout:     taskTimeout,
+		ShutdownTimeout: shutdownTimeout,
 	}, nil
 }

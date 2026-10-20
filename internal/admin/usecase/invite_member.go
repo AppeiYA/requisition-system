@@ -6,6 +6,7 @@ import (
 
 	adminin "github.com/AppeiYA/requisition-system/internal/admin/ports/in"
 	adminout "github.com/AppeiYA/requisition-system/internal/admin/ports/out"
+	"github.com/AppeiYA/requisition-system/internal/admin/tasks"
 	shareddomain "github.com/AppeiYA/requisition-system/internal/shared/domain"
 	customerrors "github.com/AppeiYA/requisition-system/internal/shared/infrastructure/errors"
 )
@@ -17,7 +18,7 @@ var (
 )
 
 type InviteMemberUsecase struct {
-	emailSender             adminout.EmailSender
+	taskQueue               adminout.TaskQueue
 	adminIdentityPort       adminout.AdminIdentityPort
 	adminInvitationPort     adminout.AdminInvitationPort
 	adminDepartmentPort     adminout.AdminDepartmentPort
@@ -25,14 +26,14 @@ type InviteMemberUsecase struct {
 }
 
 func NewInviteMemberUsecase(
-	emailSender adminout.EmailSender,
+	taskQueue adminout.TaskQueue,
 	adminIdentityPort adminout.AdminIdentityPort,
 	adminInvitationPort adminout.AdminInvitationPort,
 	adminDepartmentPort adminout.AdminDepartmentPort,
 	adminTransactionManager adminout.TransactionManager,
 ) *InviteMemberUsecase {
 	return &InviteMemberUsecase{
-		emailSender:             emailSender,
+		taskQueue:               taskQueue,
 		adminIdentityPort:       adminIdentityPort,
 		adminInvitationPort:     adminInvitationPort,
 		adminDepartmentPort:     adminDepartmentPort,
@@ -52,9 +53,11 @@ func (u *InviteMemberUsecase) Execute(ctx context.Context, cmd adminin.InviteMem
 
 	// The department must exist before we invite anyone into it. The assignment
 	// is immutable once the invitation is created.
-	if exists, err := u.adminDepartmentPort.CheckDepartmentExists(ctx, cmd.DepartmentID); err != nil {
+	department, err := u.adminDepartmentPort.GetDepartmentByID(ctx, cmd.DepartmentID)
+	if err != nil {
 		return nil, err
-	} else if !exists {
+	}
+	if department == nil {
 		return nil, ErrDepartmentNotFound
 	}
 
@@ -89,10 +92,18 @@ func (u *InviteMemberUsecase) Execute(ctx context.Context, cmd adminin.InviteMem
 		return nil, err
 	}
 
-	// Delivery happens after the invitation is durably persisted. A delivery
-	// failure surfaces to the caller; the invitation remains valid and can be
-	// re-sent.
-	if err := u.emailSender.SendInvitation(ctx, email.Value(), cmd.InviterID, saved.Token, saved.ExpiresAt.Format(time.RFC3339)); err != nil {
+	// Delivery is queued only after the invitation is durably persisted: the
+	// worker process sends the email and retries on failure. If enqueueing
+	// fails, the error surfaces to the caller; the invitation remains valid
+	// and can be re-sent.
+	if err := u.taskQueue.EnqueueInvitationEmail(ctx, tasks.InvitationEmailPayload{
+		To:             email.Value(),
+		InvitedBy:      cmd.InviterID,
+		Token:          saved.Token,
+		ExpiresAt:      saved.ExpiresAt.Format(time.RFC3339),
+		DepartmentName: department.Name,
+		JobTitle:       cmd.JobTitle,
+	}); err != nil {
 		return nil, err
 	}
 
