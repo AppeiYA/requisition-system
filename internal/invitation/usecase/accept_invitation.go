@@ -61,7 +61,6 @@ func (uc *AcceptInvitationUsecase) Execute(ctx context.Context, cmd invitationin
 		}
 		return err
 	}
-
 	now := time.Now()
 	if inv.IsExpired(now) {
 		return ErrInvitationExpired
@@ -74,6 +73,25 @@ func (uc *AcceptInvitationUsecase) Execute(ctx context.Context, cmd invitationin
 	}
 
 	err = uc.txManager.WithinTransaction(ctx, func(ctx context.Context) error {
+		inv, err := uc.invitationRepo.LockInvitationByTokenHash(ctx, tokenHash)
+		if err != nil {
+			var custErr *customerrors.CustomError
+			if errors.As(err, &custErr) && custErr.Code == http.StatusNotFound {
+				return ErrInvitationNotFound
+			}
+			return err
+		}
+
+		now := time.Now()
+		if inv.IsExpired(now) {
+			return ErrInvitationExpired
+		}
+		if inv.IsRevoked() {
+			return ErrInvitationRevoked
+		}
+		if inv.IsAccepted() {
+			return ErrInvitationAlreadyUsed
+		}
 		// Names are set by the admin in the invitation and cannot be changed by
 		// the invitee. The invitee may override the prefilled phone number.
 		phone := cmd.Phone

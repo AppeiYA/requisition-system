@@ -57,8 +57,8 @@ func Test_PasswordHasher_ComparePassword_Mismatch(t *testing.T) {
 	if err == nil {
 		t.Error("expected error for mismatched password, got nil")
 	}
-	if err != bcrypt.ErrMismatchedHashAndPassword {
-		t.Errorf("expected bcrypt.ErrMismatchedHashAndPassword, got: %v", err)
+	if err != ErrPasswordMismatch {
+		t.Errorf("expected ErrPasswordMismatch, got: %v", err)
 	}
 }
 

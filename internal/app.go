@@ -70,6 +70,7 @@ func (a *App) Run() error {
 
 	router := gin.New()
 	router.Use(gin.Logger(), gin.Recovery())
+	router.Use(requestBodyLimit())
 	api := router.Group("/api")
 
 	api.GET("/healthz", func(c *gin.Context) {

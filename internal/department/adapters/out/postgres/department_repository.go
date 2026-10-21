@@ -67,6 +67,7 @@ var getDepartmentsQuery = `
 	SELECT id, name, description, code, status, created_at, updated_at
 	FROM departments
 	ORDER BY name ASC
+	LIMIT 1000
 `
 
 func (r *DepartmentRepository) GetDepartments(ctx context.Context) ([]*departmentdomain.Department, error) {

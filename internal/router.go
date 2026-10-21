@@ -49,6 +49,15 @@ func NewRouter(
 	return nil
 }
 
+const maxRequestBodyBytes = 1 << 20
+
+func requestBodyLimit() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxRequestBodyBytes)
+		c.Next()
+	}
+}
+
 // renderScalarReference renders the Scalar API reference page from the
 // embedded OpenAPI 3 specification.
 func renderScalarReference() (string, error) {

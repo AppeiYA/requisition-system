@@ -16,7 +16,7 @@ var ErrUserNotFound = customerrors.NewNotFoundError("user not found")
 var getUserByEmailQuery = `
 	SELECT id, first_name, last_name, phone_number, staff_id, email, password_hash, status, role, created_at, updated_at
 	FROM users
-	WHERE email = $1
+	WHERE LOWER(email) = LOWER($1)
 `
 
 func (r *UserRepository) GetUserByEmail(ctx context.Context, email *shareddomain.Email) (*domain.User, error) {

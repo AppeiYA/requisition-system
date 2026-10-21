@@ -12,6 +12,7 @@ import (
 	departmentin "github.com/AppeiYA/requisition-system/internal/department/ports/in"
 	identityin "github.com/AppeiYA/requisition-system/internal/identity/ports/in"
 	invitationin "github.com/AppeiYA/requisition-system/internal/invitation/ports/in"
+	invitationout "github.com/AppeiYA/requisition-system/internal/invitation/ports/out"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/config"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/db"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/email"
@@ -42,12 +43,12 @@ func (a *App) buildAdminHandler(
 	return admin.NewAdminModule(adminPortIn, adminHandler)
 }
 
-func (w *Worker) buildAdminWorker(cfg *config.Config) *admin.AdminWorkerModule {
+func (w *Worker) buildAdminWorker(cfg *config.Config, invitationRepo invitationout.InvitationRepository) *admin.AdminWorkerModule {
 	emailPort := adminemail.NewInvitationSender(email.NewSender(cfg.Email), cfg.Frontend)
 
 	sendInvitationEmailUsecase := adminusecase.NewSendInvitationEmailUsecase(emailPort)
 
-	sendMailHandler := adminworkers.NewSendMailHandler(sendInvitationEmailUsecase)
+	sendMailHandler := adminworkers.NewSendMailHandler(sendInvitationEmailUsecase, invitationRepo)
 
 	return admin.NewAdminWorkerModule(sendMailHandler)
 }

@@ -69,17 +69,17 @@ func (w *Worker) Run() error {
 
 	mux := asynq.NewServeMux()
 
-	adminModule := w.buildAdminWorker(cfg)
+	invitationRepo := invitationpostgres.NewInvitationRepository(db.NewRepository(database))
+	adminModule := w.buildAdminWorker(cfg, invitationRepo)
 	mux.HandleFunc(adminTasks.SendInvitationEmail, adminModule.SendMailHandler().Handle)
 
-	invitationRepo := invitationpostgres.NewInvitationRepository(db.NewRepository(database))
 	expireInvitations := invitationusecase.NewExpireInvitationsUsecase(invitationRepo)
 	expireInvitationsHandler := invitationworker.NewExpireInvitationsHandler(expireInvitations)
 	mux.HandleFunc(invitationworker.ExpireInvitations, expireInvitationsHandler.Handle)
 
 	w.server = taskqueue.NewServer(redisClient, cfg.Worker)
 	scheduler := taskqueue.NewScheduler(redisClient)
-	if _, err := scheduler.Register("0 0 * * *", asynq.NewTask(invitationworker.ExpireInvitations, nil), asynq.Queue(cfg.Worker.Queue)); err != nil {
+	if _, err := scheduler.Register("*/15 * * * *", asynq.NewTask(invitationworker.ExpireInvitations, nil), asynq.Queue(cfg.Worker.Queue)); err != nil {
 		return err
 	}
 	if err := scheduler.Start(); err != nil {

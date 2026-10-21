@@ -43,9 +43,23 @@ var getByTokenHashQuery = `
 	WHERE token_hash = $1
 `
 
+var lockByTokenHashQuery = getByTokenHashQuery + ` FOR UPDATE`
+
 func (r *InvitationRepository) GetInvitationByTokenHash(ctx context.Context, tokenHash string) (*invitationdomain.Invitation, error) {
 	var model models.InvitationModel
 	err := r.repository.Executor(ctx).GetContext(ctx, &model, getByTokenHashQuery, tokenHash)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrInvitationNotFoundRepo
+		}
+		return nil, err
+	}
+	return model.ToDomain()
+}
+
+func (r *InvitationRepository) LockInvitationByTokenHash(ctx context.Context, tokenHash string) (*invitationdomain.Invitation, error) {
+	var model models.InvitationModel
+	err := r.repository.Executor(ctx).GetContext(ctx, &model, lockByTokenHashQuery, tokenHash)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrInvitationNotFoundRepo
@@ -80,7 +94,11 @@ func (r *InvitationRepository) GetActiveInvitationByEmail(ctx context.Context, e
 var markAcceptedQuery = `
 	UPDATE invitations
 	SET accepted_at = NOW(), status = 'accepted'
-	WHERE id = $1 AND accepted_at IS NULL AND revoked_at IS NULL
+	WHERE id = $1
+	  AND status IN ('pending', 'delivered')
+	  AND accepted_at IS NULL
+	  AND revoked_at IS NULL
+	  AND expires_at > NOW()
 `
 
 func (r *InvitationRepository) MarkInvitationAccepted(ctx context.Context, invitationID string) error {
@@ -102,12 +120,64 @@ var revokeQuery = `
 	UPDATE invitations
 	SET revoked_at = NOW(), status = 'revoked'
 	WHERE id = $1
+	  AND status IN ('pending', 'delivered')
+	  AND accepted_at IS NULL
+	  AND revoked_at IS NULL
 `
 
 func (r *InvitationRepository) RevokeInvitation(ctx context.Context, invitationID string) error {
-	_, err := r.repository.Executor(ctx).ExecContext(ctx, revokeQuery, invitationID)
+	res, err := r.repository.Executor(ctx).ExecContext(ctx, revokeQuery, invitationID)
 	if err != nil {
 		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrInvitationNotFoundRepo
+	}
+	return nil
+}
+
+var markDeliveredQuery = `
+	UPDATE invitations
+	SET status = 'delivered', delivered_at = NOW(), delivery_failed_at = NULL
+	WHERE id = $1 AND status = 'pending' AND expires_at > NOW()
+`
+
+func (r *InvitationRepository) MarkInvitationDelivered(ctx context.Context, invitationID string) error {
+	res, err := r.repository.Executor(ctx).ExecContext(ctx, markDeliveredQuery, invitationID)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrInvitationNotFoundRepo
+	}
+	return nil
+}
+
+var markDeliveryFailedQuery = `
+	UPDATE invitations
+	SET status = 'failed', delivery_failed_at = NOW()
+	WHERE id = $1 AND status = 'pending'
+`
+
+func (r *InvitationRepository) MarkInvitationDeliveryFailed(ctx context.Context, invitationID string) error {
+	res, err := r.repository.Executor(ctx).ExecContext(ctx, markDeliveryFailedQuery, invitationID)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrInvitationNotFoundRepo
 	}
 	return nil
 }

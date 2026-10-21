@@ -7,6 +7,7 @@ import (
 
 	adminin "github.com/AppeiYA/requisition-system/internal/admin/ports/in"
 	"github.com/AppeiYA/requisition-system/internal/admin/tasks"
+	invitationout "github.com/AppeiYA/requisition-system/internal/invitation/ports/out"
 	"github.com/hibiken/asynq"
 )
 
@@ -15,11 +16,17 @@ import (
 // the same way the HTTP handlers do.
 type SendMailHandler struct {
 	sendInvitationEmail adminin.SendInvitationEmailUseCase
+	invitationRepo      invitationout.InvitationRepository
 }
 
-func NewSendMailHandler(sendInvitationEmail adminin.SendInvitationEmailUseCase) *SendMailHandler {
+func NewSendMailHandler(sendInvitationEmail adminin.SendInvitationEmailUseCase, repos ...invitationout.InvitationRepository) *SendMailHandler {
+	var invitationRepo invitationout.InvitationRepository
+	if len(repos) > 0 {
+		invitationRepo = repos[0]
+	}
 	return &SendMailHandler{
 		sendInvitationEmail: sendInvitationEmail,
+		invitationRepo:      invitationRepo,
 	}
 }
 
@@ -40,8 +47,22 @@ func (h *SendMailHandler) Handle(ctx context.Context, t *asynq.Task) error {
 		DepartmentName: payload.DepartmentName,
 		JobTitle:       payload.JobTitle,
 	}); err != nil {
+		if h.invitationRepo != nil && payload.InvitationID != "" {
+			retried, _ := asynq.GetRetryCount(ctx)
+			maxRetry, _ := asynq.GetMaxRetry(ctx)
+			if retried >= maxRetry {
+				if statusErr := h.invitationRepo.MarkInvitationDeliveryFailed(ctx, payload.InvitationID); statusErr != nil {
+					return fmt.Errorf("mark invitation delivery failed: %w (original: %v)", statusErr, err)
+				}
+			}
+		}
 		return fmt.Errorf("send invitation email: %w", err)
 	}
 
+	if h.invitationRepo != nil && payload.InvitationID != "" {
+		if err := h.invitationRepo.MarkInvitationDelivered(ctx, payload.InvitationID); err != nil {
+			return fmt.Errorf("mark invitation delivered: %w", err)
+		}
+	}
 	return nil
 }

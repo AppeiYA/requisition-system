@@ -48,15 +48,18 @@ func ValidInvitation() *invitationdomain.Invitation {
 }
 
 type MockInvitationRepository struct {
-	SaveInvitationFunc             func(ctx context.Context, invitation *invitationdomain.Invitation) error
-	GetInvitationByTokenHashFunc   func(ctx context.Context, tokenHash string) (*invitationdomain.Invitation, error)
-	GetActiveInvitationByEmailFunc func(ctx context.Context, email string) (*invitationdomain.Invitation, error)
-	MarkInvitationAcceptedFunc     func(ctx context.Context, invitationID string) error
-	RevokeInvitationFunc           func(ctx context.Context, invitationID string) error
-	GetInvitationByIDFunc          func(ctx context.Context, invitationID string) (*invitationdomain.Invitation, error)
-	GetInvitationByEmailFunc       func(ctx context.Context, email string) (*invitationdomain.Invitation, error)
-	UpdateInvitationStatusFunc     func(ctx context.Context, invitationID string, status invitationdomain.InvitationStatus) error
-	ExpireDueInvitationsFunc       func(ctx context.Context, now time.Time) error
+	SaveInvitationFunc               func(ctx context.Context, invitation *invitationdomain.Invitation) error
+	GetInvitationByTokenHashFunc     func(ctx context.Context, tokenHash string) (*invitationdomain.Invitation, error)
+	LockInvitationByTokenHashFunc    func(ctx context.Context, tokenHash string) (*invitationdomain.Invitation, error)
+	GetActiveInvitationByEmailFunc   func(ctx context.Context, email string) (*invitationdomain.Invitation, error)
+	MarkInvitationAcceptedFunc       func(ctx context.Context, invitationID string) error
+	RevokeInvitationFunc             func(ctx context.Context, invitationID string) error
+	MarkInvitationDeliveredFunc      func(ctx context.Context, invitationID string) error
+	MarkInvitationDeliveryFailedFunc func(ctx context.Context, invitationID string) error
+	GetInvitationByIDFunc            func(ctx context.Context, invitationID string) (*invitationdomain.Invitation, error)
+	GetInvitationByEmailFunc         func(ctx context.Context, email string) (*invitationdomain.Invitation, error)
+	UpdateInvitationStatusFunc       func(ctx context.Context, invitationID string, status invitationdomain.InvitationStatus) error
+	ExpireDueInvitationsFunc         func(ctx context.Context, now time.Time) error
 }
 
 func NewMockInvitationRepository() *MockInvitationRepository {
@@ -74,6 +77,12 @@ func NewMockInvitationRepository() *MockInvitationRepository {
 			return nil
 		},
 		RevokeInvitationFunc: func(ctx context.Context, invitationID string) error {
+			return nil
+		},
+		MarkInvitationDeliveredFunc: func(ctx context.Context, invitationID string) error {
+			return nil
+		},
+		MarkInvitationDeliveryFailedFunc: func(ctx context.Context, invitationID string) error {
 			return nil
 		},
 		GetInvitationByIDFunc: func(ctx context.Context, invitationID string) (*invitationdomain.Invitation, error) {
@@ -99,6 +108,13 @@ func (m *MockInvitationRepository) GetInvitationByTokenHash(ctx context.Context,
 	return m.GetInvitationByTokenHashFunc(ctx, tokenHash)
 }
 
+func (m *MockInvitationRepository) LockInvitationByTokenHash(ctx context.Context, tokenHash string) (*invitationdomain.Invitation, error) {
+	if m.LockInvitationByTokenHashFunc == nil {
+		return m.GetInvitationByTokenHashFunc(ctx, tokenHash)
+	}
+	return m.LockInvitationByTokenHashFunc(ctx, tokenHash)
+}
+
 func (m *MockInvitationRepository) GetActiveInvitationByEmail(ctx context.Context, email string) (*invitationdomain.Invitation, error) {
 	return m.GetActiveInvitationByEmailFunc(ctx, email)
 }
@@ -109,6 +125,14 @@ func (m *MockInvitationRepository) MarkInvitationAccepted(ctx context.Context, i
 
 func (m *MockInvitationRepository) RevokeInvitation(ctx context.Context, invitationID string) error {
 	return m.RevokeInvitationFunc(ctx, invitationID)
+}
+
+func (m *MockInvitationRepository) MarkInvitationDelivered(ctx context.Context, invitationID string) error {
+	return m.MarkInvitationDeliveredFunc(ctx, invitationID)
+}
+
+func (m *MockInvitationRepository) MarkInvitationDeliveryFailed(ctx context.Context, invitationID string) error {
+	return m.MarkInvitationDeliveryFailedFunc(ctx, invitationID)
 }
 
 func (m *MockInvitationRepository) GetInvitationByID(ctx context.Context, invitationID string) (*invitationdomain.Invitation, error) {

@@ -90,6 +90,7 @@ func (u *InviteMemberUsecase) Execute(ctx context.Context, cmd adminin.InviteMem
 	// fails, the error surfaces to the caller; the invitation remains valid
 	// and can be re-sent.
 	if err := u.taskQueue.EnqueueInvitationEmail(ctx, tasks.InvitationEmailPayload{
+		InvitationID:   saved.ID,
 		To:             email.Value(),
 		InvitedBy:      cmd.InviterID,
 		Token:          saved.Token,

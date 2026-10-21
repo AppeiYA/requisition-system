@@ -6,10 +6,11 @@ const SendInvitationEmail = "admin:send-invitation-email"
 
 // InvitationEmailPayload is the payload of a SendInvitationEmail task.
 type InvitationEmailPayload struct {
-	To        string `json:"to"`
-	InvitedBy string `json:"invited_by"`
-	Token     string `json:"token"`
-	ExpiresAt string `json:"expires_at"`
+	InvitationID   string `json:"invitation_id"`
+	To             string `json:"to"`
+	InvitedBy      string `json:"invited_by"`
+	Token          string `json:"token"`
+	ExpiresAt      string `json:"expires_at"`
 	DepartmentName string `json:"department_name"`
 	JobTitle       string `json:"job_title"`
 }
