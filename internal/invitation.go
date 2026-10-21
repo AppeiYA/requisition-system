@@ -9,6 +9,7 @@ import (
 	invitationexternal "github.com/AppeiYA/requisition-system/internal/invitation/adapters/out/external"
 	invitationpostgres "github.com/AppeiYA/requisition-system/internal/invitation/adapters/out/postgres"
 	invitationin "github.com/AppeiYA/requisition-system/internal/invitation/ports/in"
+	invitationout "github.com/AppeiYA/requisition-system/internal/invitation/ports/out"
 	invitationusecase "github.com/AppeiYA/requisition-system/internal/invitation/usecase"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/db"
 )
@@ -19,6 +20,7 @@ func (a *App) buildInvitation(
 	registerUserUC identityin.RegisterUserUseCaseInt,
 	createMembershipUC departmentin.CreateMembershipUsecaseInt,
 	idGen identityout.IDGenerator,
+	telemetry invitationout.Telemetry,
 ) (
 	*invitation.InvitationModule,
 ) {
@@ -37,6 +39,7 @@ func (a *App) buildInvitation(
 		invitationIdentityPort,
 		invitationDepartmentPort,
 		txManager,
+		telemetry,
 	)
 	validateInvitationUsecase := invitationusecase.NewValidateInvitationUsecase(invitationRepo)
 	saveInvitationUsecase := invitationusecase.NewSaveInvitationUsecase(invitationRepo, idGen)

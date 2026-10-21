@@ -26,6 +26,7 @@ type AcceptInvitationUsecase struct {
 	identityPort   invitationout.InvitationIdentityPort
 	departmentPort invitationout.InvitationDepartmentPort
 	txManager      invitationout.TransactionManager
+	telemetry      invitationout.Telemetry
 }
 
 func NewAcceptInvitationUsecase(
@@ -33,20 +34,38 @@ func NewAcceptInvitationUsecase(
 	identityPort invitationout.InvitationIdentityPort,
 	departmentPort invitationout.InvitationDepartmentPort,
 	txManager invitationout.TransactionManager,
+	telemetry invitationout.Telemetry,
 ) *AcceptInvitationUsecase {
 	return &AcceptInvitationUsecase{
 		invitationRepo: invitationRepo,
 		identityPort:   identityPort,
 		departmentPort: departmentPort,
 		txManager:      txManager,
+		telemetry:      telemetry,
 	}
 }
 
 func (uc *AcceptInvitationUsecase) Execute(ctx context.Context, cmd invitationin.AcceptInvitationCommand) error {
+	// A cancelled request never starts the operation, so it is not measured.
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 
+	var operationErr error
+
+	// The measurement covers the whole operation, including the transaction
+	// that registers the user, creates the membership and accepts the
+	// invitation. The outcome of the operation is the one reported to the
+	// caller, the instrumentation can never replace nor mask it.
+	_ = uc.telemetry.Measure(ctx, invitationout.OperationAcceptInvitation, func(ctx context.Context) error {
+		operationErr = uc.acceptInvitation(ctx, cmd)
+		return operationErr
+	})
+
+	return operationErr
+}
+
+func (uc *AcceptInvitationUsecase) acceptInvitation(ctx context.Context, cmd invitationin.AcceptInvitationCommand) error {
 	if cmd.Token == "" {
 		return ErrInvitationInvalidToken
 	}

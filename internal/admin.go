@@ -8,6 +8,7 @@ import (
 	adminexternal "github.com/AppeiYA/requisition-system/internal/admin/adapters/out/external"
 	adminworker "github.com/AppeiYA/requisition-system/internal/admin/adapters/out/worker"
 	adminin "github.com/AppeiYA/requisition-system/internal/admin/ports/in"
+	adminout "github.com/AppeiYA/requisition-system/internal/admin/ports/out"
 	adminusecase "github.com/AppeiYA/requisition-system/internal/admin/usecase"
 	departmentin "github.com/AppeiYA/requisition-system/internal/department/ports/in"
 	identityin "github.com/AppeiYA/requisition-system/internal/identity/ports/in"
@@ -26,13 +27,14 @@ func (a *App) buildAdminHandler(
 	saveInvitationUC invitationin.SaveInvitationUsecaseInt,
 	getDepartmentByIDUC departmentin.GetDepartmentByIDUsecaseInt,
 	asynqClient *asynq.Client,
+	telemetry adminout.Telemetry,
 ) *admin.AdminModule {
 	taskQueue := adminworker.NewTaskQueue(asynqClient, cfg.Worker)
 	identityPort := adminexternal.NewAdminIdentityAdapter(getUserByEmailUC)
 	adminInvitationPort := adminexternal.NewAdminInvitationAdapter(saveInvitationUC)
 	adminDepartmentPort := adminexternal.NewAdminDepartmentAdapter(getDepartmentByIDUC)
 
-	inviteUC := adminusecase.NewInviteMemberUsecase(taskQueue, identityPort, adminInvitationPort, adminDepartmentPort, txManager)
+	inviteUC := adminusecase.NewInviteMemberUsecase(taskQueue, identityPort, adminInvitationPort, adminDepartmentPort, txManager, telemetry)
 
 	adminPortIn := adminin.NewAdminPortIn(inviteUC)
 	adminHandler := adminhttp.NewHandler(adminPortIn)

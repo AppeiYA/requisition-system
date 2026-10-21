@@ -22,6 +22,7 @@ type InviteMemberUsecase struct {
 	adminInvitationPort     adminout.AdminInvitationPort
 	adminDepartmentPort     adminout.AdminDepartmentPort
 	adminTransactionManager adminout.TransactionManager
+	telemetry               adminout.Telemetry
 }
 
 func NewInviteMemberUsecase(
@@ -30,6 +31,7 @@ func NewInviteMemberUsecase(
 	adminInvitationPort adminout.AdminInvitationPort,
 	adminDepartmentPort adminout.AdminDepartmentPort,
 	adminTransactionManager adminout.TransactionManager,
+	telemetry adminout.Telemetry,
 ) *InviteMemberUsecase {
 	return &InviteMemberUsecase{
 		taskQueue:               taskQueue,
@@ -37,14 +39,36 @@ func NewInviteMemberUsecase(
 		adminInvitationPort:     adminInvitationPort,
 		adminDepartmentPort:     adminDepartmentPort,
 		adminTransactionManager: adminTransactionManager,
+		telemetry:               telemetry,
 	}
 }
 
 func (u *InviteMemberUsecase) Execute(ctx context.Context, cmd adminin.InviteMemberCommand) (*adminin.InviteMemberResult, error) {
+	// A cancelled request never starts the operation, so it is not measured.
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 
+	var result *adminin.InviteMemberResult
+	var operationErr error
+
+	// The measurement covers the whole operation: the invitation is only
+	// complete once it is persisted and its delivery is queued. The outcome of
+	// the operation is the one reported to the caller, the instrumentation can
+	// never replace nor mask it.
+	_ = u.telemetry.Measure(ctx, adminout.OperationInviteMember, func(ctx context.Context) error {
+		result, operationErr = u.inviteMember(ctx, cmd)
+		return operationErr
+	})
+
+	if operationErr != nil {
+		return nil, operationErr
+	}
+
+	return result, nil
+}
+
+func (u *InviteMemberUsecase) inviteMember(ctx context.Context, cmd adminin.InviteMemberCommand) (*adminin.InviteMemberResult, error) {
 	email, err := shareddomain.NewEmail(cmd.Email)
 	if err != nil {
 		return nil, err

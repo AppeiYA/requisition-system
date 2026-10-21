@@ -10,7 +10,9 @@ import (
 	"syscall"
 	"time"
 
+	adminout "github.com/AppeiYA/requisition-system/internal/admin/ports/out"
 	jwtadapter "github.com/AppeiYA/requisition-system/internal/identity/adapters/out/jwt"
+	invitationout "github.com/AppeiYA/requisition-system/internal/invitation/ports/out"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/config"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/db"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/generator"
@@ -68,6 +70,22 @@ func (a *App) Run() error {
 		return err
 	}
 
+	// The operation names and the metric bases are stable and low cardinality:
+	// no invitation, email or user identifier is ever reported.
+	operationTelemetry, err := telemetry.NewOperationTelemetry(
+		telemetry.Operation{
+			Name:       adminout.OperationInviteMember,
+			MetricBase: "requisition.admin.invitations",
+		},
+		telemetry.Operation{
+			Name:       invitationout.OperationAcceptInvitation,
+			MetricBase: "requisition.invitee.acceptances",
+		},
+	)
+	if err != nil {
+		return err
+	}
+
 	router := gin.New()
 	router.Use(gin.Logger(), gin.Recovery())
 	router.Use(requestBodyLimit())
@@ -93,6 +111,7 @@ func (a *App) Run() error {
 		identityModule.PortIn().RegisterUserUseCase,
 		departmentModule.PortIn().CreateMembershipUsecase,
 		idGen,
+		operationTelemetry,
 	)
 
 	asynqClient := taskqueue.NewClient(redisClient)
@@ -103,7 +122,8 @@ func (a *App) Run() error {
 		identityModule.PortIn().GetUserByEmailUsecase,
 		invitationModule.PortIn().SaveInvitationUsecase,
 		departmentModule.PortIn().GetDepartmentByIDUsecase,
-		asynqClient)
+		asynqClient,
+		operationTelemetry)
 
 	if err := NewRouter(
 		api,

@@ -201,6 +201,29 @@ Invitation emails are sent through the [Resend](https://resend.com) API:
 The sender lives in `internal/shared/infrastructure/email/sender.go`; invitation
 content is built in `internal/admin/adapters/out/email/invitation_sender.go`.
 
+## Telemetry
+
+The API process exports OpenTelemetry traces and metrics for the two
+request-driven business operations. The use cases ask for an operation to be
+measured through an outbound port (`ports/out/telemetry.go`), so the domain
+never depends on OpenTelemetry; the adapter lives in
+`internal/shared/infrastructure/telemetry` and is wired in `internal/app.go`.
+
+| Operation | Span | Metrics |
+| --------- | ---- | ------- |
+| Admin creates an invitation | `admin.invitation.create` | `requisition.admin.invitations.{attempted,succeeded,failed,duration}` |
+| Invitee accepts an invitation | `invitation.accept` | `requisition.invitee.acceptances.{attempted,succeeded,failed,duration}` |
+
+The span covers the whole operation: the admin span covers the durable
+invitation creation and the enqueueing of the delivery task, the acceptance
+span covers the transaction that registers the user, creates the membership and
+accepts the invitation. Durations are reported in seconds.
+
+The names are stable and low cardinality on purpose: no email, token, user or
+invitation identifier is ever reported as a metric attribute. The measurement
+never changes the outcome of the operation — the business error is always the
+one returned to the caller.
+
 ## Docker
 
 ```bash

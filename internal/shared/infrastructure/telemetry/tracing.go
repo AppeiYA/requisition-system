@@ -9,10 +9,17 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-var tracer = otel.Tracer("requisition-system")
+// instrumentationName identifies this application in the telemetry backend.
+const instrumentationName = "requisition-system"
+
+// tracer is resolved on every call so the span always goes to the provider
+// that is active at that moment, including the one installed after start up.
+func tracer() trace.Tracer {
+	return otel.Tracer(instrumentationName)
+}
 
 func Start(ctx context.Context, operation string) (context.Context, trace.Span) {
-	return tracer.Start(ctx, operation)
+	return tracer().Start(ctx, operation)
 }
 
 func RecordError(span trace.Span, err error) {
@@ -32,4 +39,9 @@ func SetAttribute(
 	span.SetAttributes(
 		attribute.String(key, value),
 	)
+}
+
+// AddEvent records a named event on the span without changing its status.
+func AddEvent(span trace.Span, name string) {
+	span.AddEvent(name)
 }
