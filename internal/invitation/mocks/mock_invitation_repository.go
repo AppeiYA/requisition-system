@@ -29,7 +29,7 @@ func ValidInvitation() *invitationdomain.Invitation {
 	firstName, _ := shareddomain.NewUsername(DefaultFirstName, shareddomain.FirstName)
 	lastName, _ := shareddomain.NewUsername(DefaultLastName, shareddomain.LastName)
 	phone, _ := shareddomain.NewPhoneNumber(DefaultPhone)
-	return invitationdomain.NewInvitation(
+	invitation, err := invitationdomain.NewInvitation(
 		DefaultInvitationID,
 		firstName,
 		lastName,
@@ -40,9 +40,11 @@ func ValidInvitation() *invitationdomain.Invitation {
 		email,
 		invitationdomain.HashInvitationToken(DefaultToken),
 		DefaultInviterID,
-		time.Now().Add(invitationdomain.InvitationExpirationDuration),
-		time.Now(),
 	)
+	if err != nil {
+		panic(err)
+	}
+	return invitation
 }
 
 type MockInvitationRepository struct {
@@ -51,6 +53,10 @@ type MockInvitationRepository struct {
 	GetActiveInvitationByEmailFunc func(ctx context.Context, email string) (*invitationdomain.Invitation, error)
 	MarkInvitationAcceptedFunc     func(ctx context.Context, invitationID string) error
 	RevokeInvitationFunc           func(ctx context.Context, invitationID string) error
+	GetInvitationByIDFunc          func(ctx context.Context, invitationID string) (*invitationdomain.Invitation, error)
+	GetInvitationByEmailFunc       func(ctx context.Context, email string) (*invitationdomain.Invitation, error)
+	UpdateInvitationStatusFunc     func(ctx context.Context, invitationID string, status invitationdomain.InvitationStatus) error
+	ExpireDueInvitationsFunc       func(ctx context.Context, now time.Time) error
 }
 
 func NewMockInvitationRepository() *MockInvitationRepository {
@@ -68,6 +74,18 @@ func NewMockInvitationRepository() *MockInvitationRepository {
 			return nil
 		},
 		RevokeInvitationFunc: func(ctx context.Context, invitationID string) error {
+			return nil
+		},
+		GetInvitationByIDFunc: func(ctx context.Context, invitationID string) (*invitationdomain.Invitation, error) {
+			return nil, invitationdomain.ErrInvitationNotFound
+		},
+		GetInvitationByEmailFunc: func(ctx context.Context, email string) (*invitationdomain.Invitation, error) {
+			return nil, invitationdomain.ErrInvitationNotFound
+		},
+		UpdateInvitationStatusFunc: func(ctx context.Context, invitationID string, status invitationdomain.InvitationStatus) error {
+			return nil
+		},
+		ExpireDueInvitationsFunc: func(ctx context.Context, now time.Time) error {
 			return nil
 		},
 	}
@@ -91,6 +109,22 @@ func (m *MockInvitationRepository) MarkInvitationAccepted(ctx context.Context, i
 
 func (m *MockInvitationRepository) RevokeInvitation(ctx context.Context, invitationID string) error {
 	return m.RevokeInvitationFunc(ctx, invitationID)
+}
+
+func (m *MockInvitationRepository) GetInvitationByID(ctx context.Context, invitationID string) (*invitationdomain.Invitation, error) {
+	return m.GetInvitationByIDFunc(ctx, invitationID)
+}
+
+func (m *MockInvitationRepository) GetInvitationByEmail(ctx context.Context, email string) (*invitationdomain.Invitation, error) {
+	return m.GetInvitationByEmailFunc(ctx, email)
+}
+
+func (m *MockInvitationRepository) UpdateInvitationStatus(ctx context.Context, invitationID string, status invitationdomain.InvitationStatus) error {
+	return m.UpdateInvitationStatusFunc(ctx, invitationID, status)
+}
+
+func (m *MockInvitationRepository) ExpireDueInvitations(ctx context.Context, now time.Time) error {
+	return m.ExpireDueInvitationsFunc(ctx, now)
 }
 
 var _ invitationout.InvitationRepository = (*MockInvitationRepository)(nil)

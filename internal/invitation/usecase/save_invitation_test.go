@@ -158,3 +158,51 @@ func Test_SaveInvitationUsecase_SaveError(t *testing.T) {
 		t.Fatalf("expected saveErr, got: %v", err)
 	}
 }
+
+func Test_SaveInvitationUsecase_ExpiresStalePendingInvitation(t *testing.T) {
+	t.Parallel()
+
+	stale, err := domain.ReconstituteInvitationWithStatus(
+		"inv-stale",
+		"Jane",
+		"Doe",
+		"+14155551234",
+		"STF-1234",
+		"dpt-1234",
+		"Software Engineer",
+		"invitee@example.com",
+		domain.HashInvitationToken("stale-token"),
+		"usr-1234",
+		domain.InvitationStatusPending.String(),
+		time.Now().Add(-time.Hour),
+		nil,
+		nil,
+		time.Now().Add(-25*time.Hour),
+	)
+	if err != nil {
+		t.Fatalf("failed to create stale invitation: %v", err)
+	}
+
+	var expiredID string
+	var expiredStatus domain.InvitationStatus
+	repo := invitationmocks.NewMockInvitationRepository()
+	repo.GetInvitationByEmailFunc = func(ctx context.Context, email string) (*domain.Invitation, error) {
+		return stale, nil
+	}
+	repo.UpdateInvitationStatusFunc = func(ctx context.Context, invitationID string, status domain.InvitationStatus) error {
+		expiredID = invitationID
+		expiredStatus = status
+		return nil
+	}
+
+	uc := NewSaveInvitationUsecase(repo, invitationmocks.NewMockIDGenerator())
+	if _, err := uc.Execute(context.Background(), saveCmd()); err != nil {
+		t.Fatalf("expected stale invitation to be replaced, got: %v", err)
+	}
+	if expiredID != "inv-stale" {
+		t.Fatalf("expected stale invitation %q to be expired, got %q", "inv-stale", expiredID)
+	}
+	if expiredStatus != domain.InvitationStatusExpired {
+		t.Fatalf("expected expired status, got %q", expiredStatus)
+	}
+}

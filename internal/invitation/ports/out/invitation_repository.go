@@ -2,6 +2,7 @@ package invitationout
 
 import (
 	"context"
+	"time"
 
 	invitationdomain "github.com/AppeiYA/requisition-system/internal/invitation/domain"
 )
@@ -12,4 +13,8 @@ type InvitationRepository interface {
 	GetActiveInvitationByEmail(ctx context.Context, email string) (*invitationdomain.Invitation, error)
 	MarkInvitationAccepted(ctx context.Context, invitationID string) error
 	RevokeInvitation(ctx context.Context, invitationID string) error
+	GetInvitationByID(ctx context.Context, invitationID string) (*invitationdomain.Invitation, error)
+	GetInvitationByEmail(ctx context.Context, email string) (*invitationdomain.Invitation, error)
+	UpdateInvitationStatus(ctx context.Context, invitationID string, status invitationdomain.InvitationStatus) error
+	ExpireDueInvitations(ctx context.Context, now time.Time) error
 }

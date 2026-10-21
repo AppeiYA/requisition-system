@@ -60,9 +60,6 @@ func Test_InviteMemberUsecase_Success(t *testing.T) {
 	}
 
 	invitations := adminmocks.NewMockAdminInvitationPort()
-	invitations.CheckActiveInvitationExistsFunc = func(ctx context.Context, email *shareddomain.Email) (bool, error) {
-		return false, nil
-	}
 	invitations.SaveInvitationFunc = func(ctx context.Context, params adminout.SaveInvitationParams) (*adminout.SavedInvitation, error) {
 		savedEmail = params.Email.Value()
 		savedInviter = params.InviterID
@@ -239,22 +236,6 @@ func Test_InviteMemberUsecase_UserAlreadyExists(t *testing.T) {
 	}
 }
 
-func Test_InviteMemberUsecase_PendingInvitation(t *testing.T) {
-	t.Parallel()
-
-	invitations := adminmocks.NewMockAdminInvitationPort()
-	invitations.CheckActiveInvitationExistsFunc = func(ctx context.Context, email *shareddomain.Email) (bool, error) {
-		return true, nil
-	}
-
-	uc := newInviteUsecase(adminmocks.NewMockTaskQueue(), adminmocks.NewMockAdminIdentityPort(), invitations, adminmocks.NewMockAdminDepartmentPort(), adminmocks.NewMockTransactionManager())
-
-	_, err := uc.Execute(context.Background(), inviteCmd())
-	if err != ErrPendingInvitation {
-		t.Fatalf("expected ErrPendingInvitation, got: %v", err)
-	}
-}
-
 func Test_InviteMemberUsecase_IdentityCheckError(t *testing.T) {
 	t.Parallel()
 
@@ -265,23 +246,6 @@ func Test_InviteMemberUsecase_IdentityCheckError(t *testing.T) {
 	}
 
 	uc := newInviteUsecase(adminmocks.NewMockTaskQueue(), identity, adminmocks.NewMockAdminInvitationPort(), adminmocks.NewMockAdminDepartmentPort(), adminmocks.NewMockTransactionManager())
-
-	_, err := uc.Execute(context.Background(), inviteCmd())
-	if !errors.Is(err, checkErr) {
-		t.Fatalf("expected checkErr, got: %v", err)
-	}
-}
-
-func Test_InviteMemberUsecase_InvitationCheckError(t *testing.T) {
-	t.Parallel()
-
-	checkErr := errors.New("invitation check failed")
-	invitations := adminmocks.NewMockAdminInvitationPort()
-	invitations.CheckActiveInvitationExistsFunc = func(ctx context.Context, email *shareddomain.Email) (bool, error) {
-		return false, checkErr
-	}
-
-	uc := newInviteUsecase(adminmocks.NewMockTaskQueue(), adminmocks.NewMockAdminIdentityPort(), invitations, adminmocks.NewMockAdminDepartmentPort(), adminmocks.NewMockTransactionManager())
 
 	_, err := uc.Execute(context.Background(), inviteCmd())
 	if !errors.Is(err, checkErr) {

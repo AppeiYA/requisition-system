@@ -31,6 +31,5 @@ type SaveInvitationParams struct {
 }
 
 type AdminInvitationPort interface {
-	CheckActiveInvitationExists(ctx context.Context, email *shareddomain.Email) (bool, error)
 	SaveInvitation(ctx context.Context, params SaveInvitationParams) (*SavedInvitation, error)
 }

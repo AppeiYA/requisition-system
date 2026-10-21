@@ -79,16 +79,16 @@ func (a *App) Run() error {
 	txManager := db.NewTransactionManager(database)
 	accessTokenService := jwtadapter.NewJWTService(cfg.JWT)
 	idGen := &generator.IDGenerator{}
-	
+
 	identityModule := a.buildIdentity(cfg, database, redisClient, txManager, accessTokenService, idGen)
 
 	departmentModule := a.buildDepartment(database, idGen)
 
 	invitationModule := a.buildInvitation(
-		database, 
-		txManager, 
-		identityModule.PortIn().RegisterUserUseCase, 
-		departmentModule.PortIn().CreateMembershipUsecase, 
+		database,
+		txManager,
+		identityModule.PortIn().RegisterUserUseCase,
+		departmentModule.PortIn().CreateMembershipUsecase,
 		idGen,
 	)
 
@@ -97,20 +97,19 @@ func (a *App) Run() error {
 	asynqClient := taskqueue.NewClient(redisClient)
 
 	adminModule := a.buildAdminHandler(
-		cfg, 
-		txManager, 
-		identityModule.PortIn().GetUserByEmailUsecase, 
-		invitationModule.PortIn().SaveInvitationUsecase, 
-		invitationModule.PortIn().GetInvitationUsecase,
-		departmentModule.PortIn().GetDepartmentByIDUsecase, 
+		cfg,
+		txManager,
+		identityModule.PortIn().GetUserByEmailUsecase,
+		invitationModule.PortIn().SaveInvitationUsecase,
+		departmentModule.PortIn().GetDepartmentByIDUsecase,
 		asynqClient)
 
 	if err := NewRouter(
-		api, 
-		identityModule.Handler(), 
-		invitationModule.Handler(), 
-		adminModule.Handler(), 
-		departmentModule.Handler(), 
+		api,
+		identityModule.Handler(),
+		invitationModule.Handler(),
+		adminModule.Handler(),
+		departmentModule.Handler(),
 		identityModule.AuthMiddleware(),
 	); err != nil {
 		return err

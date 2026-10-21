@@ -13,7 +13,6 @@ import (
 
 var (
 	ErrUserAlreadyExists  = customerrors.NewConflictError("user with this email already exists")
-	ErrPendingInvitation  = customerrors.NewConflictError("pending invitation already exists for this email")
 	ErrDepartmentNotFound = customerrors.NewNotFoundError("department not found")
 )
 
@@ -65,12 +64,6 @@ func (u *InviteMemberUsecase) Execute(ctx context.Context, cmd adminin.InviteMem
 		return nil, err
 	} else if exists {
 		return nil, ErrUserAlreadyExists
-	}
-
-	if exists, err := u.adminInvitationPort.CheckActiveInvitationExists(ctx, email); err != nil {
-		return nil, err
-	} else if exists {
-		return nil, ErrPendingInvitation
 	}
 
 	var saved *adminout.SavedInvitation

@@ -26,7 +26,7 @@ func pendingInvitation() *invitationdomain.Invitation {
 	firstName, _ := shareddomain.NewUsername(testInvitationFirstName, shareddomain.FirstName)
 	lastName, _ := shareddomain.NewUsername(testInvitationLastName, shareddomain.LastName)
 	phone, _ := shareddomain.NewPhoneNumber(testInvitationPhone)
-	return invitationdomain.NewInvitation(
+	invitation, err := invitationdomain.NewInvitation(
 		testInvitationID,
 		firstName,
 		lastName,
@@ -37,9 +37,11 @@ func pendingInvitation() *invitationdomain.Invitation {
 		email,
 		invitationdomain.HashInvitationToken(testInvitationToken),
 		testInviterID,
-		time.Now().Add(time.Hour),
-		time.Now(),
 	)
+	if err != nil {
+		panic(err)
+	}
+	return invitation
 }
 
 func invitationWithState(expiresAt time.Time, acceptedAt, revokedAt *time.Time) *invitationdomain.Invitation {

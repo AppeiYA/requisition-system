@@ -117,15 +117,11 @@ func (m *MockAdminDepartmentPort) GetDepartmentByID(ctx context.Context, departm
 var _ adminout.AdminDepartmentPort = (*MockAdminDepartmentPort)(nil)
 
 type MockAdminInvitationPort struct {
-	CheckActiveInvitationExistsFunc func(ctx context.Context, email *shareddomain.Email) (bool, error)
-	SaveInvitationFunc              func(ctx context.Context, params adminout.SaveInvitationParams) (*adminout.SavedInvitation, error)
+	SaveInvitationFunc func(ctx context.Context, params adminout.SaveInvitationParams) (*adminout.SavedInvitation, error)
 }
 
 func NewMockAdminInvitationPort() *MockAdminInvitationPort {
 	return &MockAdminInvitationPort{
-		CheckActiveInvitationExistsFunc: func(ctx context.Context, email *shareddomain.Email) (bool, error) {
-			return false, nil
-		},
 		SaveInvitationFunc: func(ctx context.Context, params adminout.SaveInvitationParams) (*adminout.SavedInvitation, error) {
 			return &adminout.SavedInvitation{
 				ID:        DefaultInvitationID,
@@ -134,10 +130,6 @@ func NewMockAdminInvitationPort() *MockAdminInvitationPort {
 			}, nil
 		},
 	}
-}
-
-func (m *MockAdminInvitationPort) CheckActiveInvitationExists(ctx context.Context, email *shareddomain.Email) (bool, error) {
-	return m.CheckActiveInvitationExistsFunc(ctx, email)
 }
 
 func (m *MockAdminInvitationPort) SaveInvitation(ctx context.Context, params adminout.SaveInvitationParams) (*adminout.SavedInvitation, error) {

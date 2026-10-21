@@ -4,12 +4,15 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"errors"
+	"net/http"
 	"time"
 
 	"github.com/AppeiYA/requisition-system/internal/invitation/domain"
 	invitationin "github.com/AppeiYA/requisition-system/internal/invitation/ports/in"
 	invitationout "github.com/AppeiYA/requisition-system/internal/invitation/ports/out"
 	shareddomain "github.com/AppeiYA/requisition-system/internal/shared/domain"
+	customerrors "github.com/AppeiYA/requisition-system/internal/shared/infrastructure/errors"
 )
 
 type SaveInvitationUsecase struct {
@@ -34,6 +37,11 @@ func generateInvitationToken() (string, error) {
 
 func (uc *SaveInvitationUsecase) Execute(ctx context.Context, cmd invitationin.SaveInvitationCommand) (*invitationin.SaveInvitationResponse, error) {
 	validEmail, err := shareddomain.NewEmail(cmd.Email)
+	if err != nil {
+		return nil, err
+	}
+
+	err = uc.checkExistingInvitation(ctx, validEmail.Value())
 	if err != nil {
 		return nil, err
 	}
@@ -65,10 +73,10 @@ func (uc *SaveInvitationUsecase) Execute(ctx context.Context, cmd invitationin.S
 		return nil, err
 	}
 
-	now := time.Now()
-	expiresAt := now.Add(domain.InvitationExpirationDuration)
-
-	invitation := domain.NewInvitation(invitationID, firstName, lastName, phone, cmd.StaffID, cmd.DepartmentID, cmd.JobTitle, validEmail, tokenHash, cmd.InviterID, expiresAt, now)
+	invitation, err := domain.NewInvitation(invitationID, firstName, lastName, phone, cmd.StaffID, cmd.DepartmentID, cmd.JobTitle, validEmail, tokenHash, cmd.InviterID)
+	if err != nil {
+		return nil, err
+	}
 
 	err = uc.invitationRepo.SaveInvitation(ctx, invitation)
 	if err != nil {
@@ -78,8 +86,63 @@ func (uc *SaveInvitationUsecase) Execute(ctx context.Context, cmd invitationin.S
 	response := &invitationin.SaveInvitationResponse{
 		ID:        invitationID,
 		Token:     token,
-		ExpiresAt: expiresAt,
+		ExpiresAt: invitation.ExpiresAt(),
 	}
 
 	return response, nil
+}
+
+func (uc *SaveInvitationUsecase) checkExistingInvitation(
+	ctx context.Context,
+	email string,
+) error {
+	existingInvitation, err := uc.invitationRepo.GetInvitationByEmail(ctx, email)
+
+	if err != nil {
+		var customErr *customerrors.CustomError
+		if errors.As(err, &customErr) && customErr.Code == http.StatusNotFound {
+			return nil
+		}
+
+		return err
+	}
+
+	now := time.Now()
+
+	if existingInvitation.IsExpired(now) {
+		if existingInvitation.Status() == domain.InvitationStatusPending ||
+			existingInvitation.Status() == domain.InvitationStatusDelivered {
+			if err := uc.invitationRepo.UpdateInvitationStatus(
+				ctx,
+				existingInvitation.ID(),
+				domain.InvitationStatusExpired,
+			); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	switch existingInvitation.Status() {
+	case domain.InvitationStatusPending,
+		domain.InvitationStatusDelivered:
+
+		return customerrors.NewConflictError(
+			"pending invitation already exists for this email",
+		)
+
+	case domain.InvitationStatusAccepted:
+		return customerrors.NewConflictError(
+			"invitation has already been accepted",
+		)
+
+	case domain.InvitationStatusRevoked,
+		domain.InvitationStatusExpired,
+		domain.InvitationStatusFailed:
+
+		return nil
+
+	default:
+		return nil
+	}
 }
