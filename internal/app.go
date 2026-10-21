@@ -78,23 +78,23 @@ func (a *App) Run() error {
 	})
 
 	txManager := db.NewTransactionManager(database)
+	baseRepo := db.NewRepository(database)
 	accessTokenService := jwtadapter.NewJWTService(cfg.JWT)
 	idGen := &generator.IDGenerator{}
+	redisCache := redis.NewCache(redisClient.Client())
 
-	identityModule := a.buildIdentity(cfg, database, redisClient, txManager, accessTokenService, idGen)
+	identityModule := a.buildIdentity(cfg, baseRepo, redisClient, txManager, accessTokenService, idGen)
 
-	departmentModule := a.buildDepartment(database, idGen)
+	departmentModule := a.buildDepartment(baseRepo, idGen, redisCache)
 
 	invitationModule := a.buildInvitation(
-		database,
+		baseRepo,
 		txManager,
 		identityModule.PortIn().RegisterUserUseCase,
 		departmentModule.PortIn().CreateMembershipUsecase,
 		idGen,
 	)
 
-	// The asynq client shares the Redis pool above; redisClient.Close()
-	// owns tearing it down, so the client is not closed separately.
 	asynqClient := taskqueue.NewClient(redisClient)
 
 	adminModule := a.buildAdminHandler(

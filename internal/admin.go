@@ -27,9 +27,6 @@ func (a *App) buildAdminHandler(
 	getDepartmentByIDUC departmentin.GetDepartmentByIDUsecaseInt,
 	asynqClient *asynq.Client,
 ) *admin.AdminModule {
-
-	// Delivery is queued instead of performed: the worker process owns the
-	// mail sender, the API only pushes the task.
 	taskQueue := adminworker.NewTaskQueue(asynqClient, cfg.Worker)
 	identityPort := adminexternal.NewAdminIdentityAdapter(getUserByEmailUC)
 	adminInvitationPort := adminexternal.NewAdminInvitationAdapter(saveInvitationUC)

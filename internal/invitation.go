@@ -14,7 +14,7 @@ import (
 )
 
 func (a *App) buildInvitation(
-	database *db.DB,
+	baseRepo db.Repository,
 	txManager *db.TransactionManager,
 	registerUserUC identityin.RegisterUserUseCaseInt,
 	createMembershipUC departmentin.CreateMembershipUsecaseInt,
@@ -22,7 +22,7 @@ func (a *App) buildInvitation(
 ) (
 	*invitation.InvitationModule,
 ) {
-	invitationRepo := invitationpostgres.NewInvitationRepository(db.NewRepository(database))
+	invitationRepo := invitationpostgres.NewInvitationRepository(baseRepo)
 
 	// The identity port lets the invitation module register the invited user
 	// without depending on the identity module's concrete use cases.

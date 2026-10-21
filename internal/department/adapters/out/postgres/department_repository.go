@@ -4,9 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
+	"time"
 
 	"github.com/AppeiYA/requisition-system/internal/department/adapters/out/postgres/models"
 	departmentdomain "github.com/AppeiYA/requisition-system/internal/department/domain"
+	sharedcache "github.com/AppeiYA/requisition-system/internal/shared/infrastructure/cache"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/db"
 	customerrors "github.com/AppeiYA/requisition-system/internal/shared/infrastructure/errors"
 	"github.com/lib/pq"
@@ -18,13 +21,15 @@ var (
 )
 
 const pqUniqueViolationCode = "23505"
+const departmentCacheTTL = 10 * time.Minute
 
 type DepartmentRepository struct {
 	repository db.Repository
+	cache sharedcache.Cache
 }
 
-func NewDepartmentRepository(repository db.Repository) *DepartmentRepository {
-	return &DepartmentRepository{repository: repository}
+func NewDepartmentRepository(repository db.Repository, cache sharedcache.Cache) *DepartmentRepository {
+	return &DepartmentRepository{repository: repository, cache: cache}
 }
 
 var saveDepartmentQuery = `
@@ -33,6 +38,7 @@ var saveDepartmentQuery = `
 `
 
 func (r *DepartmentRepository) SaveDepartment(ctx context.Context, department *departmentdomain.Department) error {
+	key := "department:all"
 	_, err := r.repository.Executor(ctx).NamedExecContext(ctx, saveDepartmentQuery, models.DepartmentFromDomain(department))
 	if err != nil {
 		// Translate the unique-code index violation into an application error.
@@ -42,6 +48,12 @@ func (r *DepartmentRepository) SaveDepartment(ctx context.Context, department *d
 		}
 		return err
 	}
+
+	err = r.cache.Delete(ctx, key)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -52,14 +64,31 @@ var getByIDQuery = `
 `
 
 func (r *DepartmentRepository) GetDepartmentByID(ctx context.Context, id string) (*departmentdomain.Department, error) {
+	key := fmt.Sprintf("department:%s", id)
 	var model models.DepartmentModel
-	err := r.repository.Executor(ctx).GetContext(ctx, &model, getByIDQuery, id)
+
+	found, err := r.cache.Get(ctx, key, &model)
+	if err != nil {
+		return nil, err
+	}
+
+	if found {
+		return model.ToDomain()
+	}
+
+	err = r.repository.Executor(ctx).GetContext(ctx, &model, getByIDQuery, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrDepartmentNotFoundRepo
 		}
 		return nil, err
 	}
+
+	err = r.cache.Set(ctx, key, model, departmentCacheTTL)
+	if err != nil {
+		return nil, err
+	}
+	
 	return model.ToDomain()
 }
 
@@ -71,9 +100,26 @@ var getDepartmentsQuery = `
 `
 
 func (r *DepartmentRepository) GetDepartments(ctx context.Context) ([]*departmentdomain.Department, error) {
+	key := "department:all"
 	var modelsList []models.DepartmentModel
 
-	err := r.repository.Executor(ctx).SelectContext(ctx, &modelsList, getDepartmentsQuery)
+	found, err := r.cache.Get(ctx, key, &modelsList)
+	if err != nil {
+		return nil, err
+	}
+	if found {
+		departments := make([]*departmentdomain.Department, 0, len(modelsList))
+		for _, model := range modelsList {
+			department, err := model.ToDomain()
+			if err != nil {
+				return nil, err
+			}
+			departments = append(departments, department)
+		}
+		return departments, nil
+	}
+
+	err = r.repository.Executor(ctx).SelectContext(ctx, &modelsList, getDepartmentsQuery)
 	if err != nil {
 		return nil, err
 	}
@@ -87,6 +133,11 @@ func (r *DepartmentRepository) GetDepartments(ctx context.Context) ([]*departmen
 		}
 
 		departments = append(departments, department)
+	}
+
+	err = r.cache.Set(ctx, key, modelsList, departmentCacheTTL)
+	if err != nil {
+		return nil, err
 	}
 
 	return departments, nil

@@ -17,7 +17,7 @@ import (
 
 func (a *App) buildIdentity(
 	cfg *config.Config,
-	database *db.DB,
+	baseRepo db.Repository,
 	redisClient *redis.Redis,
 	txManager *db.TransactionManager,
 	accessTokenService *jwtadapter.JWTService,
@@ -25,7 +25,7 @@ func (a *App) buildIdentity(
 ) (
 	*identity.IdentityModule,
 ) {
-	userRepository := identitypostgres.NewUserRepository(db.NewRepository(database))
+	userRepository := identitypostgres.NewUserRepository(baseRepo)
 
 	refreshSessionRepository := identityredis.NewRefreshSessionRepository(
 		redisClient.Client(),
