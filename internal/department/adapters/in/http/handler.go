@@ -21,5 +21,6 @@ func NewDepartmentHandler(
 func (h *DepartmentHandler) Register(router *gin.RouterGroup, authMiddleware gin.HandlerFunc) {
 	dept := router.Group("/departments")
 	dept.POST("", authMiddleware, h.create)
+	dept.GET("", authMiddleware, h.getDepartments)
 	dept.GET("/:id", authMiddleware, h.getByID)
 }

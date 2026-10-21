@@ -31,3 +31,28 @@ func (a *AdminDepartmentAdapter) CheckDepartmentExists(ctx context.Context, depa
 	}
 	return true, nil
 }
+
+// GetDepartmentName resolves the department's display name, which the
+// invitation email quotes back to the invitee.
+func (a *AdminDepartmentAdapter) GetDepartmentName(ctx context.Context, departmentID string) (string, error) {
+	res, err := a.getDepartmentByID.Execute(ctx, departmentID)
+	if err != nil {
+		return "", err
+	}
+	return res.Name, nil
+}
+
+func (a *AdminDepartmentAdapter) GetDepartmentByID(ctx context.Context, departmentID string) (*adminout.DepartmentResponse, error) {
+	res, err := a.getDepartmentByID.Execute(ctx, departmentID)
+	if err != nil {
+		return nil, err
+	}
+	
+	return &adminout.DepartmentResponse{
+		ID:          res.ID,
+		Name:        res.Name,
+		Description: res.Description,
+		Code:        res.Code,
+		Status:      res.Status,
+	}, nil
+}

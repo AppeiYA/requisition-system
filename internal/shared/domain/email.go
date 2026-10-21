@@ -16,6 +16,7 @@ var (
 )
 
 func NewEmail(value string) (*Email, error) {
+	value = strings.ToLower(value)
 	if !validateEmail(value) {
 		return nil, ErrInvalidEmailFormat
 	}

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	adminout "github.com/AppeiYA/requisition-system/internal/admin/ports/out"
+	"github.com/AppeiYA/requisition-system/internal/admin/tasks"
 	shareddomain "github.com/AppeiYA/requisition-system/internal/shared/domain"
 )
 
@@ -19,25 +20,46 @@ var (
 	DefaultStaffID      = "STF-1234"
 	DefaultDepartmentID = "dpt-1234"
 	DefaultJobTitle     = "Software Engineer"
+	// DefaultDepartmentName mirrors the name the department module returns
+	// for DefaultDepartmentID, so queued payloads can be asserted end to end.
+	DefaultDepartmentName = "Finance"
 )
 
 type MockEmailSender struct {
-	SendInvitationFunc func(ctx context.Context, to string, invitedBy string, token string, expiresAt string) error
+	SendInvitationFunc func(ctx context.Context, to string, invitedBy string, token string, expiresAt string, departmentName string, jobTitle string) error
 }
 
 func NewMockEmailSender() *MockEmailSender {
 	return &MockEmailSender{
-		SendInvitationFunc: func(ctx context.Context, to string, invitedBy string, token string, expiresAt string) error {
+		SendInvitationFunc: func(ctx context.Context, to string, invitedBy string, token string, expiresAt string, departmentName string, jobTitle string) error {
 			return nil
 		},
 	}
 }
 
-func (m *MockEmailSender) SendInvitation(ctx context.Context, to string, invitedBy string, token string, expiresAt string) error {
-	return m.SendInvitationFunc(ctx, to, invitedBy, token, expiresAt)
+func (m *MockEmailSender) SendInvitation(ctx context.Context, to string, invitedBy string, token string, expiresAt string, departmentName string, jobTitle string) error {
+	return m.SendInvitationFunc(ctx, to, invitedBy, token, expiresAt, departmentName, jobTitle)
 }
 
 var _ adminout.EmailSender = (*MockEmailSender)(nil)
+
+type MockTaskQueue struct {
+	EnqueueInvitationEmailFunc func(ctx context.Context, payload tasks.InvitationEmailPayload) error
+}
+
+func NewMockTaskQueue() *MockTaskQueue {
+	return &MockTaskQueue{
+		EnqueueInvitationEmailFunc: func(ctx context.Context, payload tasks.InvitationEmailPayload) error {
+			return nil
+		},
+	}
+}
+
+func (m *MockTaskQueue) EnqueueInvitationEmail(ctx context.Context, payload tasks.InvitationEmailPayload) error {
+	return m.EnqueueInvitationEmailFunc(ctx, payload)
+}
+
+var _ adminout.TaskQueue = (*MockTaskQueue)(nil)
 
 type MockAdminIdentityPort struct {
 	CheckUserExistsFunc func(ctx context.Context, email *shareddomain.Email) (bool, error)
@@ -59,12 +81,23 @@ var _ adminout.AdminIdentityPort = (*MockAdminIdentityPort)(nil)
 
 type MockAdminDepartmentPort struct {
 	CheckDepartmentExistsFunc func(ctx context.Context, departmentID string) (bool, error)
+	GetDepartmentNameFunc     func(ctx context.Context, departmentID string) (string, error)
+	GetDepartmentByIDFunc     func(ctx context.Context, departmentID string) (*adminout.DepartmentResponse, error)
 }
 
 func NewMockAdminDepartmentPort() *MockAdminDepartmentPort {
 	return &MockAdminDepartmentPort{
 		CheckDepartmentExistsFunc: func(ctx context.Context, departmentID string) (bool, error) {
 			return true, nil
+		},
+		GetDepartmentNameFunc: func(ctx context.Context, departmentID string) (string, error) {
+			return DefaultDepartmentName, nil
+		},
+		GetDepartmentByIDFunc: func(ctx context.Context, departmentID string) (*adminout.DepartmentResponse, error) {
+			return &adminout.DepartmentResponse{
+				ID:   departmentID,
+				Name: DefaultDepartmentName,
+			}, nil
 		},
 	}
 }
@@ -73,18 +106,22 @@ func (m *MockAdminDepartmentPort) CheckDepartmentExists(ctx context.Context, dep
 	return m.CheckDepartmentExistsFunc(ctx, departmentID)
 }
 
+func (m *MockAdminDepartmentPort) GetDepartmentName(ctx context.Context, departmentID string) (string, error) {
+	return m.GetDepartmentNameFunc(ctx, departmentID)
+}
+
+func (m *MockAdminDepartmentPort) GetDepartmentByID(ctx context.Context, departmentID string) (*adminout.DepartmentResponse, error) {
+	return m.GetDepartmentByIDFunc(ctx, departmentID)
+}
+
 var _ adminout.AdminDepartmentPort = (*MockAdminDepartmentPort)(nil)
 
 type MockAdminInvitationPort struct {
-	CheckActiveInvitationExistsFunc func(ctx context.Context, email *shareddomain.Email) (bool, error)
-	SaveInvitationFunc              func(ctx context.Context, params adminout.SaveInvitationParams) (*adminout.SavedInvitation, error)
+	SaveInvitationFunc func(ctx context.Context, params adminout.SaveInvitationParams) (*adminout.SavedInvitation, error)
 }
 
 func NewMockAdminInvitationPort() *MockAdminInvitationPort {
 	return &MockAdminInvitationPort{
-		CheckActiveInvitationExistsFunc: func(ctx context.Context, email *shareddomain.Email) (bool, error) {
-			return false, nil
-		},
 		SaveInvitationFunc: func(ctx context.Context, params adminout.SaveInvitationParams) (*adminout.SavedInvitation, error) {
 			return &adminout.SavedInvitation{
 				ID:        DefaultInvitationID,
@@ -93,10 +130,6 @@ func NewMockAdminInvitationPort() *MockAdminInvitationPort {
 			}, nil
 		},
 	}
-}
-
-func (m *MockAdminInvitationPort) CheckActiveInvitationExists(ctx context.Context, email *shareddomain.Email) (bool, error) {
-	return m.CheckActiveInvitationExistsFunc(ctx, email)
 }
 
 func (m *MockAdminInvitationPort) SaveInvitation(ctx context.Context, params adminout.SaveInvitationParams) (*adminout.SavedInvitation, error) {

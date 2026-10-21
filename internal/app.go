@@ -13,11 +13,11 @@ import (
 	jwtadapter "github.com/AppeiYA/requisition-system/internal/identity/adapters/out/jwt"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/config"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/db"
-	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/email"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/generator"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/redis"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/response"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/server"
+	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/taskqueue"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/telemetry"
 	"github.com/gin-gonic/gin"
 )
@@ -70,6 +70,7 @@ func (a *App) Run() error {
 
 	router := gin.New()
 	router.Use(gin.Logger(), gin.Recovery())
+	router.Use(requestBodyLimit())
 	api := router.Group("/api")
 
 	api.GET("/healthz", func(c *gin.Context) {
@@ -79,36 +80,37 @@ func (a *App) Run() error {
 	txManager := db.NewTransactionManager(database)
 	accessTokenService := jwtadapter.NewJWTService(cfg.JWT)
 	idGen := &generator.IDGenerator{}
-	
+
 	identityModule := a.buildIdentity(cfg, database, redisClient, txManager, accessTokenService, idGen)
 
 	departmentModule := a.buildDepartment(database, idGen)
 
 	invitationModule := a.buildInvitation(
-		database, 
-		txManager, 
-		identityModule.PortIn().RegisterUserUseCase, 
-		departmentModule.PortIn().CreateMembershipUsecase, 
+		database,
+		txManager,
+		identityModule.PortIn().RegisterUserUseCase,
+		departmentModule.PortIn().CreateMembershipUsecase,
 		idGen,
 	)
 
-	emailSender := email.NewSender(cfg.Email)
-	
+	// The asynq client shares the Redis pool above; redisClient.Close()
+	// owns tearing it down, so the client is not closed separately.
+	asynqClient := taskqueue.NewClient(redisClient)
+
 	adminModule := a.buildAdminHandler(
-		cfg, 
-		txManager, 
-		identityModule.PortIn().GetUserByEmailUsecase, 
-		invitationModule.PortIn().SaveInvitationUsecase, 
-		invitationModule.PortIn().GetInvitationUsecase,
-		departmentModule.PortIn().GetDepartmentByIDUsecase, 
-		emailSender)
+		cfg,
+		txManager,
+		identityModule.PortIn().GetUserByEmailUsecase,
+		invitationModule.PortIn().SaveInvitationUsecase,
+		departmentModule.PortIn().GetDepartmentByIDUsecase,
+		asynqClient)
 
 	if err := NewRouter(
-		api, 
-		identityModule.Handler(), 
-		invitationModule.Handler(), 
-		adminModule.Handler(), 
-		departmentModule.Handler(), 
+		api,
+		identityModule.Handler(),
+		invitationModule.Handler(),
+		adminModule.Handler(),
+		departmentModule.Handler(),
 		identityModule.AuthMiddleware(),
 	); err != nil {
 		return err

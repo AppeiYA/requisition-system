@@ -3,22 +3,28 @@ package email
 import (
 	"context"
 	"fmt"
-	"net/smtp"
 
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/config"
 	customerrors "github.com/AppeiYA/requisition-system/internal/shared/infrastructure/errors"
+	"github.com/resendlabs/resend-go"
 )
 
 var (
 	ErrSendFailed = customerrors.NewInternalServerError("failed to send email")
 )
 
+// Sender delivers transactional email through the Resend API:
+// https://resend.com/docs/api-reference/emails/send-email
 type Sender struct {
-	cfg config.EmailConfig
+	emails resend.EmailsSvc
+	cfg    config.EmailConfig
 }
 
 func NewSender(cfg config.EmailConfig) *Sender {
-	return &Sender{cfg: cfg}
+	return &Sender{
+		emails: resend.NewClient(cfg.APIKey).Emails,
+		cfg:    cfg,
+	}
 }
 
 func (s *Sender) Send(ctx context.Context, to, subject, body string) error {
@@ -26,22 +32,26 @@ func (s *Sender) Send(ctx context.Context, to, subject, body string) error {
 		return err
 	}
 
-	from := s.cfg.From
-	if from == "" {
-		from = "noreply@requisition-system.local"
-	}
-
-	addr := fmt.Sprintf("%s:%d", s.cfg.Host, s.cfg.Port)
-	msg := fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n%s\r\n", from, to, subject, body)
-
-	var auth smtp.Auth
-	if s.cfg.Username != "" {
-		auth = smtp.PlainAuth("", s.cfg.Username, s.cfg.Password, s.cfg.Host)
-	}
-
-	err := smtp.SendMail(addr, auth, from, []string{to}, []byte(msg))
+	_, err := s.emails.Send(&resend.SendEmailRequest{
+		From:    s.from(),
+		To:      []string{to},
+		Subject: subject,
+		Html:    body,
+	})
 	if err != nil {
-		return ErrSendFailed
+		// Keep the API error in the chain for logging while presenting the
+		// generic message to callers.
+		return fmt.Errorf("%w: %v", ErrSendFailed, err)
 	}
+
 	return nil
+}
+
+// from renders the configured sender the way the Resend API expects it,
+// "Name <address>". The address must be a verified sender in Resend.
+func (s *Sender) from() string {
+	if s.cfg.FromName == "" {
+		return s.cfg.From
+	}
+	return fmt.Sprintf("%s <%s>", s.cfg.FromName, s.cfg.From)
 }

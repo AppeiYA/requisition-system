@@ -1,6 +1,13 @@
 package hasher
 
-import "golang.org/x/crypto/bcrypt"
+import (
+	customerrors "github.com/AppeiYA/requisition-system/internal/shared/infrastructure/errors"
+	"golang.org/x/crypto/bcrypt"
+)
+
+var (
+	ErrPasswordMismatch = customerrors.NewUnauthorizedError("Account and password credentials do not match")
+)
 
 type PasswordHasher struct {
 	cost int
@@ -27,7 +34,15 @@ func (h *PasswordHasher) HashPassword(password string) (string, error) {
 }
 
 func (h *PasswordHasher) ComparePassword(hashedPassword, password string) error {
-	return bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password))
+	err := bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password))
+	switch err {
+	case nil:
+		return nil
+	case bcrypt.ErrMismatchedHashAndPassword:
+		return ErrPasswordMismatch
+	default:
+		return err
+	}
 }
 
 func (h *PasswordHasher) Hash(password string) (string, error) {

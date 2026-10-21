@@ -37,6 +37,7 @@ func ValidMembership() *departmentdomain.DepartmentMembership {
 type MockDepartmentRepository struct {
 	SaveDepartmentFunc    func(ctx context.Context, department *departmentdomain.Department) error
 	GetDepartmentByIDFunc func(ctx context.Context, id string) (*departmentdomain.Department, error)
+	GetDepartmentsFunc    func(ctx context.Context) ([]*departmentdomain.Department, error)
 }
 
 func NewMockDepartmentRepository() *MockDepartmentRepository {
@@ -47,6 +48,9 @@ func NewMockDepartmentRepository() *MockDepartmentRepository {
 		GetDepartmentByIDFunc: func(ctx context.Context, id string) (*departmentdomain.Department, error) {
 			return ValidDepartment(), nil
 		},
+		GetDepartmentsFunc: func(ctx context.Context) ([]*departmentdomain.Department, error) {
+			return []*departmentdomain.Department{ValidDepartment()}, nil
+		},
 	}
 }
 
@@ -56,6 +60,10 @@ func (m *MockDepartmentRepository) SaveDepartment(ctx context.Context, departmen
 
 func (m *MockDepartmentRepository) GetDepartmentByID(ctx context.Context, id string) (*departmentdomain.Department, error) {
 	return m.GetDepartmentByIDFunc(ctx, id)
+}
+
+func (m *MockDepartmentRepository) GetDepartments(ctx context.Context) ([]*departmentdomain.Department, error) {
+	return m.GetDepartmentsFunc(ctx)
 }
 
 var _ departmentout.DepartmentRepository = (*MockDepartmentRepository)(nil)

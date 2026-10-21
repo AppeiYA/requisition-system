@@ -377,3 +377,52 @@ func TestLoadJWTConfig_RefreshTTLNotLongerThanAccess(t *testing.T) {
 		t.Fatalf("expected ErrJWTRefreshTTLNotLongerThanAccess, got: %v", err)
 	}
 }
+
+func requireEmailEnv(t *testing.T) {
+	t.Helper()
+	t.Setenv("RESEND_API_KEY", "re_test_key")
+}
+
+func TestLoadEmailConfig_Defaults(t *testing.T) {
+	requireEmailEnv(t)
+	unsetEnv(t, "EMAIL_FROM")
+	unsetEnv(t, "EMAIL_FROM_NAME")
+
+	cfg, err := LoadEmailConfig()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if cfg.APIKey != "re_test_key" {
+		t.Errorf("APIKey = %q, want %q", cfg.APIKey, "re_test_key")
+	}
+	if cfg.From != "onboarding@resend.dev" {
+		t.Errorf("From = %q, want default onboarding@resend.dev", cfg.From)
+	}
+	if cfg.FromName != "Requisition System" {
+		t.Errorf("FromName = %q, want default Requisition System", cfg.FromName)
+	}
+}
+
+func TestLoadEmailConfig_ReadsValues(t *testing.T) {
+	requireEmailEnv(t)
+	t.Setenv("EMAIL_FROM", "orders@example.com")
+	t.Setenv("EMAIL_FROM_NAME", "Orders")
+
+	cfg, err := LoadEmailConfig()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if cfg.From != "orders@example.com" || cfg.FromName != "Orders" {
+		t.Errorf("expected sender from env, got: %+v", cfg)
+	}
+}
+
+func TestLoadEmailConfig_MissingAPIKey(t *testing.T) {
+	unsetEnv(t, "RESEND_API_KEY")
+
+	if _, err := LoadEmailConfig(); err == nil {
+		t.Fatal("expected error when RESEND_API_KEY is missing")
+	}
+}

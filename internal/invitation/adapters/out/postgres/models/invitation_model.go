@@ -17,6 +17,7 @@ type InvitationModel struct {
 	Email        string     `db:"email"`
 	TokenHash    string     `db:"token_hash"`
 	InvitedBy    string     `db:"invited_by"`
+	Status       string     `db:"status"`
 	ExpiresAt    time.Time  `db:"expires_at"`
 	AcceptedAt   *time.Time `db:"accepted_at"`
 	RevokedAt    *time.Time `db:"revoked_at"`
@@ -45,6 +46,7 @@ func FromDomain(inv *invitationdomain.Invitation) *InvitationModel {
 		Email:        inv.Email().Value(),
 		TokenHash:    inv.TokenHash(),
 		InvitedBy:    inv.InvitedBy(),
+		Status:       inv.Status().String(),
 		ExpiresAt:    inv.ExpiresAt(),
 		AcceptedAt:   inv.AcceptedAt(),
 		RevokedAt:    inv.RevokedAt(),
@@ -63,7 +65,7 @@ func (m InvitationModel) ToDomain() (*invitationdomain.Invitation, error) {
 		staffID = *m.StaffID
 	}
 
-	return invitationdomain.ReconstituteInvitation(
+	return invitationdomain.ReconstituteInvitationWithStatus(
 		m.ID,
 		m.FirstName,
 		m.LastName,
@@ -74,6 +76,7 @@ func (m InvitationModel) ToDomain() (*invitationdomain.Invitation, error) {
 		m.Email,
 		m.TokenHash,
 		m.InvitedBy,
+		m.Status,
 		m.ExpiresAt,
 		m.AcceptedAt,
 		m.RevokedAt,

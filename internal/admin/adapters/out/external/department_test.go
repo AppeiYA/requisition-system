@@ -63,3 +63,33 @@ func Test_AdminDepartmentAdapter_CheckDepartmentExists_Error(t *testing.T) {
 		t.Fatalf("expected dbErr, got: %v", err)
 	}
 }
+
+func Test_AdminDepartmentAdapter_GetDepartmentName(t *testing.T) {
+	t.Parallel()
+
+	get := &stubGetDepartmentByID{res: &departmentin.DepartmentResult{ID: "dpt-1", Name: "Finance"}}
+	adapter := NewAdminDepartmentAdapter(get)
+
+	name, err := adapter.GetDepartmentName(context.Background(), "dpt-1")
+	if err != nil {
+		t.Fatalf("expected nil error, got: %v", err)
+	}
+	if name != "Finance" {
+		t.Errorf("expected name %q, got %q", "Finance", name)
+	}
+	if get.gotID != "dpt-1" {
+		t.Errorf("expected lookup of %q, got %q", "dpt-1", get.gotID)
+	}
+}
+
+func Test_AdminDepartmentAdapter_GetDepartmentName_Error(t *testing.T) {
+	t.Parallel()
+
+	dbErr := errors.New("db down")
+	adapter := NewAdminDepartmentAdapter(&stubGetDepartmentByID{err: dbErr})
+
+	_, err := adapter.GetDepartmentName(context.Background(), "dpt-1")
+	if !errors.Is(err, dbErr) {
+		t.Fatalf("expected dbErr, got: %v", err)
+	}
+}
