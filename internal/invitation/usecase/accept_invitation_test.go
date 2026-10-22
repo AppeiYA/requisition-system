@@ -25,8 +25,9 @@ func newAcceptUsecase(
 	identityPort invitationout.InvitationIdentityPort,
 	departmentPort invitationout.InvitationDepartmentPort,
 	tx invitationout.TransactionManager,
-) *AcceptInvitationUsecase {
-	return NewAcceptInvitationUsecase(repo, identityPort, departmentPort, tx)
+) (*AcceptInvitationUsecase, *invitationmocks.MockTelemetry) {
+	telemetry := invitationmocks.NewMockTelemetry()
+	return NewAcceptInvitationUsecase(repo, identityPort, departmentPort, tx, telemetry), telemetry
 }
 
 func Test_AcceptInvitationUsecase_Success(t *testing.T) {
@@ -35,7 +36,7 @@ func Test_AcceptInvitationUsecase_Success(t *testing.T) {
 	var registered *invitationout.CreateIdentityRequest
 	var membership *invitationout.CreateMembershipRequest
 	var acceptedID string
-	var txUsed, membershipInsideTx bool
+	var txUsed, membershipInsideTx, measuring, txInsideMeasurement bool
 
 	repo := invitationmocks.NewMockInvitationRepository()
 	repo.GetInvitationByTokenHashFunc = func(ctx context.Context, tokenHash string) (*domain.Invitation, error) {
@@ -65,10 +66,17 @@ func Test_AcceptInvitationUsecase_Success(t *testing.T) {
 	tx := invitationmocks.NewMockTransactionManager()
 	tx.WithinTransactionFunc = func(ctx context.Context, fn func(context.Context) error) error {
 		txUsed = true
+		txInsideMeasurement = measuring
 		return fn(ctx)
 	}
 
-	uc := newAcceptUsecase(repo, identityPort, departmentPort, tx)
+	uc, telemetry := newAcceptUsecase(repo, identityPort, departmentPort, tx)
+
+	telemetry.MeasureFunc = func(ctx context.Context, operation string, fn func(context.Context) error) error {
+		measuring = true
+		defer func() { measuring = false }()
+		return fn(ctx)
+	}
 
 	if err := uc.Execute(context.Background(), acceptCmd()); err != nil {
 		t.Fatalf("expected nil error, got: %v", err)
@@ -79,6 +87,9 @@ func Test_AcceptInvitationUsecase_Success(t *testing.T) {
 	}
 	if !membershipInsideTx {
 		t.Error("expected membership creation to run inside the same transaction")
+	}
+	if !txInsideMeasurement {
+		t.Error("expected the transaction to run inside the measured operation")
 	}
 	if registered == nil {
 		t.Fatal("expected identity registration")
@@ -113,6 +124,17 @@ func Test_AcceptInvitationUsecase_Success(t *testing.T) {
 	if acceptedID != testInvitationID {
 		t.Errorf("expected invitation %q to be marked accepted, got %q", testInvitationID, acceptedID)
 	}
+
+	calls := telemetry.Calls()
+	if len(calls) != 1 {
+		t.Fatalf("expected the operation to be measured once, got %d measurements", len(calls))
+	}
+	if calls[0].Operation != invitationout.OperationAcceptInvitation {
+		t.Errorf("expected operation %q, got %q", invitationout.OperationAcceptInvitation, calls[0].Operation)
+	}
+	if calls[0].Err != nil {
+		t.Errorf("expected a successful measurement, got: %v", calls[0].Err)
+	}
 }
 
 func Test_AcceptInvitationUsecase_UsesPrefillWhenOmitted(t *testing.T) {
@@ -131,7 +153,7 @@ func Test_AcceptInvitationUsecase_UsesPrefillWhenOmitted(t *testing.T) {
 		return testRegisteredUserID, nil
 	}
 
-	uc := newAcceptUsecase(repo, identityPort, invitationmocks.NewMockInvitationDepartmentPort(), invitationmocks.NewMockTransactionManager())
+	uc, _ := newAcceptUsecase(repo, identityPort, invitationmocks.NewMockInvitationDepartmentPort(), invitationmocks.NewMockTransactionManager())
 
 	cmd := invitationin.AcceptInvitationCommand{
 		Token:    testInvitationToken,
@@ -158,7 +180,7 @@ func Test_AcceptInvitationUsecase_UsesPrefillWhenOmitted(t *testing.T) {
 func Test_AcceptInvitationUsecase_EmptyToken(t *testing.T) {
 	t.Parallel()
 
-	uc := newAcceptUsecase(
+	uc, _ := newAcceptUsecase(
 		invitationmocks.NewMockInvitationRepository(),
 		invitationmocks.NewMockInvitationIdentityPort(),
 		invitationmocks.NewMockInvitationDepartmentPort(),
@@ -179,7 +201,7 @@ func Test_AcceptInvitationUsecase_NotFound(t *testing.T) {
 		return nil, domain.ErrInvitationNotFound
 	}
 
-	uc := newAcceptUsecase(repo, invitationmocks.NewMockInvitationIdentityPort(), invitationmocks.NewMockInvitationDepartmentPort(), invitationmocks.NewMockTransactionManager())
+	uc, _ := newAcceptUsecase(repo, invitationmocks.NewMockInvitationIdentityPort(), invitationmocks.NewMockInvitationDepartmentPort(), invitationmocks.NewMockTransactionManager())
 
 	err := uc.Execute(context.Background(), acceptCmd())
 	if err != ErrInvitationNotFound {
@@ -218,7 +240,7 @@ func Test_AcceptInvitationUsecase_InvalidStates(t *testing.T) {
 				return nil
 			}
 
-			uc := newAcceptUsecase(repo, invitationmocks.NewMockInvitationIdentityPort(), invitationmocks.NewMockInvitationDepartmentPort(), tx)
+			uc, _ := newAcceptUsecase(repo, invitationmocks.NewMockInvitationIdentityPort(), invitationmocks.NewMockInvitationDepartmentPort(), tx)
 
 			err := uc.Execute(context.Background(), acceptCmd())
 			if err != tt.expectedErr {
@@ -255,7 +277,7 @@ func Test_AcceptInvitationUsecase_RegisterUserError(t *testing.T) {
 		return nil
 	}
 
-	uc := newAcceptUsecase(repo, identityPort, departmentPort, invitationmocks.NewMockTransactionManager())
+	uc, _ := newAcceptUsecase(repo, identityPort, departmentPort, invitationmocks.NewMockTransactionManager())
 
 	err := uc.Execute(context.Background(), acceptCmd())
 	if !errors.Is(err, regErr) {
@@ -289,7 +311,7 @@ func Test_AcceptInvitationUsecase_CreateMembershipError(t *testing.T) {
 		return departmentErr
 	}
 
-	uc := newAcceptUsecase(repo, invitationmocks.NewMockInvitationIdentityPort(), departmentPort, invitationmocks.NewMockTransactionManager())
+	uc, _ := newAcceptUsecase(repo, invitationmocks.NewMockInvitationIdentityPort(), departmentPort, invitationmocks.NewMockTransactionManager())
 
 	err := uc.Execute(context.Background(), acceptCmd())
 	if !errors.Is(err, departmentErr) {
@@ -313,7 +335,7 @@ func Test_AcceptInvitationUsecase_MarkAcceptedError(t *testing.T) {
 		return markErr
 	}
 
-	uc := newAcceptUsecase(repo, invitationmocks.NewMockInvitationIdentityPort(), invitationmocks.NewMockInvitationDepartmentPort(), invitationmocks.NewMockTransactionManager())
+	uc, _ := newAcceptUsecase(repo, invitationmocks.NewMockInvitationIdentityPort(), invitationmocks.NewMockInvitationDepartmentPort(), invitationmocks.NewMockTransactionManager())
 
 	err := uc.Execute(context.Background(), acceptCmd())
 	if !errors.Is(err, markErr) {
@@ -336,7 +358,7 @@ func Test_AcceptInvitationUsecase_TransactionError(t *testing.T) {
 		return txErr
 	}
 
-	uc := newAcceptUsecase(repo, invitationmocks.NewMockInvitationIdentityPort(), invitationmocks.NewMockInvitationDepartmentPort(), tx)
+	uc, _ := newAcceptUsecase(repo, invitationmocks.NewMockInvitationIdentityPort(), invitationmocks.NewMockInvitationDepartmentPort(), tx)
 
 	err := uc.Execute(context.Background(), acceptCmd())
 	if !errors.Is(err, txErr) {
@@ -350,7 +372,7 @@ func Test_AcceptInvitationUsecase_ContextCancelled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	uc := newAcceptUsecase(
+	uc, telemetry := newAcceptUsecase(
 		invitationmocks.NewMockInvitationRepository(),
 		invitationmocks.NewMockInvitationIdentityPort(),
 		invitationmocks.NewMockInvitationDepartmentPort(),
@@ -360,5 +382,148 @@ func Test_AcceptInvitationUsecase_ContextCancelled(t *testing.T) {
 	err := uc.Execute(ctx, acceptCmd())
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("expected context.Canceled, got: %v", err)
+	}
+	if calls := telemetry.Calls(); len(calls) != 0 {
+		t.Errorf("expected a cancelled request not to be measured, got %d measurements", len(calls))
+	}
+}
+
+func Test_AcceptInvitationUsecase_MeasuresValidationFailure(t *testing.T) {
+	t.Parallel()
+
+	uc, telemetry := newAcceptUsecase(
+		invitationmocks.NewMockInvitationRepository(),
+		invitationmocks.NewMockInvitationIdentityPort(),
+		invitationmocks.NewMockInvitationDepartmentPort(),
+		invitationmocks.NewMockTransactionManager(),
+	)
+
+	err := uc.Execute(context.Background(), invitationin.AcceptInvitationCommand{})
+	if err != ErrInvitationInvalidToken {
+		t.Fatalf("expected ErrInvitationInvalidToken, got: %v", err)
+	}
+
+	calls := telemetry.Calls()
+	if len(calls) != 1 {
+		t.Fatalf("expected the operation to be measured once, got %d measurements", len(calls))
+	}
+	if calls[0].Operation != invitationout.OperationAcceptInvitation {
+		t.Errorf("expected operation %q, got %q", invitationout.OperationAcceptInvitation, calls[0].Operation)
+	}
+	if !errors.Is(calls[0].Err, ErrInvitationInvalidToken) {
+		t.Errorf("expected the measured error to be ErrInvitationInvalidToken, got: %v", calls[0].Err)
+	}
+}
+
+func Test_AcceptInvitationUsecase_MeasuresBusinessFailure(t *testing.T) {
+	t.Parallel()
+
+	repo := invitationmocks.NewMockInvitationRepository()
+	repo.GetInvitationByTokenHashFunc = func(ctx context.Context, tokenHash string) (*domain.Invitation, error) {
+		return nil, domain.ErrInvitationNotFound
+	}
+
+	uc, telemetry := newAcceptUsecase(repo, invitationmocks.NewMockInvitationIdentityPort(), invitationmocks.NewMockInvitationDepartmentPort(), invitationmocks.NewMockTransactionManager())
+
+	err := uc.Execute(context.Background(), acceptCmd())
+	if err != ErrInvitationNotFound {
+		t.Fatalf("expected ErrInvitationNotFound, got: %v", err)
+	}
+
+	calls := telemetry.Calls()
+	if len(calls) != 1 {
+		t.Fatalf("expected the operation to be measured once, got %d measurements", len(calls))
+	}
+	if calls[0].Operation != invitationout.OperationAcceptInvitation {
+		t.Errorf("expected operation %q, got %q", invitationout.OperationAcceptInvitation, calls[0].Operation)
+	}
+	if !errors.Is(calls[0].Err, ErrInvitationNotFound) {
+		t.Errorf("expected the measured error to be ErrInvitationNotFound, got: %v", calls[0].Err)
+	}
+}
+
+func Test_AcceptInvitationUsecase_MeasurementKeepsTheContext(t *testing.T) {
+	t.Parallel()
+
+	type contextKey string
+	const key contextKey = "trace"
+
+	var seen any
+	repo := invitationmocks.NewMockInvitationRepository()
+	repo.GetInvitationByTokenHashFunc = func(ctx context.Context, tokenHash string) (*domain.Invitation, error) {
+		seen = ctx.Value(key)
+		return pendingInvitation(), nil
+	}
+
+	uc, _ := newAcceptUsecase(repo, invitationmocks.NewMockInvitationIdentityPort(), invitationmocks.NewMockInvitationDepartmentPort(), invitationmocks.NewMockTransactionManager())
+
+	ctx := context.WithValue(context.Background(), key, "span-context")
+	if err := uc.Execute(ctx, acceptCmd()); err != nil {
+		t.Fatalf("expected nil error, got: %v", err)
+	}
+	if seen != "span-context" {
+		t.Errorf("expected the measured operation to receive the original context, got %v", seen)
+	}
+}
+
+func Test_AcceptInvitationUsecase_InstrumentationFailureDoesNotChangeTheOutcome(t *testing.T) {
+	t.Parallel()
+
+	repo := invitationmocks.NewMockInvitationRepository()
+	repo.GetInvitationByTokenHashFunc = func(ctx context.Context, tokenHash string) (*domain.Invitation, error) {
+		return pendingInvitation(), nil
+	}
+
+	telemetry := invitationmocks.NewMockTelemetry()
+	telemetry.MeasureFunc = func(ctx context.Context, operation string, fn func(context.Context) error) error {
+		_ = fn(ctx)
+		return errors.New("telemetry unavailable")
+	}
+
+	uc := NewAcceptInvitationUsecase(
+		repo,
+		invitationmocks.NewMockInvitationIdentityPort(),
+		invitationmocks.NewMockInvitationDepartmentPort(),
+		invitationmocks.NewMockTransactionManager(),
+		telemetry,
+	)
+
+	if err := uc.Execute(context.Background(), acceptCmd()); err != nil {
+		t.Fatalf("expected nil error, got: %v", err)
+	}
+}
+
+func Test_AcceptInvitationUsecase_InstrumentationFailureDoesNotMaskTheBusinessError(t *testing.T) {
+	t.Parallel()
+
+	regErr := errors.New("registration failed")
+
+	repo := invitationmocks.NewMockInvitationRepository()
+	repo.GetInvitationByTokenHashFunc = func(ctx context.Context, tokenHash string) (*domain.Invitation, error) {
+		return pendingInvitation(), nil
+	}
+
+	identityPort := invitationmocks.NewMockInvitationIdentityPort()
+	identityPort.RegisterUserFunc = func(ctx context.Context, req *invitationout.CreateIdentityRequest) (string, error) {
+		return "", regErr
+	}
+
+	telemetry := invitationmocks.NewMockTelemetry()
+	telemetry.MeasureFunc = func(ctx context.Context, operation string, fn func(context.Context) error) error {
+		_ = fn(ctx)
+		return errors.New("telemetry unavailable")
+	}
+
+	uc := NewAcceptInvitationUsecase(
+		repo,
+		identityPort,
+		invitationmocks.NewMockInvitationDepartmentPort(),
+		invitationmocks.NewMockTransactionManager(),
+		telemetry,
+	)
+
+	err := uc.Execute(context.Background(), acceptCmd())
+	if !errors.Is(err, regErr) {
+		t.Fatalf("expected regErr, got: %v", err)
 	}
 }

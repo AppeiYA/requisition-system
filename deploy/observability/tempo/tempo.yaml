@@ -1,0 +1,31 @@
+stream_over_http_enabled: true
+
+server:
+  http_listen_port: 3200
+
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+        http:
+          endpoint: 0.0.0.0:4318
+
+storage:
+  trace:
+    backend: local
+    wal:
+      path: /var/tempo/wal
+    local:
+      path: /var/tempo/blocks
+
+# Traces are kept for as long as the metrics are, so the two backends cover
+# the same window and a panel and a trace of the same minute agree.
+overrides:
+  defaults:
+    compaction:
+      block_retention: 24h
+
+usage_report:
+  reporting_enabled: false

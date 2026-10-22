@@ -1,0 +1,29 @@
+# Prometheus holds the metrics of both processes. Nothing pushes to it: the
+# collector exposes them on its prometheus exporter and Prometheus pulls,
+# which is where retention, recording rules and alerting all belong.
+#
+# Check after any change:
+#   docker run --rm -v "$PWD/prometheus:/etc/prometheus:ro" prom/prometheus:v3.15.1 \
+#     promtool check config /etc/prometheus/prometheus.yml
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # The collector is the only target. The applications speak OTLP and never
+  # open a metrics endpoint of their own, so there is nothing else to scrape.
+  #
+  # honor_labels keeps the labels the collector put on each metric instead of
+  # discarding them in favour of the scrape's own job and instance. The
+  # resource attributes it converted into labels, service_name and
+  # deployment_environment_name among them, live or die by it.
+  - job_name: otel-collector
+    honor_labels: true
+    static_configs:
+      - targets: ["otel-collector:9464"]
+
+  # Tempo's own health, so a stalled backend is visible from the same place.
+  - job_name: tempo
+    static_configs:
+      - targets: ["tempo:3200"]

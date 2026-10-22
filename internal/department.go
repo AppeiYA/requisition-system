@@ -7,15 +7,17 @@ import (
 	departmentin "github.com/AppeiYA/requisition-system/internal/department/ports/in"
 	departmentusecase "github.com/AppeiYA/requisition-system/internal/department/usecase"
 	identityout "github.com/AppeiYA/requisition-system/internal/identity/ports/out"
+	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/cache"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/db"
 )
 
 func (a *App) buildDepartment(
-	database *db.DB,
+	baseRepo db.Repository,
 	idGen identityout.IDGenerator,
+	cache cache.Cache,
 ) *department.DepartmentModule {
-	departmentRepo := departmentpostgres.NewDepartmentRepository(db.NewRepository(database))
-	membershipRepo := departmentpostgres.NewMembershipRepository(db.NewRepository(database))
+	departmentRepo := departmentpostgres.NewDepartmentRepository(baseRepo, cache)
+	membershipRepo := departmentpostgres.NewMembershipRepository(baseRepo)
 
 	createDepartmentUC := departmentusecase.NewCreateDepartmentUsecase(departmentRepo, idGen)
 	getDepartmentByIDUC := departmentusecase.NewGetDepartmentByIDUsecase(departmentRepo)

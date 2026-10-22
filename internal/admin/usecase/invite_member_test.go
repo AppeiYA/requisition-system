@@ -32,8 +32,9 @@ func newInviteUsecase(
 	invitations adminout.AdminInvitationPort,
 	department adminout.AdminDepartmentPort,
 	tx adminout.TransactionManager,
-) *InviteMemberUsecase {
-	return NewInviteMemberUsecase(taskQueue, identity, invitations, department, tx)
+) (*InviteMemberUsecase, *adminmocks.MockTelemetry) {
+	telemetry := adminmocks.NewMockTelemetry()
+	return NewInviteMemberUsecase(taskQueue, identity, invitations, department, tx, telemetry), telemetry
 }
 
 func Test_InviteMemberUsecase_Success(t *testing.T) {
@@ -93,7 +94,7 @@ func Test_InviteMemberUsecase_Success(t *testing.T) {
 		return fn(ctx)
 	}
 
-	uc := newInviteUsecase(queue, identity, invitations, department, tx)
+	uc, telemetry := newInviteUsecase(queue, identity, invitations, department, tx)
 
 	res, err := uc.Execute(context.Background(), inviteCmd())
 	if err != nil {
@@ -148,12 +149,23 @@ func Test_InviteMemberUsecase_Success(t *testing.T) {
 	if queuedJobTitle != adminmocks.DefaultJobTitle {
 		t.Errorf("expected queued job title %q, got %q", adminmocks.DefaultJobTitle, queuedJobTitle)
 	}
+
+	calls := telemetry.Calls()
+	if len(calls) != 1 {
+		t.Fatalf("expected the operation to be measured once, got %d measurements", len(calls))
+	}
+	if calls[0].Operation != adminout.OperationInviteMember {
+		t.Errorf("expected operation %q, got %q", adminout.OperationInviteMember, calls[0].Operation)
+	}
+	if calls[0].Err != nil {
+		t.Errorf("expected a successful measurement, got: %v", calls[0].Err)
+	}
 }
 
 func Test_InviteMemberUsecase_InvalidEmail(t *testing.T) {
 	t.Parallel()
 
-	uc := newInviteUsecase(
+	uc, _ := newInviteUsecase(
 		adminmocks.NewMockTaskQueue(),
 		adminmocks.NewMockAdminIdentityPort(),
 		adminmocks.NewMockAdminInvitationPort(),
@@ -182,7 +194,7 @@ func Test_InviteMemberUsecase_DepartmentNotFound(t *testing.T) {
 		return &adminout.SavedInvitation{ID: adminmocks.DefaultInvitationID, Token: adminmocks.DefaultToken, ExpiresAt: time.Now()}, nil
 	}
 
-	uc := newInviteUsecase(adminmocks.NewMockTaskQueue(), adminmocks.NewMockAdminIdentityPort(), invitations, department, adminmocks.NewMockTransactionManager())
+	uc, _ := newInviteUsecase(adminmocks.NewMockTaskQueue(), adminmocks.NewMockAdminIdentityPort(), invitations, department, adminmocks.NewMockTransactionManager())
 
 	_, err := uc.Execute(context.Background(), inviteCmd())
 	if err != ErrDepartmentNotFound {
@@ -209,7 +221,7 @@ func Test_InviteMemberUsecase_DepartmentLookupError(t *testing.T) {
 		return &adminout.SavedInvitation{ID: adminmocks.DefaultInvitationID, Token: adminmocks.DefaultToken, ExpiresAt: time.Now()}, nil
 	}
 
-	uc := newInviteUsecase(adminmocks.NewMockTaskQueue(), adminmocks.NewMockAdminIdentityPort(), invitations, department, adminmocks.NewMockTransactionManager())
+	uc, _ := newInviteUsecase(adminmocks.NewMockTaskQueue(), adminmocks.NewMockAdminIdentityPort(), invitations, department, adminmocks.NewMockTransactionManager())
 
 	_, err := uc.Execute(context.Background(), inviteCmd())
 	if !errors.Is(err, lookupErr) {
@@ -228,7 +240,7 @@ func Test_InviteMemberUsecase_UserAlreadyExists(t *testing.T) {
 		return true, nil
 	}
 
-	uc := newInviteUsecase(adminmocks.NewMockTaskQueue(), identity, adminmocks.NewMockAdminInvitationPort(), adminmocks.NewMockAdminDepartmentPort(), adminmocks.NewMockTransactionManager())
+	uc, _ := newInviteUsecase(adminmocks.NewMockTaskQueue(), identity, adminmocks.NewMockAdminInvitationPort(), adminmocks.NewMockAdminDepartmentPort(), adminmocks.NewMockTransactionManager())
 
 	_, err := uc.Execute(context.Background(), inviteCmd())
 	if err != ErrUserAlreadyExists {
@@ -245,7 +257,7 @@ func Test_InviteMemberUsecase_IdentityCheckError(t *testing.T) {
 		return false, checkErr
 	}
 
-	uc := newInviteUsecase(adminmocks.NewMockTaskQueue(), identity, adminmocks.NewMockAdminInvitationPort(), adminmocks.NewMockAdminDepartmentPort(), adminmocks.NewMockTransactionManager())
+	uc, _ := newInviteUsecase(adminmocks.NewMockTaskQueue(), identity, adminmocks.NewMockAdminInvitationPort(), adminmocks.NewMockAdminDepartmentPort(), adminmocks.NewMockTransactionManager())
 
 	_, err := uc.Execute(context.Background(), inviteCmd())
 	if !errors.Is(err, checkErr) {
@@ -269,7 +281,7 @@ func Test_InviteMemberUsecase_SaveError(t *testing.T) {
 		return nil
 	}
 
-	uc := newInviteUsecase(queue, adminmocks.NewMockAdminIdentityPort(), invitations, adminmocks.NewMockAdminDepartmentPort(), adminmocks.NewMockTransactionManager())
+	uc, _ := newInviteUsecase(queue, adminmocks.NewMockAdminIdentityPort(), invitations, adminmocks.NewMockAdminDepartmentPort(), adminmocks.NewMockTransactionManager())
 
 	_, err := uc.Execute(context.Background(), inviteCmd())
 	if !errors.Is(err, saveErr) {
@@ -289,7 +301,7 @@ func Test_InviteMemberUsecase_TransactionError(t *testing.T) {
 		return txErr
 	}
 
-	uc := newInviteUsecase(adminmocks.NewMockTaskQueue(), adminmocks.NewMockAdminIdentityPort(), adminmocks.NewMockAdminInvitationPort(), adminmocks.NewMockAdminDepartmentPort(), tx)
+	uc, _ := newInviteUsecase(adminmocks.NewMockTaskQueue(), adminmocks.NewMockAdminIdentityPort(), adminmocks.NewMockAdminInvitationPort(), adminmocks.NewMockAdminDepartmentPort(), tx)
 
 	_, err := uc.Execute(context.Background(), inviteCmd())
 	if !errors.Is(err, txErr) {
@@ -306,7 +318,7 @@ func Test_InviteMemberUsecase_EnqueueError(t *testing.T) {
 		return enqueueErr
 	}
 
-	uc := newInviteUsecase(queue, adminmocks.NewMockAdminIdentityPort(), adminmocks.NewMockAdminInvitationPort(), adminmocks.NewMockAdminDepartmentPort(), adminmocks.NewMockTransactionManager())
+	uc, _ := newInviteUsecase(queue, adminmocks.NewMockAdminIdentityPort(), adminmocks.NewMockAdminInvitationPort(), adminmocks.NewMockAdminDepartmentPort(), adminmocks.NewMockTransactionManager())
 
 	_, err := uc.Execute(context.Background(), inviteCmd())
 	if !errors.Is(err, enqueueErr) {
@@ -320,7 +332,7 @@ func Test_InviteMemberUsecase_ContextCancelled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	uc := newInviteUsecase(
+	uc, telemetry := newInviteUsecase(
 		adminmocks.NewMockTaskQueue(),
 		adminmocks.NewMockAdminIdentityPort(),
 		adminmocks.NewMockAdminInvitationPort(),
@@ -331,5 +343,156 @@ func Test_InviteMemberUsecase_ContextCancelled(t *testing.T) {
 	_, err := uc.Execute(ctx, inviteCmd())
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("expected context.Canceled, got: %v", err)
+	}
+	if calls := telemetry.Calls(); len(calls) != 0 {
+		t.Errorf("expected a cancelled request not to be measured, got %d measurements", len(calls))
+	}
+}
+
+func Test_InviteMemberUsecase_MeasuresValidationFailure(t *testing.T) {
+	t.Parallel()
+
+	uc, telemetry := newInviteUsecase(
+		adminmocks.NewMockTaskQueue(),
+		adminmocks.NewMockAdminIdentityPort(),
+		adminmocks.NewMockAdminInvitationPort(),
+		adminmocks.NewMockAdminDepartmentPort(),
+		adminmocks.NewMockTransactionManager(),
+	)
+
+	_, err := uc.Execute(context.Background(), adminin.InviteMemberCommand{InviterID: adminmocks.DefaultInviterID, Email: "not-an-email"})
+	if err != shareddomain.ErrInvalidEmailFormat {
+		t.Fatalf("expected ErrInvalidEmailFormat, got: %v", err)
+	}
+
+	calls := telemetry.Calls()
+	if len(calls) != 1 {
+		t.Fatalf("expected the operation to be measured once, got %d measurements", len(calls))
+	}
+	if calls[0].Operation != adminout.OperationInviteMember {
+		t.Errorf("expected operation %q, got %q", adminout.OperationInviteMember, calls[0].Operation)
+	}
+	if !errors.Is(calls[0].Err, shareddomain.ErrInvalidEmailFormat) {
+		t.Errorf("expected the measured error to be ErrInvalidEmailFormat, got: %v", calls[0].Err)
+	}
+}
+
+func Test_InviteMemberUsecase_MeasuresBusinessFailure(t *testing.T) {
+	t.Parallel()
+
+	department := adminmocks.NewMockAdminDepartmentPort()
+	department.GetDepartmentByIDFunc = func(ctx context.Context, departmentID string) (*adminout.DepartmentResponse, error) {
+		return nil, nil
+	}
+
+	uc, telemetry := newInviteUsecase(
+		adminmocks.NewMockTaskQueue(),
+		adminmocks.NewMockAdminIdentityPort(),
+		adminmocks.NewMockAdminInvitationPort(),
+		department,
+		adminmocks.NewMockTransactionManager(),
+	)
+
+	_, err := uc.Execute(context.Background(), inviteCmd())
+	if err != ErrDepartmentNotFound {
+		t.Fatalf("expected ErrDepartmentNotFound, got: %v", err)
+	}
+
+	calls := telemetry.Calls()
+	if len(calls) != 1 {
+		t.Fatalf("expected the operation to be measured once, got %d measurements", len(calls))
+	}
+	if calls[0].Operation != adminout.OperationInviteMember {
+		t.Errorf("expected operation %q, got %q", adminout.OperationInviteMember, calls[0].Operation)
+	}
+	if !errors.Is(calls[0].Err, ErrDepartmentNotFound) {
+		t.Errorf("expected the measured error to be ErrDepartmentNotFound, got: %v", calls[0].Err)
+	}
+}
+
+func Test_InviteMemberUsecase_MeasurementKeepsTheContext(t *testing.T) {
+	t.Parallel()
+
+	type contextKey string
+	const key contextKey = "trace"
+
+	var seen any
+	department := adminmocks.NewMockAdminDepartmentPort()
+	department.GetDepartmentByIDFunc = func(ctx context.Context, departmentID string) (*adminout.DepartmentResponse, error) {
+		seen = ctx.Value(key)
+		return &adminout.DepartmentResponse{ID: departmentID, Name: adminmocks.DefaultDepartmentName}, nil
+	}
+
+	uc, _ := newInviteUsecase(
+		adminmocks.NewMockTaskQueue(),
+		adminmocks.NewMockAdminIdentityPort(),
+		adminmocks.NewMockAdminInvitationPort(),
+		department,
+		adminmocks.NewMockTransactionManager(),
+	)
+
+	ctx := context.WithValue(context.Background(), key, "span-context")
+	if _, err := uc.Execute(ctx, inviteCmd()); err != nil {
+		t.Fatalf("expected nil error, got: %v", err)
+	}
+	if seen != "span-context" {
+		t.Errorf("expected the measured operation to receive the original context, got %v", seen)
+	}
+}
+
+func Test_InviteMemberUsecase_InstrumentationFailureDoesNotChangeTheOutcome(t *testing.T) {
+	t.Parallel()
+
+	telemetry := adminmocks.NewMockTelemetry()
+	telemetry.MeasureFunc = func(ctx context.Context, operation string, fn func(context.Context) error) error {
+		_ = fn(ctx)
+		return errors.New("telemetry unavailable")
+	}
+
+	uc := NewInviteMemberUsecase(
+		adminmocks.NewMockTaskQueue(),
+		adminmocks.NewMockAdminIdentityPort(),
+		adminmocks.NewMockAdminInvitationPort(),
+		adminmocks.NewMockAdminDepartmentPort(),
+		adminmocks.NewMockTransactionManager(),
+		telemetry,
+	)
+
+	res, err := uc.Execute(context.Background(), inviteCmd())
+	if err != nil {
+		t.Fatalf("expected nil error, got: %v", err)
+	}
+	if res == nil || res.InvitationID != adminmocks.DefaultInvitationID {
+		t.Errorf("expected the invitation id %q, got %+v", adminmocks.DefaultInvitationID, res)
+	}
+}
+
+func Test_InviteMemberUsecase_InstrumentationFailureDoesNotMaskTheBusinessError(t *testing.T) {
+	t.Parallel()
+
+	lookupErr := errors.New("department lookup failed")
+	department := adminmocks.NewMockAdminDepartmentPort()
+	department.GetDepartmentByIDFunc = func(ctx context.Context, departmentID string) (*adminout.DepartmentResponse, error) {
+		return nil, lookupErr
+	}
+
+	telemetry := adminmocks.NewMockTelemetry()
+	telemetry.MeasureFunc = func(ctx context.Context, operation string, fn func(context.Context) error) error {
+		_ = fn(ctx)
+		return errors.New("telemetry unavailable")
+	}
+
+	uc := NewInviteMemberUsecase(
+		adminmocks.NewMockTaskQueue(),
+		adminmocks.NewMockAdminIdentityPort(),
+		adminmocks.NewMockAdminInvitationPort(),
+		department,
+		adminmocks.NewMockTransactionManager(),
+		telemetry,
+	)
+
+	_, err := uc.Execute(context.Background(), inviteCmd())
+	if !errors.Is(err, lookupErr) {
+		t.Fatalf("expected lookupErr, got: %v", err)
 	}
 }

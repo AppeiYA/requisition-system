@@ -9,20 +9,22 @@ import (
 	invitationexternal "github.com/AppeiYA/requisition-system/internal/invitation/adapters/out/external"
 	invitationpostgres "github.com/AppeiYA/requisition-system/internal/invitation/adapters/out/postgres"
 	invitationin "github.com/AppeiYA/requisition-system/internal/invitation/ports/in"
+	invitationout "github.com/AppeiYA/requisition-system/internal/invitation/ports/out"
 	invitationusecase "github.com/AppeiYA/requisition-system/internal/invitation/usecase"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/db"
 )
 
 func (a *App) buildInvitation(
-	database *db.DB,
+	baseRepo db.Repository,
 	txManager *db.TransactionManager,
 	registerUserUC identityin.RegisterUserUseCaseInt,
 	createMembershipUC departmentin.CreateMembershipUsecaseInt,
 	idGen identityout.IDGenerator,
+	telemetry invitationout.Telemetry,
 ) (
 	*invitation.InvitationModule,
 ) {
-	invitationRepo := invitationpostgres.NewInvitationRepository(db.NewRepository(database))
+	invitationRepo := invitationpostgres.NewInvitationRepository(baseRepo)
 
 	// The identity port lets the invitation module register the invited user
 	// without depending on the identity module's concrete use cases.
@@ -37,6 +39,7 @@ func (a *App) buildInvitation(
 		invitationIdentityPort,
 		invitationDepartmentPort,
 		txManager,
+		telemetry,
 	)
 	validateInvitationUsecase := invitationusecase.NewValidateInvitationUsecase(invitationRepo)
 	saveInvitationUsecase := invitationusecase.NewSaveInvitationUsecase(invitationRepo, idGen)

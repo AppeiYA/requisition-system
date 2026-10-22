@@ -7,6 +7,7 @@ import (
 
 	adminmocks "github.com/AppeiYA/requisition-system/internal/admin/mocks"
 	adminin "github.com/AppeiYA/requisition-system/internal/admin/ports/in"
+	adminout "github.com/AppeiYA/requisition-system/internal/admin/ports/out"
 )
 
 func invitationEmailCmd() adminin.SendInvitationEmailCommand {
@@ -35,7 +36,7 @@ func Test_SendInvitationEmailUsecase_Success(t *testing.T) {
 		return nil
 	}
 
-	uc := NewSendInvitationEmailUsecase(sender)
+	uc := NewSendInvitationEmailUsecase(sender, adminmocks.NewMockTelemetry())
 	cmd := invitationEmailCmd()
 
 	if err := uc.Execute(context.Background(), cmd); err != nil {
@@ -71,7 +72,7 @@ func Test_SendInvitationEmailUsecase_SendError(t *testing.T) {
 		return sendErr
 	}
 
-	uc := NewSendInvitationEmailUsecase(sender)
+	uc := NewSendInvitationEmailUsecase(sender, adminmocks.NewMockTelemetry())
 
 	err := uc.Execute(context.Background(), invitationEmailCmd())
 	if !errors.Is(err, sendErr) {
@@ -92,7 +93,7 @@ func Test_SendInvitationEmailUsecase_ContextCancelled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	uc := NewSendInvitationEmailUsecase(sender)
+	uc := NewSendInvitationEmailUsecase(sender, adminmocks.NewMockTelemetry())
 
 	err := uc.Execute(ctx, invitationEmailCmd())
 	if !errors.Is(err, context.Canceled) {
@@ -100,5 +101,44 @@ func Test_SendInvitationEmailUsecase_ContextCancelled(t *testing.T) {
 	}
 	if senderCalled {
 		t.Error("sender must not be called with a cancelled context")
+	}
+}
+
+func Test_SendInvitationEmailUsecase_MeasuresTheDelivery(t *testing.T) {
+	t.Parallel()
+
+	telemetry := adminmocks.NewMockTelemetry()
+	uc := NewSendInvitationEmailUsecase(adminmocks.NewMockEmailSender(), telemetry)
+
+	if err := uc.Execute(context.Background(), invitationEmailCmd()); err != nil {
+		t.Fatalf("expected nil error, got: %v", err)
+	}
+
+	calls := telemetry.Calls()
+	if len(calls) != 1 {
+		t.Fatalf("expected exactly one measured operation, got %d", len(calls))
+	}
+	if calls[0].Operation != adminout.OperationSendInvitationEmail {
+		t.Errorf("measured operation = %q, want %q", calls[0].Operation, adminout.OperationSendInvitationEmail)
+	}
+}
+
+// Test_SendInvitationEmailUsecase_TelemetryFailureIsNotTheOutcomeOfTheDelivery
+// checks the instrumentation cannot turn a delivered email into a failed
+// one: asynq decides whether to retry the task from the outcome of the
+// operation, not from the outcome of the backend that reports it.
+func Test_SendInvitationEmailUsecase_TelemetryFailureIsNotTheOutcomeOfTheDelivery(t *testing.T) {
+	t.Parallel()
+
+	telemetry := adminmocks.NewMockTelemetry()
+	telemetry.MeasureFunc = func(ctx context.Context, operation string, fn func(context.Context) error) error {
+		_ = fn(ctx)
+		return errors.New("telemetry backend down")
+	}
+
+	uc := NewSendInvitationEmailUsecase(adminmocks.NewMockEmailSender(), telemetry)
+
+	if err := uc.Execute(context.Background(), invitationEmailCmd()); err != nil {
+		t.Errorf("expected nil error, got: %v", err)
 	}
 }

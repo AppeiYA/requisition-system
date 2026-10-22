@@ -1,0 +1,77 @@
+# The collector is the single door the telemetry comes through. The API and
+# the worker speak OTLP to it, and it fans the traces out to Tempo and leaves
+# the metrics on a port for Prometheus to scrape.
+#
+# Validate after any change:
+#   docker run --rm -v "$PWD/otel-collector:/etc/otelcol:ro" \
+#     otel/opentelemetry-collector-contrib:0.163.2 \
+#     validate --config=/etc/otelcol/config.yaml
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  # Runs first on purpose: when a burst arrives, the queue is shed before the
+  # container is killed by the kernel and the telemetry of the whole window
+  # is lost.
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 400
+    spike_limit_mib: 100
+
+  # Nothing decorates the telemetry on the way through. The application
+  # already reports its own service, version, host and environment, and a
+  # collector that stamped its own host onto every resource it forwarded
+  # would be lying about where the telemetry came from.
+
+  # Exporting one request at a time is what makes the volume unbearable for
+  # the backends.
+  batch:
+    timeout: 5s
+    send_batch_size: 1024
+
+extensions:
+  # Answers / on :13133 with 200 when the collector is accepting telemetry.
+  # It is worth its two lines: the container ships no shell, so this is the
+  # only thing a process supervisor or a script can ask.
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+exporters:
+  # Traces go to Tempo. The container network is private, so the connection
+  # needs no TLS.
+  otlp/tempo:
+    endpoint: tempo:4317
+    tls:
+      insecure: true
+
+  # The metrics are not pushed anywhere: the collector exposes them and
+  # Prometheus scrapes that. Retention, recording rules and alerting then all
+  # live in Prometheus, which is where they belong.
+  prometheus:
+    endpoint: 0.0.0.0:9464
+    # Exposes the metrics in the OpenMetrics format, which is what lets
+    # Prometheus carry exemplars: a bar in a panel links to the trace that
+    # produced it.
+    enable_open_metrics: true
+    # Turns the resource attributes of the telemetry into labels, so
+    # service_name and deployment_environment_name are queryable.
+    resource_to_telemetry_conversion:
+      enabled: true
+
+service:
+  extensions: [health_check]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [otlp/tempo]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [prometheus]

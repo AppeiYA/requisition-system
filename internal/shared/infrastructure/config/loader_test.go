@@ -426,3 +426,197 @@ func TestLoadEmailConfig_MissingAPIKey(t *testing.T) {
 		t.Fatal("expected error when RESEND_API_KEY is missing")
 	}
 }
+
+// requireTelemetryEnv clears every telemetry variable, so a test starts from
+// a known state whatever the environment of the developer holds.
+func requireTelemetryEnv(t *testing.T) {
+	t.Helper()
+
+	for _, key := range []string{
+		"TELEMETRY_EXPORTER",
+		"OTEL_SERVICE_NAME",
+		"OTEL_EXPORTER_OTLP_ENDPOINT",
+		"OTEL_EXPORTER_OTLP_PROTOCOL",
+		"OTEL_EXPORTER_OTLP_INSECURE",
+		"OTEL_TRACES_SAMPLER",
+		"OTEL_TRACES_SAMPLER_ARG",
+		"OTEL_METRIC_EXPORT_INTERVAL",
+		"APP_ENV",
+	} {
+		unsetEnv(t, key)
+	}
+}
+
+func TestLoadTelemetryConfig_Defaults(t *testing.T) {
+	requireTelemetryEnv(t)
+
+	cfg, err := LoadTelemetryConfig()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if cfg.Exporter != TelemetryExporterStdout {
+		t.Errorf("Exporter = %q, want %q", cfg.Exporter, TelemetryExporterStdout)
+	}
+	if cfg.ServiceName != "" {
+		t.Errorf("ServiceName = %q, want an empty default", cfg.ServiceName)
+	}
+	if cfg.Environment != "development" {
+		t.Errorf("Environment = %q, want %q", cfg.Environment, "development")
+	}
+	if cfg.OTLPEndpoint != "localhost:4317" {
+		t.Errorf("OTLPEndpoint = %q, want %q", cfg.OTLPEndpoint, "localhost:4317")
+	}
+	if cfg.OTLPProtocol != OTLPProtocolGRPC {
+		t.Errorf("OTLPProtocol = %q, want %q", cfg.OTLPProtocol, OTLPProtocolGRPC)
+	}
+	if !cfg.OTLPInsecure {
+		t.Error("OTLPInsecure = false, want true")
+	}
+	if cfg.Sampler != "parentbased_traceidratio" {
+		t.Errorf("Sampler = %q, want %q", cfg.Sampler, "parentbased_traceidratio")
+	}
+	if cfg.SampleRatio != 1 {
+		t.Errorf("SampleRatio = %v, want 1", cfg.SampleRatio)
+	}
+	if cfg.MetricsInterval != 60*time.Second {
+		t.Errorf("MetricsInterval = %v, want %v", cfg.MetricsInterval, 60*time.Second)
+	}
+}
+
+func TestLoadTelemetryConfig_ReadsValues(t *testing.T) {
+	requireTelemetryEnv(t)
+	t.Setenv("TELEMETRY_EXPORTER", TelemetryExporterOTLP)
+	t.Setenv("OTEL_SERVICE_NAME", "requisition-system-api")
+	t.Setenv("APP_ENV", "production")
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "collector:4317")
+	t.Setenv("OTEL_EXPORTER_OTLP_PROTOCOL", OTLPProtocolHTTP)
+	t.Setenv("OTEL_EXPORTER_OTLP_INSECURE", "false")
+	t.Setenv("OTEL_TRACES_SAMPLER", "traceidratio")
+	t.Setenv("OTEL_TRACES_SAMPLER_ARG", "0.25")
+	t.Setenv("OTEL_METRIC_EXPORT_INTERVAL", "15000")
+
+	cfg, err := LoadTelemetryConfig()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if cfg.Exporter != TelemetryExporterOTLP {
+		t.Errorf("Exporter = %q, want %q", cfg.Exporter, TelemetryExporterOTLP)
+	}
+	if cfg.ServiceName != "requisition-system-api" {
+		t.Errorf("ServiceName = %q, want %q", cfg.ServiceName, "requisition-system-api")
+	}
+	if cfg.Environment != "production" {
+		t.Errorf("Environment = %q, want %q", cfg.Environment, "production")
+	}
+	if cfg.OTLPEndpoint != "collector:4317" {
+		t.Errorf("OTLPEndpoint = %q, want %q", cfg.OTLPEndpoint, "collector:4317")
+	}
+	if cfg.OTLPProtocol != OTLPProtocolHTTP {
+		t.Errorf("OTLPProtocol = %q, want %q", cfg.OTLPProtocol, OTLPProtocolHTTP)
+	}
+	if cfg.OTLPInsecure {
+		t.Error("OTLPInsecure = true, want false")
+	}
+	if cfg.Sampler != "traceidratio" {
+		t.Errorf("Sampler = %q, want %q", cfg.Sampler, "traceidratio")
+	}
+	if cfg.SampleRatio != 0.25 {
+		t.Errorf("SampleRatio = %v, want 0.25", cfg.SampleRatio)
+	}
+	if cfg.MetricsInterval != 15*time.Second {
+		t.Errorf("MetricsInterval = %v, want %v", cfg.MetricsInterval, 15*time.Second)
+	}
+}
+
+func TestLoadTelemetryConfig_UnsupportedExporter(t *testing.T) {
+	requireTelemetryEnv(t)
+	t.Setenv("TELEMETRY_EXPORTER", "carrier-pigeon")
+
+	_, err := LoadTelemetryConfig()
+	if err == nil {
+		t.Fatal("expected an error for an unknown exporter, got none")
+	}
+	if !errors.Is(err, ErrTelemetryExporterUnsupported) {
+		t.Errorf("expected ErrTelemetryExporterUnsupported, got: %v", err)
+	}
+}
+
+func TestLoadTelemetryConfig_UnsupportedProtocol(t *testing.T) {
+	requireTelemetryEnv(t)
+	t.Setenv("OTEL_EXPORTER_OTLP_PROTOCOL", "smoke-signal")
+
+	_, err := LoadTelemetryConfig()
+	if err == nil {
+		t.Fatal("expected an error for an unknown protocol, got none")
+	}
+	if !errors.Is(err, ErrTelemetryProtocolUnsupported) {
+		t.Errorf("expected ErrTelemetryProtocolUnsupported, got: %v", err)
+	}
+}
+
+func TestLoadTelemetryConfig_SampleRatioOutOfRange(t *testing.T) {
+	requireTelemetryEnv(t)
+	t.Setenv("OTEL_TRACES_SAMPLER_ARG", "1.5")
+
+	_, err := LoadTelemetryConfig()
+	if err == nil {
+		t.Fatal("expected an error for a sample ratio above one, got none")
+	}
+	if !errors.Is(err, ErrTelemetrySampleRatioOutOfRange) {
+		t.Errorf("expected ErrTelemetrySampleRatioOutOfRange, got: %v", err)
+	}
+}
+
+func TestLoadTelemetryConfig_InvalidSampleRatio(t *testing.T) {
+	requireTelemetryEnv(t)
+	t.Setenv("OTEL_TRACES_SAMPLER_ARG", "half")
+
+	if _, err := LoadTelemetryConfig(); err == nil {
+		t.Fatal("expected an error for an invalid sample ratio, got none")
+	}
+}
+
+func TestLoadTelemetryConfig_InvalidBool(t *testing.T) {
+	requireTelemetryEnv(t)
+	t.Setenv("OTEL_EXPORTER_OTLP_INSECURE", "maybe")
+
+	if _, err := LoadTelemetryConfig(); err == nil {
+		t.Fatal("expected an error for an invalid boolean, got none")
+	}
+}
+
+func TestLoadTelemetryConfig_InvalidInterval(t *testing.T) {
+	requireTelemetryEnv(t)
+	t.Setenv("OTEL_METRIC_EXPORT_INTERVAL", "soon")
+
+	if _, err := LoadTelemetryConfig(); err == nil {
+		t.Fatal("expected an error for an invalid interval, got none")
+	}
+}
+
+// The interval is counted in milliseconds, as the OpenTelemetry specification
+// defines it. A duration is not a valid value, and the SDK that reads the
+// same variable rejects it too.
+func TestLoadTelemetryConfig_IntervalIsNotADuration(t *testing.T) {
+	requireTelemetryEnv(t)
+	t.Setenv("OTEL_METRIC_EXPORT_INTERVAL", "15s")
+
+	if _, err := LoadTelemetryConfig(); err == nil {
+		t.Fatal("expected an error for an interval written as a duration, got none")
+	}
+}
+
+func TestLoadTelemetryConfig_NonPositiveInterval(t *testing.T) {
+	requireTelemetryEnv(t)
+	t.Setenv("OTEL_METRIC_EXPORT_INTERVAL", "0")
+
+	_, err := LoadTelemetryConfig()
+	if err == nil {
+		t.Fatal("expected an error for a non positive interval, got none")
+	}
+	if !errors.Is(err, ErrTelemetryMetricsIntervalInvalid) {
+		t.Errorf("expected ErrTelemetryMetricsIntervalInvalid, got: %v", err)
+	}
+}

@@ -1,17 +1,32 @@
 package config
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
+
+const (
+	TelemetryExporterStdout = "stdout"
+	TelemetryExporterOTLP   = "otlp"
+	TelemetryExporterNone   = "none"
+)
+
+const (
+	OTLPProtocolGRPC = "grpc"
+	OTLPProtocolHTTP = "http"
+)
 
 type Config struct {
-	App      AppConfig
-	API      APIConfig
-	DB       DBConfig
-	Redis    RedisConfig
-	Server   ServerConfig
-	JWT      JWTConfig
-	Email    EmailConfig
-	Frontend FrontendConfig
-	Worker   WorkerConfig
+	App       AppConfig
+	API       APIConfig
+	DB        DBConfig
+	Redis     RedisConfig
+	Server    ServerConfig
+	JWT       JWTConfig
+	Email     EmailConfig
+	Frontend  FrontendConfig
+	Worker    WorkerConfig
+	Telemetry TelemetryConfig
 }
 
 type AppConfig struct {
@@ -32,6 +47,13 @@ type DBConfig struct {
 	MaxOpenConnections int
 	MaxIdleConnections int
 	MaxLifetimeMinutes int
+}
+
+func (c DBConfig) DSN() string {
+	return fmt.Sprintf(
+		"host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
+		c.Host, c.Port, c.User, c.Password, c.Name, c.SSLMode,
+	)
 }
 
 type RedisConfig struct {
@@ -76,4 +98,19 @@ type WorkerConfig struct {
 	TaskMaxRetry    int           // delivery attempts before a task is given up on
 	TaskTimeout     time.Duration // per-attempt processing timeout
 	ShutdownTimeout time.Duration // grace period for in-flight tasks on shutdown
+}
+
+// TelemetryConfig configures how the OpenTelemetry traces and metrics leave
+// the process. The variable names follow the OpenTelemetry specification, so
+// the application can be pointed at any OTLP backend without a code change.
+type TelemetryConfig struct {
+	ServiceName     string        // OTEL_SERVICE_NAME; empty keeps the built-in name
+	Environment     string        // deployment.environment.name of the resource
+	Exporter        string        // stdout, otlp or none
+	OTLPEndpoint    string        // OTEL_EXPORTER_OTLP_ENDPOINT
+	OTLPProtocol    string        // OTEL_EXPORTER_OTLP_PROTOCOL: grpc or http
+	OTLPInsecure    bool          // OTEL_EXPORTER_OTLP_INSECURE
+	Sampler         string        // OTEL_TRACES_SAMPLER
+	SampleRatio     float64       // OTEL_TRACES_SAMPLER_ARG
+	MetricsInterval time.Duration // OTEL_METRIC_EXPORT_INTERVAL
 }

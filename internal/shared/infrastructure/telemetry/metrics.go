@@ -2,14 +2,15 @@ package telemetry
 
 import (
 	"context"
-	"time"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 )
 
-var meter = otel.Meter("requisition-system")
+func meter() metric.Meter {
+	return otel.Meter(instrumentationName)
+}
 
 type Counter struct {
 	instrument metric.Int64Counter
@@ -19,11 +20,15 @@ type Histogram struct {
 	instrument metric.Float64Histogram
 }
 
-func NewHistogram(name, description string) (*Histogram, error) {
-	histogram, err := meter.Float64Histogram(
-		name,
+func NewHistogram(name, description, unit string) (*Histogram, error) {
+	opts := []metric.Float64HistogramOption{
 		metric.WithDescription(description),
-	)
+	}
+	if unit != "" {
+		opts = append(opts, metric.WithUnit(unit))
+	}
+
+	histogram, err := meter().Float64Histogram(name, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -37,11 +42,15 @@ func (h *Histogram) Record(ctx context.Context, seconds float64) {
 	h.instrument.Record(ctx, seconds)
 }
 
-func NewCounter(name, description string) (*Counter, error) {
-	counter, err := meter.Int64Counter(
-		name,
+func NewCounter(name, description, unit string) (*Counter, error) {
+	opts := []metric.Int64CounterOption{
 		metric.WithDescription(description),
-	)
+	}
+	if unit != "" {
+		opts = append(opts, metric.WithUnit(unit))
+	}
+
+	counter, err := meter().Int64Counter(name, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -65,14 +74,4 @@ func (c *Counter) AddWithAttributes(
 	attributes ...attribute.KeyValue,
 ) {
 	c.instrument.Add(ctx, value, metric.WithAttributes(attributes...))
-}
-
-func (c *Counter) Measure(ctx context.Context, histogram *Histogram, operation func(context.Context) error) error {
-	start := time.Now()
-
-	err := operation(ctx)
-
-	histogram.Record(ctx, time.Since(start).Seconds())
-
-	return err
 }

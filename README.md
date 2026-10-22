@@ -28,7 +28,7 @@ hexagonal architecture (ports & adapters) per feature module.
 | Email        | [Resend](https://resend.com) Go SDK |
 | Migrations   | golang-migrate (plain SQL) + custom seed runner |
 | Docs         | swaggo → OpenAPI 3 → Scalar |
-| Telemetry    | OpenTelemetry |
+| Observability | OpenTelemetry → Tempo (traces) + Prometheus (metrics) + Grafana |
 
 ## Architecture
 
@@ -200,6 +200,156 @@ Invitation emails are sent through the [Resend](https://resend.com) API:
 
 The sender lives in `internal/shared/infrastructure/email/sender.go`; invitation
 content is built in `internal/admin/adapters/out/email/invitation_sender.go`.
+
+## Observability
+
+The API and worker processes export OpenTelemetry traces and metrics for the two
+request-driven business operations. The use cases ask for an operation to be
+measured through an outbound port (`ports/out/telemetry.go`), so the domain
+never depends on OpenTelemetry; the adapter lives in
+`internal/shared/infrastructure/telemetry` and is wired in `internal/app.go`
+and `internal/worker.go`.
+
+The exporter defaults to `stdout`, so nothing changes until you ask for it to
+leave the process.
+
+### The bundled backend
+
+`deploy/observability/` is a self-contained stack the telemetry can be exported
+to — the collector, Tempo for traces, Prometheus for metrics and Grafana for
+the dashboard. It runs beside the application and never instead of it: with the
+directory absent, the application starts and logs to stdout exactly as it did
+before.
+
+```bash
+docker compose -f deploy/observability/docker-compose.observability.yml up -d
+```
+
+The standalone binary takes the same arguments, for a machine that has no
+Compose plugin: `docker-compose -f deploy/observability/docker-compose.observability.yml up -d`.
+
+Then export to it:
+
+```bash
+TELEMETRY_EXPORTER=otlp
+OTEL_EXPORTER_OTLP_ENDPOINT=localhost:4317
+```
+
+| | |
+| --- | ----------------------------------------------- |
+| http://localhost:3000 | the dashboard (`Requisition System`), login `admin` / `admin` |
+| http://localhost:9090 | Prometheus |
+| http://localhost:3200 | Tempo |
+| http://localhost:13133 | the collector's health endpoint |
+
+The dashboard is provisioned, not imported by hand, so it is there the moment
+the stack starts. Two variables, `service` and `env`, filter every panel;
+`service` separates the API from the worker. It covers request rate, latency
+and the 5xx ratio; the four business operations by attempted, succeeded and
+failed; the worker's email delivery and expirations; and the Postgres and
+Redis query durations, with a TraceQL search underneath.
+
+Two things the stack deliberately does not do, so nobody goes looking for
+them: the Redis instrumentation reports no query duration as a metric, so the
+Redis duration is read out of the traces with TraceQL metrics, while the
+Postgres one comes from the histogram `otelsql` records; and Tempo's metrics
+generator is not enabled, so there is no service map and no
+`traces_spanmetrics_*` in Prometheus. Trace relationships within a single trace
+still work.
+
+`deploy/observability/README.md` has the details, including how to revalidate
+the configs after editing them.
+
+### Where the telemetry goes
+
+`TELEMETRY_EXPORTER` selects the exporter:
+
+| Value | Behaviour |
+| ----- | --------- |
+| `stdout` (default) | Prints the traces and the metrics on the terminal. No collector needed, so the local loop is unchanged. |
+| `otlp` | Ships them to an OpenTelemetry collector over gRPC or HTTP. |
+| `none` | Drops them. The application keeps running. |
+
+The rest of the configuration follows the OpenTelemetry specification
+(`OTEL_SERVICE_NAME`, `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_PROTOCOL`,
+`OTEL_EXPORTER_OTLP_INSECURE`, `OTEL_TRACES_SAMPLER`, `OTEL_TRACES_SAMPLER_ARG`,
+`OTEL_METRIC_EXPORT_INTERVAL`, `OTEL_RESOURCE_ATTRIBUTES`), so the process can
+be pointed at any OTLP backend without a code change. They are documented in
+`.env.example`. The intervals the specification defines are counted in
+milliseconds, so `OTEL_METRIC_EXPORT_INTERVAL=10000` is ten seconds — the SDK
+reads the very same variable, and the two have to agree on the unit. Pointing
+the exporter at a collector that is not listening never stops the application:
+the connection is established in the background.
+
+### Automatic instrumentation
+
+Beyond the two business operations, the infrastructure is instrumented
+automatically, so a request is traced all the way down:
+
+| Component | Instrumentation | What it reports |
+| --------- | --------------- | ----------------- |
+| Gin | `otelgin` | `http.server.request.duration`, one span per request named after the route |
+| PostgreSQL | `otelsql` | one span per statement, plus the query and the table it touched, and the `db.client.operation.duration` histogram |
+| Redis | `redisotel` | one span per command, plus the pool metrics |
+| Resend | `otelhttp` | `http.client.request.duration`, one span per call |
+| asynq | middleware | one span per task, with the task id, the queue and the retry bookkeeping |
+
+The tracing middleware is registered first, so the span of a request covers
+the whole handler, and it rewrites `c.Request` with the span context: every
+handler picks it up through `c.Request.Context()` without any change. Because
+the instrumented clients capture the providers when they are built, both
+composition roots set the telemetry up **before** connecting to the database
+and to Redis.
+
+One known limitation: `resend-go` builds its request without the caller's
+context, so a call to Resend is reported as its own trace instead of hanging
+under the invitation that triggered it. The outcome is still recorded by the
+counters of the operation.
+
+### Business operations
+
+| Operation | Span | Metrics |
+| --------- | ---- | ------- |
+| Admin creates an invitation | `admin.invitation.create` | `requisition.admin.invitations.{attempted,succeeded,failed,duration}` |
+| Invitee accepts an invitation | `invitation.accept` | `requisition.invitee.acceptances.{attempted,succeeded,failed,duration}` |
+| Worker delivers the invitation email | `admin.email.delivery` | `requisition.admin.email_delivery.{attempted,succeeded,failed,duration}` |
+| Worker expires the stale invitations | `invitation.expire` | `requisition.invitation.expirations.{attempted,succeeded,failed,duration}` |
+
+The span covers the whole operation: the admin span covers the durable
+invitation creation and the enqueueing of the delivery task, the acceptance
+span covers the transaction that registers the user, creates the membership and
+accepts the invitation. The counters carry the unit of what they count and the
+histogram reports durations in seconds, so a Prometheus backend names them
+`..._attempted_total` and `..._duration_seconds_bucket`.
+
+The names are stable and low cardinality on purpose: no email, token, user or
+invitation identifier is ever reported as a metric attribute. The measurement
+never changes the outcome of the operation — the business error is always the
+one returned to the caller.
+
+### Worker trace continuity
+
+An invitation spans two processes: the API queues the email task and the
+worker delivers it. The two are the same trace, so the whole story of an
+invitation is one thing to look at:
+
+```
+POST /api/admin/invitations        (API process)
+└── asynq admin:send-invitation-email   (worker process)
+    └── admin.email.delivery
+        └── the statement that marks the invitation delivered
+```
+
+The traceparent of the request travels in the task payload, under the
+`trace_parent` field. asynq hands its handler a context with the retry
+bookkeeping but without the producer's span, so the tracing middleware reads
+the field back and starts the consumer span as a child of it. Any task type
+gets this by carrying the field; a task that carries nothing, the scheduled
+`expire_invitations` sweep for instance, starts a trace of its own.
+
+The call to Resend is the one gap: `resend-go` builds its request without the
+caller's context, so it stays a trace of its own, as described above. The
+counters of `admin.email.delivery` still record whether it worked.
 
 ## Docker
 
