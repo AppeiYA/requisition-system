@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/config"
+	"github.com/redis/go-redis/extra/redisotel/v9"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -17,6 +18,12 @@ func Connect(cfg config.RedisConfig) (*Redis, error) {
 	}
 
 	client := redis.NewClient(opts)
+	if err := redisotel.InstrumentTracing(client); err != nil {
+		return nil, err
+	}
+	if err := redisotel.InstrumentMetrics(client); err != nil {
+		return nil, err
+	}
 
 	ctx := context.Background()
 

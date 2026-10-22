@@ -13,15 +13,12 @@ import (
 type Operation struct {
 	Name       string
 	MetricBase string
+	Unit       string
 }
 
-// OperationTelemetry measures business operations. Every measurement reports a
-// span plus an attempt counter, a success or failure counter and a duration
-// histogram for the operation.
-//
-// The adapter lives in the shared infrastructure because it is the composition
-// boundary of the application: it satisfies the telemetry port of every
-// module without any of them depending on OpenTelemetry.
+// durationUnit is the unit of every duration reported by the adapter.
+const durationUnit = "s"
+
 type OperationTelemetry struct {
 	operations map[string]*operationInstruments
 }
@@ -55,6 +52,13 @@ func NewOperationTelemetry(operations ...Operation) (*OperationTelemetry, error)
 		if err != nil {
 			return nil, err
 		}
+
+		// The counters are published once with a zero value, so an outcome
+		// that has not happened yet still has a series. A counter that was
+		// never incremented has no series at all, and a panel cannot tell
+		// "nothing failed" from "the metric is missing": the legend of the
+		// outcome panels would silently leave the line out.
+		instruments.publishZero(context.Background())
 
 		adapter.operations[operation.Name] = instruments
 	}
@@ -100,10 +104,23 @@ func (t *OperationTelemetry) Measure(ctx context.Context, operation string, fn f
 	return nil
 }
 
+// publishZero records a zero on each counter of the operation.
+//
+// The point is published once, when the instruments are built, so the series
+// exists from the start. The counters keep their own value once the operation
+// runs: a zero adds nothing to a counter, it only gives it a series to be
+// read from.
+func (i *operationInstruments) publishZero(ctx context.Context) {
+	i.attempted.Add(ctx, 0)
+	i.succeeded.Add(ctx, 0)
+	i.failed.Add(ctx, 0)
+}
+
 func newOperationInstruments(operation Operation) (*operationInstruments, error) {
 	attempted, err := NewCounter(
 		operation.MetricBase+".attempted",
 		"Number of attempts of "+operation.Name,
+		operation.Unit,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("telemetry: cannot create the attempted counter of %q: %w", operation.Name, err)
@@ -112,6 +129,7 @@ func newOperationInstruments(operation Operation) (*operationInstruments, error)
 	succeeded, err := NewCounter(
 		operation.MetricBase+".succeeded",
 		"Number of successful "+operation.Name+" operations",
+		operation.Unit,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("telemetry: cannot create the succeeded counter of %q: %w", operation.Name, err)
@@ -120,6 +138,7 @@ func newOperationInstruments(operation Operation) (*operationInstruments, error)
 	failed, err := NewCounter(
 		operation.MetricBase+".failed",
 		"Number of failed "+operation.Name+" operations",
+		operation.Unit,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("telemetry: cannot create the failed counter of %q: %w", operation.Name, err)
@@ -128,6 +147,7 @@ func newOperationInstruments(operation Operation) (*operationInstruments, error)
 	duration, err := NewHistogram(
 		operation.MetricBase+".duration",
 		"Duration of "+operation.Name+" operations in seconds",
+		durationUnit,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("telemetry: cannot create the duration histogram of %q: %w", operation.Name, err)

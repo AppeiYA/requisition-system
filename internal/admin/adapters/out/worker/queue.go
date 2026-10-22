@@ -9,6 +9,7 @@ import (
 	adminout "github.com/AppeiYA/requisition-system/internal/admin/ports/out"
 	"github.com/AppeiYA/requisition-system/internal/admin/tasks"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/config"
+	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/telemetry"
 	"github.com/hibiken/asynq"
 )
 
@@ -29,14 +30,11 @@ func NewTaskQueue(client *asynq.Client, cfg config.WorkerConfig) *TaskQueue {
 var _ adminout.TaskQueue = (*TaskQueue)(nil)
 
 func (q *TaskQueue) EnqueueInvitationEmail(ctx context.Context, payload tasks.InvitationEmailPayload) error {
-	task, err := invitationEmailTask(payload)
+	task, err := invitationEmailTask(ctx, payload)
 	if err != nil {
 		return err
 	}
 
-	// The task ID derives from the invitation token, so retrying the API
-	// request can never queue the same invitation mail twice. A conflict
-	// means the task is already queued and is treated as success.
 	_, err = q.client.EnqueueContext(ctx, task,
 		asynq.Queue(q.cfg.Queue),
 		asynq.MaxRetry(q.cfg.TaskMaxRetry),
@@ -52,9 +50,9 @@ func (q *TaskQueue) EnqueueInvitationEmail(ctx context.Context, payload tasks.In
 	return nil
 }
 
-// invitationEmailTask renders the task contract shared with the worker-side
-// handler. It is kept separate so the encoding can be tested without Redis.
-func invitationEmailTask(payload tasks.InvitationEmailPayload) (*asynq.Task, error) {
+func invitationEmailTask(ctx context.Context, payload tasks.InvitationEmailPayload) (*asynq.Task, error) {
+	payload.TraceParent = telemetry.TraceParentFrom(ctx)
+
 	b, err := json.Marshal(payload)
 	if err != nil {
 		return nil, fmt.Errorf("marshal %s payload: %w", tasks.SendInvitationEmail, err)

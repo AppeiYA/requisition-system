@@ -1,0 +1,15 @@
+# Where the dashboards come from. Grafana re-reads the directory on the
+# update interval below, so editing a dashboard JSON and waiting a beat is
+# enough, with no restart and no clicking through the import dialog.
+apiVersion: 1
+
+providers:
+  - name: requisition-system
+    orgId: 1
+    folder: Requisition System
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/dashboards

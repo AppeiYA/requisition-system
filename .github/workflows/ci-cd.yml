@@ -37,10 +37,44 @@ jobs:
             - name: Run tests
               run: go test ./...
 
+    observability-config:
+        name: Validate observability configs
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout Repository
+              uses: actions/checkout@v4
+
+            # A collector config that does not parse is a stack that does not
+            # start, and nothing else in the build would notice.
+            - name: Validate collector configuration
+              run: |
+                  docker run --rm -v "$PWD/deploy/observability/otel-collector:/etc/otelcol:ro" \
+                    --entrypoint /otelcol-contrib otel/opentelemetry-collector-contrib:0.163.2 \
+                    validate --config=/etc/otelcol/config.yaml
+
+            - name: Validate Prometheus configuration
+              run: |
+                  docker run --rm -v "$PWD/deploy/observability/prometheus:/etc/prometheus:ro" \
+                    --entrypoint /bin/promtool prom/prometheus:v3.15.1 \
+                    check config /etc/prometheus/prometheus.yml
+
+            # Tempo has no validator outside its own binary, and the Grafana
+            # provisioning is YAML. Both are checked for being parseable, which
+            # is most of what can go wrong with them.
+            - name: Validate provisioning and dashboard
+              run: |
+                  python3 -c "import yaml,sys; [yaml.safe_load(open(p)) for p in sys.argv[1:]]" \
+                    deploy/observability/grafana/provisioning/datasources/datasources.yaml \
+                    deploy/observability/grafana/provisioning/dashboards/dashboards.yaml \
+                    deploy/observability/tempo/tempo.yaml
+                  python3 -m json.tool \
+                    deploy/observability/grafana/dashboards/requisition-system.json > /dev/null
+
     build-n-push:
         name: Build and push to GHCR
         if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-        needs: test
+        needs: [test, observability-config]
         runs-on: ubuntu-latest
 
         steps:

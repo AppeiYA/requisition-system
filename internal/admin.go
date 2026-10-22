@@ -42,10 +42,10 @@ func (a *App) buildAdminHandler(
 	return admin.NewAdminModule(adminPortIn, adminHandler)
 }
 
-func (w *Worker) buildAdminWorker(cfg *config.Config, invitationRepo invitationout.InvitationRepository) *admin.AdminWorkerModule {
+func (w *Worker) buildAdminWorker(cfg *config.Config, invitationRepo invitationout.InvitationRepository, telemetry adminout.Telemetry) *admin.AdminWorkerModule {
 	emailPort := adminemail.NewInvitationSender(email.NewSender(cfg.Email), cfg.Frontend)
 
-	sendInvitationEmailUsecase := adminusecase.NewSendInvitationEmailUsecase(emailPort)
+	sendInvitationEmailUsecase := adminusecase.NewSendInvitationEmailUsecase(emailPort, telemetry)
 
 	sendMailHandler := adminworkers.NewSendMailHandler(sendInvitationEmailUsecase, invitationRepo)
 

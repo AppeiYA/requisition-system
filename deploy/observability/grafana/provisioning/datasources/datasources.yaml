@@ -1,0 +1,35 @@
+# The two datasources the stack needs. Both are provisioned from this file
+# rather than added by hand, so the dashboard and the exploration tools work
+# the moment the stack starts.
+apiVersion: 1
+
+datasources:
+  # Default, so every panel gets a datasource without naming one.
+  - name: Prometheus
+    uid: prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
+    jsonData:
+      timeInterval: 15s
+
+  - name: Tempo
+    uid: tempo
+    type: tempo
+    access: proxy
+    url: http://tempo:3200
+    editable: false
+    jsonData:
+      # The node graph is enabled for what it can do without any help: the
+      # relationships between the spans of a single trace, in the trace view.
+      #
+      # Two neighbouring features are deliberately absent. tracesToMetrics
+      # and the service map both read traces_spanmetrics_*, which only
+      # exists when Tempo's metrics generator writes to Prometheus, and this
+      # stack runs without it. The dependency durations the dashboard would
+      # otherwise take from there are computed with TraceQL metrics straight
+      # out of Tempo instead.
+      nodeGraph:
+        enabled: true

@@ -3,10 +3,12 @@ package email
 import (
 	"context"
 	"fmt"
+	"net/http"
 
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/config"
 	customerrors "github.com/AppeiYA/requisition-system/internal/shared/infrastructure/errors"
 	"github.com/resendlabs/resend-go"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 var (
@@ -21,8 +23,12 @@ type Sender struct {
 }
 
 func NewSender(cfg config.EmailConfig) *Sender {
+	client := &http.Client{
+		Transport: otelhttp.NewTransport(nil),
+	}
+
 	return &Sender{
-		emails: resend.NewClient(cfg.APIKey).Emails,
+		emails: resend.NewCustomClient(client, cfg.APIKey).Emails,
 		cfg:    cfg,
 	}
 }

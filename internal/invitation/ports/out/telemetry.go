@@ -10,6 +10,12 @@ import (
 // request specific value such as the invitation token.
 const OperationAcceptInvitation = "invitation.accept"
 
+// OperationExpireInvitations is the stable name of the scheduled sweep that
+// expires the invitations that were never accepted. It runs in the worker
+// process, on a schedule, so it has no request to belong to and starts a
+// trace of its own.
+const OperationExpireInvitations = "invitation.expire"
+
 // Telemetry measures the business operations of the invitation module. The
 // port is deliberately free of tracing and metrics concepts: the application
 // layer only asks for an operation to be measured and receives the outcome of

@@ -90,6 +90,29 @@ func counterValue(t *testing.T, metrics metricdata.ResourceMetrics, name string)
 	return 0
 }
 
+// hasSeries tells whether an instrument is reported at all. A counter that
+// was never incremented is not reported, so it has no series to read.
+func hasSeries(t *testing.T, metrics metricdata.ResourceMetrics, name string) bool {
+	t.Helper()
+
+	for _, scope := range metrics.ScopeMetrics {
+		for _, metric := range scope.Metrics {
+			if metric.Name != name {
+				continue
+			}
+
+			sum, ok := metric.Data.(metricdata.Sum[int64])
+			if !ok {
+				t.Fatalf("expected %q to be a sum of int64, got %T", name, metric.Data)
+			}
+
+			return len(sum.DataPoints) > 0
+		}
+	}
+
+	return false
+}
+
 func histogramCount(t *testing.T, metrics metricdata.ResourceMetrics, name string) uint64 {
 	t.Helper()
 
@@ -144,6 +167,27 @@ func Test_NewOperationTelemetry_InvalidOperations(t *testing.T) {
 				t.Fatal("expected an error, got none")
 			}
 		})
+	}
+}
+
+// The counters are published with a zero value when the adapter is built. A
+// counter that was never incremented has no series at all, and a panel cannot
+// tell "nothing failed" from "the metric is missing": the line of the outcome
+// would be left out of the legend.
+func Test_OperationTelemetry_CountersArePublishedAtZero(t *testing.T) {
+	_, reader := setupTelemetry(t)
+	newTestTelemetry(t)
+
+	metrics := collect(t, reader)
+
+	for _, suffix := range []string{".attempted", ".succeeded", ".failed"} {
+		name := testMetricBase + suffix
+		if !hasSeries(t, metrics, name) {
+			t.Errorf("expected %q to be reported before any measurement", name)
+		}
+		if got := counterValue(t, metrics, name); got != 0 {
+			t.Errorf("expected %q to start at 0, got %d", name, got)
+		}
 	}
 }
 

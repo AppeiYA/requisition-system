@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -13,6 +14,22 @@ var (
 	ErrJWTSecretTooShort                = errors.New("JWT secret must be at least 32 characters long")
 	ErrJWTRefreshTTLNotLongerThanAccess = errors.New(
 		"JWT refresh token TTL must be greater than the access token TTL",
+	)
+	ErrTelemetryExporterUnsupported = errors.New(
+		"telemetry exporter must be one of: stdout, otlp, none",
+	)
+	ErrTelemetryProtocolUnsupported = errors.New(
+		"telemetry OTLP protocol must be one of: grpc, http",
+	)
+	ErrTelemetrySamplerUnsupported = errors.New(
+		"telemetry sampler must be one of: always_on, always_off, " +
+			"parentbased_always_on, parentbased_traceidratio, traceidratio",
+	)
+	ErrTelemetrySampleRatioOutOfRange = errors.New(
+		"telemetry sample ratio must be between 0 and 1",
+	)
+	ErrTelemetryMetricsIntervalInvalid = errors.New(
+		"telemetry metric export interval must be positive",
 	)
 )
 
@@ -62,16 +79,22 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 
+	telemetryConfig, err := LoadTelemetryConfig()
+	if err != nil {
+		return nil, err
+	}
+
 	return &Config{
-		App:      *appConfig,
-		API:      *apiConfig,
-		DB:       *dbConfig,
-		Redis:    *redisConfig,
-		Server:   *serverConfig,
-		JWT:      *jwtConfig,
-		Email:    *emailConfig,
-		Frontend: *frontendConfig,
-		Worker:   *workerConfig,
+		App:       *appConfig,
+		API:       *apiConfig,
+		DB:        *dbConfig,
+		Redis:     *redisConfig,
+		Server:    *serverConfig,
+		JWT:       *jwtConfig,
+		Email:     *emailConfig,
+		Frontend:  *frontendConfig,
+		Worker:    *workerConfig,
+		Telemetry: *telemetryConfig,
 	}, nil
 }
 
@@ -276,5 +299,59 @@ func LoadWorkerConfig() (*WorkerConfig, error) {
 		TaskMaxRetry:    taskMaxRetry,
 		TaskTimeout:     taskTimeout,
 		ShutdownTimeout: shutdownTimeout,
+	}, nil
+}
+
+func LoadTelemetryConfig() (*TelemetryConfig, error) {
+	exporter := getEnv("TELEMETRY_EXPORTER", TelemetryExporterStdout)
+	switch exporter {
+	case TelemetryExporterStdout, TelemetryExporterOTLP, TelemetryExporterNone:
+	default:
+		return nil, fmt.Errorf("%w, got %q", ErrTelemetryExporterUnsupported, exporter)
+	}
+
+	protocol := getEnv("OTEL_EXPORTER_OTLP_PROTOCOL", OTLPProtocolGRPC)
+	switch protocol {
+	case OTLPProtocolGRPC, OTLPProtocolHTTP:
+	default:
+		return nil, fmt.Errorf("%w, got %q", ErrTelemetryProtocolUnsupported, protocol)
+	}
+
+	sampler := getEnv("OTEL_TRACES_SAMPLER", "parentbased_traceidratio")
+
+	sampleRatio, err := getFloatEnv("OTEL_TRACES_SAMPLER_ARG", 1)
+	if err != nil {
+		return nil, err
+	}
+	if sampleRatio < 0 || sampleRatio > 1 {
+		return nil, fmt.Errorf("%w, got %v", ErrTelemetrySampleRatioOutOfRange, sampleRatio)
+	}
+
+	otlpInsecure, err := getBoolEnv("OTEL_EXPORTER_OTLP_INSECURE", true)
+	if err != nil {
+		return nil, err
+	}
+
+	// The OpenTelemetry specification counts this interval in milliseconds,
+	// and the SDK reads the same variable: the two have to agree on the unit
+	// or the SDK logs a parse error on every start.
+	metricsInterval, err := getDurationMillisEnv("OTEL_METRIC_EXPORT_INTERVAL", 60*time.Second)
+	if err != nil {
+		return nil, err
+	}
+	if metricsInterval <= 0 {
+		return nil, fmt.Errorf("%w, got %v", ErrTelemetryMetricsIntervalInvalid, metricsInterval)
+	}
+
+	return &TelemetryConfig{
+		ServiceName:     getEnv("OTEL_SERVICE_NAME", ""),
+		Environment:     getEnv("APP_ENV", "development"),
+		Exporter:        exporter,
+		OTLPEndpoint:    getEnv("OTEL_EXPORTER_OTLP_ENDPOINT", "localhost:4317"),
+		OTLPProtocol:    protocol,
+		OTLPInsecure:    otlpInsecure,
+		Sampler:         sampler,
+		SampleRatio:     sampleRatio,
+		MetricsInterval: metricsInterval,
 	}, nil
 }

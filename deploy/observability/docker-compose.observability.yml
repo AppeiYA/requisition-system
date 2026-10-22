@@ -1,0 +1,87 @@
+# The backend the telemetry of the API and the worker is exported to. It runs
+# beside the application, never instead of it: with this file absent, the
+# application still starts and logs to stdout as it always did.
+#
+#   docker compose -f deploy/observability/docker-compose.observability.yml up -d
+#
+# Then point the application at it:
+#
+#   TELEMETRY_EXPORTER=otlp
+#   OTEL_EXPORTER_OTLP_ENDPOINT=localhost:4317
+#
+# And open http://localhost:3000 for the dashboard, http://localhost:9090 for
+# Prometheus and http://localhost:3200 for Tempo.
+
+name: requisition-observability
+
+services:
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.163.2
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./otel-collector/config.yaml:/etc/otelcol/config.yaml:ro
+    ports:
+      - "4317:4317" # OTLP gRPC, what the application speaks
+      - "4318:4318" # OTLP HTTP
+      - "9464:9464" # the metrics Prometheus scrapes
+      # The collector's own health endpoint. The image ships no shell, so
+      # there is no way to give the container a healthcheck of its own, and
+      # this is how you ask it whether it is alive:
+      #   curl http://localhost:13133/
+      - "13133:13133"
+    depends_on:
+      - tempo
+    restart: unless-stopped
+
+  tempo:
+    image: grafana/tempo:3.1.1
+    command: ["-config.file=/etc/tempo/tempo.yaml"]
+    volumes:
+      - ./tempo/tempo.yaml:/etc/tempo/tempo.yaml:ro
+      # /var/tempo is the directory the image ships owned by the unprivileged
+      # user it runs as, so the volume inherits that ownership on first use.
+      # Anywhere else would be root owned and the container would refuse to
+      # write to it.
+      - tempo-data:/var/tempo
+    ports:
+      - "3200:3200" # what Grafana queries
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v3.15.1
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=24h
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090" # the query UI
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:13.2.4
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      # The dashboards are mounted outside /var/lib/grafana on purpose: the
+      # named volume below covers that directory, and a mount nested under it
+      # would be shadowed by it.
+      - ./grafana/dashboards:/etc/grafana/dashboards:ro
+      # /var/lib/grafana is the directory the image ships owned by the
+      # unprivileged user it runs as, so the volume inherits that ownership
+      # on first use. Anywhere else would be root owned and Grafana would
+      # refuse to create its database there.
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3000:3000" # the dashboard
+    depends_on:
+      - prometheus
+      - tempo
+    restart: unless-stopped
+
+volumes:
+  tempo-data:
+  grafana-data:
