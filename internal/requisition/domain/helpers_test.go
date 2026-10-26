@@ -101,6 +101,7 @@ func mustItemWithStatus(t *testing.T, status ItemStatus) *Item {
 		"Laptop",
 		"Business laptop",
 		"cat_123",
+		0,
 		status.String(),
 		time.Now(),
 	)

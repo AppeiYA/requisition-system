@@ -21,7 +21,8 @@ type Item struct {
 }
 
 var (
-	ErrInvalidItemID = customerrors.NewBadRequestError("invalid item ID")
+	ErrInvalidItemID      = customerrors.NewBadRequestError("invalid item ID")
+	ErrNoItemUpdateFields = customerrors.NewBadRequestError("at least one field must be provided to update an item")
 )
 
 func NewItem(id string, name *ItemName, description *ItemDescription, categoryID string, unitCost float64) (*Item, error) {
@@ -52,7 +53,7 @@ func NewItem(id string, name *ItemName, description *ItemDescription, categoryID
 	}, nil
 }
 
-func ReconstituteItem(id string, name string, description string, categoryID string, status string, createdAt time.Time) (*Item, error) {
+func ReconstituteItem(id string, name string, description string, categoryID string, unitCostKobo int64, status string, createdAt time.Time) (*Item, error) {
 	if id == "" || !strings.HasPrefix(id, ItemPrefixID) {
 		return nil, ErrInvalidItemID
 	}
@@ -76,11 +77,17 @@ func ReconstituteItem(id string, name string, description string, categoryID str
 		return nil, err
 	}
 
+	unitCost, err := shareddomain.NewNairaMoneyFromMinorUnits(unitCostKobo)
+	if err != nil {
+		return nil, err
+	}
+
 	return &Item{
 		id:          id,
 		name:        itemName,
 		description: itemDescription,
 		categoryID:  categoryID,
+		unitCost:    unitCost,
 		status:      itemStatus,
 		createdAt:   createdAt,
 	}, nil
@@ -112,6 +119,73 @@ func (i *Item) UnitCost() *shareddomain.Money {
 
 func (i *Item) CreatedAt() time.Time {
 	return i.createdAt
+}
+
+// Update applies a partial update to the item. A nil field is left unchanged.
+// At least one field must be provided. Status changes go through Activate and
+// Deactivate instead.
+func (i *Item) Update(
+	name *string,
+	description *string,
+	categoryID *string,
+	unitCost *float64,
+) error {
+	if name == nil && description == nil && categoryID == nil && unitCost == nil {
+		return ErrNoItemUpdateFields
+	}
+
+	var (
+		newName        *ItemName
+		newDescription *ItemDescription
+		newCategoryID  string
+		newUnitCost    *shareddomain.Money
+	)
+
+	if name != nil {
+		value, err := NewItemName(*name)
+		if err != nil {
+			return err
+		}
+		newName = value
+	}
+
+	if description != nil {
+		value, err := NewItemDescription(*description)
+		if err != nil {
+			return err
+		}
+		newDescription = value
+	}
+
+	if categoryID != nil {
+		if *categoryID == "" || !strings.HasPrefix(*categoryID, CategoryPrefixID) {
+			return ErrInvalidCategoryID
+		}
+		newCategoryID = *categoryID
+	}
+
+	if unitCost != nil {
+		value, err := shareddomain.NewNairaMoney(*unitCost)
+		if err != nil {
+			return err
+		}
+		newUnitCost = value
+	}
+
+	if newName != nil {
+		i.name = newName
+	}
+	if newDescription != nil {
+		i.description = newDescription
+	}
+	if categoryID != nil {
+		i.categoryID = newCategoryID
+	}
+	if newUnitCost != nil {
+		i.unitCost = newUnitCost
+	}
+
+	return nil
 }
 
 func (i *Item) Activate() error {

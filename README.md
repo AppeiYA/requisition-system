@@ -133,6 +133,12 @@ Base URL: `http://localhost:8080/api/v1` — interactive docs at
 | PATCH  | `/api/v1/categories/:id`    | admin        | Partially update an item category's name/description |
 | PATCH  | `/api/v1/categories/:id/activate`   | admin | Activate an item category |
 | PATCH  | `/api/v1/categories/:id/deactivate` | admin | Deactivate an item category |
+| POST   | `/api/v1/items`             | admin        | Create an item |
+| GET    | `/api/v1/items`             | access token | List items (ordered by name) |
+| GET    | `/api/v1/items/:id`         | access token | Get an item |
+| PATCH  | `/api/v1/items/:id`         | admin        | Partially update an item's name/description/category/unit cost |
+| PATCH  | `/api/v1/items/:id/activate`   | admin | Activate an item |
+| PATCH  | `/api/v1/items/:id/deactivate` | admin | Deactivate an item |
 
 Authenticated requests need `Authorization: Bearer <access token>`.
 

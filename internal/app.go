@@ -153,6 +153,7 @@ func (a *App) Run() error {
 		adminModule.Handler(),
 		departmentModule.Handler(),
 		requisitionModule.ItemCategoryHandler(),
+		requisitionModule.ItemHandler(),
 		identityModule.AuthMiddleware(),
 	); err != nil {
 		return err

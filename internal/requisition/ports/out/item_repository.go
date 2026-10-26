@@ -6,8 +6,9 @@ import (
 	"github.com/AppeiYA/requisition-system/internal/requisition/domain"
 )
 
-type RequisitionRepository interface {
+type ItemRepository interface {
 	SaveItem(ctx context.Context, item *domain.Item) error
-	FindItemByID(ctx context.Context, id string) (*domain.Item, error)
+	GetItemByID(ctx context.Context, id string) (*domain.Item, error)
 	ListItems(ctx context.Context, limit int, offset int) ([]*domain.Item, error)
+	UpdateItem(ctx context.Context, item *domain.Item) error
 }

@@ -243,6 +243,7 @@ func Test_ReconstituteItem(t *testing.T) {
 				tt.itemName,
 				tt.description,
 				tt.categoryID,
+				0,
 				tt.status,
 				createdAt,
 			)

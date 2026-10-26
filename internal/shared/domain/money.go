@@ -10,7 +10,7 @@ import (
 
 var (
 	ErrInvalidCurrency = customerrors.NewBadRequestError("invalid currency")
-	ErrInvalidAmount = customerrors.NewBadRequestError("invalid monetary amount")
+	ErrInvalidAmount   = customerrors.NewBadRequestError("invalid monetary amount")
 
 	ErrNegativeAmount = customerrors.NewBadRequestError(
 		"monetary amount cannot be negative",
@@ -24,9 +24,11 @@ var (
 )
 
 type Currency string
+
 const (
 	CurrencyNaira Currency = "NGN"
 )
+
 func (c Currency) isValid() bool {
 	switch c {
 	case CurrencyNaira:
@@ -47,7 +49,7 @@ func (c Currency) String() string {
 }
 
 type Money struct {
-	amount   int64 
+	amount   int64
 	currency Currency
 }
 
@@ -61,7 +63,7 @@ func NewMoney(amount float64, currency string) (*Money, error) {
 	if math.IsNaN(amount) || math.IsInf(amount, 0) {
 		return nil, ErrInvalidAmount
 	}
- 
+
 	if amount < 0 {
 		return nil, ErrNegativeAmount
 	}
@@ -69,14 +71,14 @@ func NewMoney(amount float64, currency string) (*Money, error) {
 	scaled := amount * 100
 
 	if scaled > float64(math.MaxInt64) {
-        return nil, ErrMoneyOverflow
-    }
+		return nil, ErrMoneyOverflow
+	}
 
 	rounded := math.Round(scaled)
 
-    if math.Abs(scaled-rounded) > 1e-7 {
-        return nil, ErrInvalidAmount
-    }
+	if math.Abs(scaled-rounded) > 1e-7 {
+		return nil, ErrInvalidAmount
+	}
 
 	return &Money{
 		amount:   int64(rounded),
@@ -87,6 +89,29 @@ func NewMoney(amount float64, currency string) (*Money, error) {
 // NewNairaMoney creates money from an amount expressed in naira (NGN). The amount is expected to be in the major unit (naira), and it will be converted to the minor unit (kobo) by multiplying by 100.
 func NewNairaMoney(amount float64) (*Money, error) {
 	return NewMoney(amount, string(CurrencyNaira))
+}
+
+// NewMoneyFromMinorUnits creates money from an amount already expressed in the
+// currency's minor unit (for example kobo for NGN).
+func NewMoneyFromMinorUnits(amount int64, currency string) (*Money, error) {
+	validCurrency, err := NewCurrency(currency)
+	if err != nil {
+		return nil, err
+	}
+
+	if amount < 0 {
+		return nil, ErrNegativeAmount
+	}
+
+	return &Money{
+		amount:   amount,
+		currency: validCurrency,
+	}, nil
+}
+
+// NewNairaMoneyFromMinorUnits creates money from an amount expressed in kobo.
+func NewNairaMoneyFromMinorUnits(amount int64) (*Money, error) {
+	return NewMoneyFromMinorUnits(amount, string(CurrencyNaira))
 }
 
 func NewMoneyFromDecimal(value string, currency string) (*Money, error) {
