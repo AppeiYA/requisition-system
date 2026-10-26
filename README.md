@@ -1,7 +1,8 @@
 # Requisition System
 
 Backend API for managing requisitions: staff invitations, departments and department
-memberships, with JWT authentication and Redis-backed refresh-token sessions.
+memberships, and item categories, with JWT authentication and Redis-backed
+refresh-token sessions.
 
 Built with **Go + Gin + PostgreSQL + Redis**, structured as a modular monolith using
 hexagonal architecture (ports & adapters) per feature module.
@@ -14,6 +15,8 @@ hexagonal architecture (ports & adapters) per feature module.
   24h link delivered through [Resend](https://resend.com).
 - **Departments** – create and list departments with a unique 4-letter code, and manage
   department memberships (job titles).
+- **Item categories** – admins create and update categories; authenticated users list
+  and read them. Default categories are provided as a seed.
 - **API documentation** – OpenAPI 3 spec served by Scalar at `/api/v1/docs`.
 
 ## Tech stack
@@ -68,7 +71,7 @@ createdb requisition_system
 # 3. Apply migrations
 go run ./migrations -up
 
-# 4. Seed the default departments (Engineering, Design, Administrator)
+# 4. Seed the default departments and item categories
 go run ./migrations -seed
 
 # 5. Run the API (serves on :8080 by default)
@@ -124,6 +127,12 @@ Base URL: `http://localhost:8080/api/v1` — interactive docs at
 | POST   | `/api/v1/departments`       | access token | Create a department |
 | GET    | `/api/v1/departments`       | access token | List departments (ordered by name) |
 | GET    | `/api/v1/departments/:id`   | access token | Get a department |
+| POST   | `/api/v1/categories`        | admin        | Create an item category |
+| GET    | `/api/v1/categories`        | access token | List item categories (ordered by name) |
+| GET    | `/api/v1/categories/:id`    | access token | Get an item category |
+| PATCH  | `/api/v1/categories/:id`    | admin        | Partially update an item category's name/description |
+| PATCH  | `/api/v1/categories/:id/activate`   | admin | Activate an item category |
+| PATCH  | `/api/v1/categories/:id/deactivate` | admin | Deactivate an item category |
 
 Authenticated requests need `Authorization: Bearer <access token>`.
 

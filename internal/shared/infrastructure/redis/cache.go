@@ -61,4 +61,18 @@ func (c *Cache) Delete(
 	return c.client.Del(ctx, key).Err()
 }
 
+func (c *Cache) DeleteByPrefix(
+	ctx context.Context,
+	prefix string,
+) error {
+	iter := c.client.Scan(ctx, 0, prefix+"*", 100).Iterator()
+	for iter.Next(ctx) {
+		if err := c.client.Del(ctx, iter.Val()).Err(); err != nil {
+			return err
+		}
+	}
+
+	return iter.Err()
+}
+
 var _ cache.Cache = (*Cache)(nil)

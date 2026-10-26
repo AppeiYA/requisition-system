@@ -15,4 +15,5 @@ type Cache interface {
 	) error
 
 	Delete(ctx context.Context, key string) error
+	DeleteByPrefix(ctx context.Context, prefix string) error
 }

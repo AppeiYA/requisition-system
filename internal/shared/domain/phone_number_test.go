@@ -96,3 +96,23 @@ func Test_PhoneNumber_IsZeroAndEquals(t *testing.T) {
 		t.Error("expected a number to equal itself")
 	}
 }
+
+func Test_PhoneNumber_EqualsNilCases(t *testing.T) {
+	t.Parallel()
+
+	var nilPhone *PhoneNumber
+	phone, err := NewPhoneNumber("+14155551234")
+	if err != nil {
+		t.Fatalf("NewPhoneNumber() unexpected error = %v", err)
+	}
+
+	if !nilPhone.Equals(nil) {
+		t.Error("nil PhoneNumber should equal nil")
+	}
+	if nilPhone.Equals(phone) {
+		t.Error("nil PhoneNumber should not equal a value")
+	}
+	if phone.Equals(nil) {
+		t.Error("PhoneNumber should not equal nil")
+	}
+}
