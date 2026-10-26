@@ -9,6 +9,7 @@ import (
 	departmenthttp "github.com/AppeiYA/requisition-system/internal/department/adapters/in/http"
 	identityhttp "github.com/AppeiYA/requisition-system/internal/identity/adapters/in/http"
 	invitationhttp "github.com/AppeiYA/requisition-system/internal/invitation/adapters/in/http"
+	requisitionhttp "github.com/AppeiYA/requisition-system/internal/requisition/adapters/in/http"
 	scalar "github.com/MarceloPetrucio/go-scalar-api-reference"
 	"github.com/gin-gonic/gin"
 	"gopkg.in/yaml.v3"
@@ -20,6 +21,7 @@ func NewRouter(
 	invitationHandler *invitationhttp.InvitationHandler,
 	adminHandler *adminhttp.Handler,
 	departmentHandler *departmenthttp.DepartmentHandler,
+	itemCategoryHandler *requisitionhttp.ItemCategoryHandler,
 	authMiddleware *identityhttp.AuthMiddleware,
 ) error {
 	scalarHTML, err := renderScalarReference()
@@ -45,6 +47,7 @@ func NewRouter(
 	invitationHandler.Register(v1)
 	adminHandler.Register(v1, authMiddleware.Handle(), authMiddleware.RequireRole("admin"))
 	departmentHandler.Register(v1, authMiddleware.Handle())
+	itemCategoryHandler.Register(v1, authMiddleware.Handle(), authMiddleware.RequireRole("admin"))
 
 	return nil
 }

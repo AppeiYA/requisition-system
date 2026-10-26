@@ -97,3 +97,53 @@ func Test_NewEmail(t *testing.T) {
 		})
 	}
 }
+
+func Test_NewEmail_NormalizesToLowercase(t *testing.T) {
+	t.Parallel()
+
+	email, err := NewEmail("John.Doe@Example.COM")
+	if err != nil {
+		t.Fatalf("NewEmail() unexpected error = %v", err)
+	}
+	if email.Value() != "john.doe@example.com" {
+		t.Errorf("Email.Value() = %q, want %q", email.Value(), "john.doe@example.com")
+	}
+}
+
+func Test_Email_IsZeroAndEquals(t *testing.T) {
+	t.Parallel()
+
+	email, err := NewEmail("john.doe@example.com")
+	if err != nil {
+		t.Fatalf("NewEmail() unexpected error = %v", err)
+	}
+	sameEmail, err := NewEmail("JOHN.DOE@EXAMPLE.COM")
+	if err != nil {
+		t.Fatalf("NewEmail() unexpected error = %v", err)
+	}
+	otherEmail, err := NewEmail("jane.doe@example.com")
+	if err != nil {
+		t.Fatalf("NewEmail() unexpected error = %v", err)
+	}
+
+	if email.IsZero() {
+		t.Error("Email.IsZero() = true, want false")
+	}
+	if !(&Email{}).IsZero() {
+		t.Error("zero-value Email.IsZero() = false, want true")
+	}
+
+	var nilEmail *Email
+	if nilEmail.Equals(email) {
+		t.Error("nil Email.Equals() = true, want false")
+	}
+	if email.Equals(nil) {
+		t.Error("Email.Equals(nil) = true, want false")
+	}
+	if !email.Equals(sameEmail) {
+		t.Error("Email.Equals() = false for equivalent emails, want true")
+	}
+	if email.Equals(otherEmail) {
+		t.Error("Email.Equals() = true for different emails, want false")
+	}
+}
