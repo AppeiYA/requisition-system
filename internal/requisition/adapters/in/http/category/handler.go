@@ -26,6 +26,7 @@ func (h *ItemCategoryHandler) Register(
 	categories := router.Group("/categories")
 	categories.GET("", authMiddleware, h.list)
 	categories.GET("/:id", authMiddleware, h.getByID)
+	categories.GET("/:id/items", authMiddleware, h.listItems)
 	categories.POST("", authMiddleware, adminOnlyMiddleware, h.create)
 	categories.PATCH("/:id", authMiddleware, adminOnlyMiddleware, h.update)
 	categories.PATCH("/:id/activate", authMiddleware, adminOnlyMiddleware, h.activate)

@@ -25,6 +25,7 @@ type MockItemCategoryRepository struct {
 	SaveItemCategoryFunc    func(ctx context.Context, category *requisitiondomain.ItemCategory) error
 	GetItemCategoryByIDFunc func(ctx context.Context, id string) (*requisitiondomain.ItemCategory, error)
 	ListItemCategoriesFunc  func(ctx context.Context, limit int, offset int) ([]*requisitiondomain.ItemCategory, error)
+	ListItemsInCategoryFunc func(ctx context.Context, categoryID string) ([]*requisitiondomain.Item, error)
 	UpdateItemCategoryFunc  func(ctx context.Context, category *requisitiondomain.ItemCategory) error
 }
 
@@ -38,6 +39,9 @@ func NewMockItemCategoryRepository() *MockItemCategoryRepository {
 		},
 		ListItemCategoriesFunc: func(ctx context.Context, limit int, offset int) ([]*requisitiondomain.ItemCategory, error) {
 			return []*requisitiondomain.ItemCategory{ValidItemCategory()}, nil
+		},
+		ListItemsInCategoryFunc: func(ctx context.Context, categoryID string) ([]*requisitiondomain.Item, error) {
+			return []*requisitiondomain.Item{}, nil
 		},
 		UpdateItemCategoryFunc: func(ctx context.Context, category *requisitiondomain.ItemCategory) error {
 			return nil
@@ -55,6 +59,10 @@ func (m *MockItemCategoryRepository) GetItemCategoryByID(ctx context.Context, id
 
 func (m *MockItemCategoryRepository) ListItemCategories(ctx context.Context, limit int, offset int) ([]*requisitiondomain.ItemCategory, error) {
 	return m.ListItemCategoriesFunc(ctx, limit, offset)
+}
+
+func (m *MockItemCategoryRepository) ListItemsInCategory(ctx context.Context, categoryID string) ([]*requisitiondomain.Item, error) {
+	return m.ListItemsInCategoryFunc(ctx, categoryID)
 }
 
 func (m *MockItemCategoryRepository) UpdateItemCategory(ctx context.Context, category *requisitiondomain.ItemCategory) error {

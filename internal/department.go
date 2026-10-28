@@ -31,5 +31,6 @@ func (a *App) buildDepartment(
 	return department.NewDepartmentModule(
 		departmentPortIn,
 		handler,
+		membershipRepo,
 	)
 }

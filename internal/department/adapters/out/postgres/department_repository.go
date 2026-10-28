@@ -25,7 +25,7 @@ const departmentCacheTTL = 10 * time.Minute
 
 type DepartmentRepository struct {
 	repository db.Repository
-	cache sharedcache.Cache
+	cache      sharedcache.Cache
 }
 
 func NewDepartmentRepository(repository db.Repository, cache sharedcache.Cache) *DepartmentRepository {
@@ -88,7 +88,7 @@ func (r *DepartmentRepository) GetDepartmentByID(ctx context.Context, id string)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return model.ToDomain()
 }
 

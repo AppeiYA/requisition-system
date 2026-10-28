@@ -7,7 +7,7 @@ type MemberJobTitle struct {
 }
 
 var (
-	ErrEmptyJobTitle = customerrors.NewBadRequestError("Job title cannot be empty")
+	ErrEmptyJobTitle   = customerrors.NewBadRequestError("Job title cannot be empty")
 	ErrJobTitleTooLong = customerrors.NewBadRequestError("Job title cannot exceed 60 characters")
 )
 

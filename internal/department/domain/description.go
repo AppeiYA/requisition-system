@@ -7,7 +7,7 @@ type DepartmentDescription struct {
 }
 
 var (
-	ErrEmptyDepartmentDescription = customerrors.NewBadRequestError("Department description cannot be empty")
+	ErrEmptyDepartmentDescription   = customerrors.NewBadRequestError("Department description cannot be empty")
 	ErrDepartmentDescriptionTooLong = customerrors.NewBadRequestError("Department description cannot exceed 255 characters")
 )
 

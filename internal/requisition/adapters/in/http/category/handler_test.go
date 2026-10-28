@@ -109,6 +109,17 @@ func newTestRouter(
 	)
 }
 
+type stubListItemsInCategory struct {
+	res []*domain.Item
+	err error
+	got string
+}
+
+func (s *stubListItemsInCategory) Execute(ctx context.Context, categoryID string) ([]*domain.Item, error) {
+	s.got = categoryID
+	return s.res, s.err
+}
+
 func newTestRouterWithStatus(
 	create categoryin.CreateItemCategoryUsecaseInt,
 	get categoryin.GetItemCategoryUsecaseInt,
@@ -116,6 +127,30 @@ func newTestRouterWithStatus(
 	update categoryin.UpdateItemCategoryUsecaseInt,
 	activate categoryin.ActivateItemCategoryUsecaseInt,
 	deactivate categoryin.DeactivateItemCategoryUsecaseInt,
+	authMiddleware gin.HandlerFunc,
+	adminOnlyMiddleware gin.HandlerFunc,
+) *gin.Engine {
+	return newTestRouterWithAll(
+		create,
+		get,
+		list,
+		update,
+		activate,
+		deactivate,
+		&stubListItemsInCategory{},
+		authMiddleware,
+		adminOnlyMiddleware,
+	)
+}
+
+func newTestRouterWithAll(
+	create categoryin.CreateItemCategoryUsecaseInt,
+	get categoryin.GetItemCategoryUsecaseInt,
+	list categoryin.ListItemCategoriesUsecaseInt,
+	update categoryin.UpdateItemCategoryUsecaseInt,
+	activate categoryin.ActivateItemCategoryUsecaseInt,
+	deactivate categoryin.DeactivateItemCategoryUsecaseInt,
+	listItems categoryin.ListItemsInCategoryUsecaseInt,
 	authMiddleware gin.HandlerFunc,
 	adminOnlyMiddleware gin.HandlerFunc,
 ) *gin.Engine {
@@ -129,6 +164,7 @@ func newTestRouterWithStatus(
 		UpdateItemCategoryUsecase:     update,
 		ActivateItemCategoryUsecase:   activate,
 		DeactivateItemCategoryUsecase: deactivate,
+		ListItemsInCategoryUsecase:    listItems,
 	}
 	NewItemCategoryHandler(port).Register(router.Group("/api/v1"), authMiddleware, adminOnlyMiddleware)
 
@@ -211,20 +247,27 @@ func Test_ListItemCategories_Success(t *testing.T) {
 	}
 
 	var body struct {
-		Success bool `json:"success"`
-		Data    []struct {
+		Status     string `json:"status"`
+		Data       []struct {
 			ID   string `json:"id"`
 			Name string `json:"name"`
 		} `json:"data"`
+		Pagination struct {
+			Page     int `json:"page"`
+			PageSize int `json:"page_size"`
+		} `json:"pagination"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if !body.Success || len(body.Data) != 1 {
+	if body.Status != "success" || len(body.Data) != 1 {
 		t.Fatalf("unexpected response: %s", rec.Body.String())
 	}
 	if body.Data[0].ID != requisitionmocks.DefaultItemCategoryID {
 		t.Errorf("expected id %q, got %q", requisitionmocks.DefaultItemCategoryID, body.Data[0].ID)
+	}
+	if body.Pagination.Page != 1 || body.Pagination.PageSize != 10 {
+		t.Errorf("unexpected pagination: %+v", body.Pagination)
 	}
 }
 

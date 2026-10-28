@@ -1,0 +1,3 @@
+ALTER TABLE requisitions
+    ALTER COLUMN needed_by TYPE TIMESTAMPTZ
+    USING needed_by::TIMESTAMPTZ;

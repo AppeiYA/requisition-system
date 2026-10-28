@@ -242,6 +242,72 @@ components:
                     minimum: 0
                     type: number
             type: object
+        requisitionhttp.CreateRequisitionRequest:
+            properties:
+                category_id:
+                    type: string
+                estimated_cost:
+                    minimum: 0
+                    type: number
+                item_id:
+                    type: string
+                justification:
+                    type: string
+                needed_by:
+                    type: string
+                priority:
+                    type: string
+                quantity:
+                    minimum: 1
+                    type: integer
+                requested_item_description:
+                    type: string
+                requested_item_name:
+                    type: string
+            required:
+                - category_id
+                - justification
+                - needed_by
+                - priority
+                - quantity
+                - requested_item_description
+                - requested_item_name
+            type: object
+        requisitionhttp.RequisitionResponse:
+            properties:
+                category_id:
+                    type: string
+                created_at:
+                    type: string
+                currency:
+                    type: string
+                department_id:
+                    type: string
+                estimated_cost:
+                    type: number
+                id:
+                    type: string
+                item_id:
+                    type: string
+                justification:
+                    type: string
+                needed_by:
+                    type: string
+                priority:
+                    type: string
+                quantity:
+                    type: integer
+                requested_by:
+                    type: string
+                requested_item_description:
+                    type: string
+                requested_item_name:
+                    type: string
+                status:
+                    type: string
+                updated_at:
+                    type: string
+            type: object
         response.ErrorResponse:
             properties:
                 data: {}
@@ -759,6 +825,53 @@ paths:
             summary: Deactivate an item category
             tags:
                 - category
+    /categories/{id}/items:
+        get:
+            description: Returns items belonging to the specified category. Requires an access token.
+            parameters:
+                - description: Category ID
+                  in: path
+                  name: id
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                allOf:
+                                    - $ref: '#/components/schemas/response.Response'
+                                    - properties:
+                                        data:
+                                            items:
+                                                $ref: '#/components/schemas/item.ItemResponse'
+                                            type: array
+                                      type: object
+                    description: OK
+                "400":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Invalid category ID
+                "401":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Missing or invalid access token
+                "404":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Category not found
+            security:
+                - BearerAuth: []
+            summary: List items in a category
+            tags:
+                - category
     /departments:
         get:
             description: Returns every department, ordered by name.
@@ -1243,5 +1356,146 @@ paths:
             summary: Deactivate an item
             tags:
                 - item
+    /requisitions:
+        get:
+            description: Returns requisitions created by the authenticated user, ordered by creation time (newest first). Requires an access token.
+            parameters:
+                - description: Maximum number of requisitions to return (default 100, max 100)
+                  in: query
+                  name: limit
+                  schema:
+                    type: integer
+                - description: Number of requisitions to skip (default 0)
+                  in: query
+                  name: offset
+                  schema:
+                    type: integer
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                allOf:
+                                    - $ref: '#/components/schemas/response.Response'
+                                    - properties:
+                                        data:
+                                            items:
+                                                $ref: '#/components/schemas/requisitionhttp.RequisitionResponse'
+                                            type: array
+                                      type: object
+                    description: OK
+                "400":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Invalid pagination parameters
+                "401":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Missing or invalid access token
+            security:
+                - BearerAuth: []
+            summary: List my requisitions
+            tags:
+                - requisition
+        post:
+            description: Creates a requisition for the authenticated user's department. The category is required; item_id is optional. needed_by must be a calendar date in YYYY-MM-DD format and cannot be before today.
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/requisitionhttp.CreateRequisitionRequest'
+                description: Requisition details
+                required: true
+                x-originalParamName: request
+            responses:
+                "201":
+                    content:
+                        application/json:
+                            schema:
+                                allOf:
+                                    - $ref: '#/components/schemas/response.Response'
+                                    - properties:
+                                        data:
+                                            $ref: '#/components/schemas/requisitionhttp.RequisitionResponse'
+                                      type: object
+                    description: Created
+                "400":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.ErrorResponse'
+                    description: Validation error
+                "401":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Missing or invalid access token
+                "404":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Department membership, category, or item not found
+            security:
+                - BearerAuth: []
+            summary: Create a requisition
+            tags:
+                - requisition
+    /requisitions/all:
+        get:
+            description: Returns all requisitions ordered by creation time (newest first). Requires an access token and admin role.
+            parameters:
+                - description: Maximum number of requisitions to return (default 100, max 100)
+                  in: query
+                  name: limit
+                  schema:
+                    type: integer
+                - description: Number of requisitions to skip (default 0)
+                  in: query
+                  name: offset
+                  schema:
+                    type: integer
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                allOf:
+                                    - $ref: '#/components/schemas/response.Response'
+                                    - properties:
+                                        data:
+                                            items:
+                                                $ref: '#/components/schemas/requisitionhttp.RequisitionResponse'
+                                            type: array
+                                      type: object
+                    description: OK
+                "400":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Invalid pagination parameters
+                "401":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Missing or invalid access token
+                "403":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Forbidden
+            security:
+                - BearerAuth: []
+            summary: List all requisitions
+            tags:
+                - requisition
 servers:
     - url: /api/v1

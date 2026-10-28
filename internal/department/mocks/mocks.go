@@ -2,9 +2,11 @@ package departmentmocks
 
 import (
 	"context"
+	"net/http"
 
 	departmentdomain "github.com/AppeiYA/requisition-system/internal/department/domain"
 	departmentout "github.com/AppeiYA/requisition-system/internal/department/ports/out"
+	customerrors "github.com/AppeiYA/requisition-system/internal/shared/infrastructure/errors"
 )
 
 var (
@@ -69,7 +71,8 @@ func (m *MockDepartmentRepository) GetDepartments(ctx context.Context) ([]*depar
 var _ departmentout.DepartmentRepository = (*MockDepartmentRepository)(nil)
 
 type MockMembershipRepository struct {
-	SaveMembershipFunc func(ctx context.Context, membership *departmentdomain.DepartmentMembership) error
+	SaveMembershipFunc        func(ctx context.Context, membership *departmentdomain.DepartmentMembership) error
+	GetMembershipByUserIDFunc func(ctx context.Context, userID string) (*departmentdomain.DepartmentMembership, error)
 }
 
 func NewMockMembershipRepository() *MockMembershipRepository {
@@ -77,11 +80,18 @@ func NewMockMembershipRepository() *MockMembershipRepository {
 		SaveMembershipFunc: func(ctx context.Context, membership *departmentdomain.DepartmentMembership) error {
 			return nil
 		},
+		GetMembershipByUserIDFunc: func(ctx context.Context, userID string) (*departmentdomain.DepartmentMembership, error) {
+			return nil, customerrors.NewCustomError("department membership not found", http.StatusNotFound)
+		},
 	}
 }
 
 func (m *MockMembershipRepository) SaveMembership(ctx context.Context, membership *departmentdomain.DepartmentMembership) error {
 	return m.SaveMembershipFunc(ctx, membership)
+}
+
+func (m *MockMembershipRepository) GetMembershipByUserID(ctx context.Context, userID string) (*departmentdomain.DepartmentMembership, error) {
+	return m.GetMembershipByUserIDFunc(ctx, userID)
 }
 
 var _ departmentout.MembershipRepository = (*MockMembershipRepository)(nil)

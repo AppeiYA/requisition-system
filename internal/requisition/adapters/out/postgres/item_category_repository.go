@@ -174,6 +174,34 @@ func (r *ItemCategoryRepository) UpdateItemCategory(ctx context.Context, categor
 	return nil
 }
 
+var listItemsInCategoryQuery = `
+	SELECT id, name, description, category_id, unit_cost, status, created_at, updated_at
+	FROM items
+	WHERE category_id = $1
+	ORDER BY name ASC
+`
+
+func (r *ItemCategoryRepository) ListItemsInCategory(ctx context.Context, categoryID string) ([]*requisitiondomain.Item, error) {
+	var modelsList []models.ItemModel
+	if err := r.repository.Executor(ctx).SelectContext(ctx, &modelsList, listItemsInCategoryQuery, categoryID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return []*requisitiondomain.Item{}, nil
+		}
+		return nil, err
+	}
+
+	items := make([]*requisitiondomain.Item, 0, len(modelsList))
+	for _, model := range modelsList {
+		item, err := model.ToDomain()
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+
+	return items, nil
+}
+
 func translateItemCategoryError(err error) error {
 	var pqErr *pq.Error
 	if errors.As(err, &pqErr) && string(pqErr.Code) == pqUniqueViolationCode {

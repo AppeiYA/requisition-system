@@ -2,12 +2,15 @@ package app
 
 import (
 	"github.com/AppeiYA/requisition-system/internal/requisition"
+	requisitionhttp "github.com/AppeiYA/requisition-system/internal/requisition/adapters/in/http"
 	categoryhttp "github.com/AppeiYA/requisition-system/internal/requisition/adapters/in/http/category"
 	itemhttp "github.com/AppeiYA/requisition-system/internal/requisition/adapters/in/http/item"
 	requisitionpostgres "github.com/AppeiYA/requisition-system/internal/requisition/adapters/out/postgres"
+	requisitionin "github.com/AppeiYA/requisition-system/internal/requisition/ports/in"
 	categoryin "github.com/AppeiYA/requisition-system/internal/requisition/ports/in/category"
 	itemin "github.com/AppeiYA/requisition-system/internal/requisition/ports/in/item"
 	requisitionout "github.com/AppeiYA/requisition-system/internal/requisition/ports/out"
+	requisitionusecase "github.com/AppeiYA/requisition-system/internal/requisition/usecase"
 	categoryusecase "github.com/AppeiYA/requisition-system/internal/requisition/usecase/category"
 	itemusecase "github.com/AppeiYA/requisition-system/internal/requisition/usecase/item"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/cache"
@@ -18,6 +21,7 @@ func (a *App) buildRequisition(
 	baseRepo db.Repository,
 	idGen requisitionout.IDGenerator,
 	cache cache.Cache,
+	membershipRepo requisitionout.MembershipLookup,
 ) *requisition.RequisitionModule {
 	itemCategoryRepo := requisitionpostgres.NewItemCategoryRepository(baseRepo, cache)
 	itemRepo := requisitionpostgres.NewItemRepository(baseRepo, cache)
@@ -28,6 +32,7 @@ func (a *App) buildRequisition(
 	updateItemCategoryUC := categoryusecase.NewUpdateItemCategoryUsecase(itemCategoryRepo)
 	activateItemCategoryUC := categoryusecase.NewActivateItemCategoryUsecase(itemCategoryRepo)
 	deactivateItemCategoryUC := categoryusecase.NewDeactivateItemCategoryUsecase(itemCategoryRepo)
+	listItemsInCategoryUC := categoryusecase.NewListItemsInCategoryUsecase(itemCategoryRepo)
 
 	itemCategoryPortIn := categoryin.NewItemCategoryPortIn(
 		createItemCategoryUC,
@@ -36,6 +41,7 @@ func (a *App) buildRequisition(
 		updateItemCategoryUC,
 		activateItemCategoryUC,
 		deactivateItemCategoryUC,
+		listItemsInCategoryUC,
 	)
 
 	itemCategoryHandler := categoryhttp.NewItemCategoryHandler(itemCategoryPortIn)
@@ -58,10 +64,21 @@ func (a *App) buildRequisition(
 
 	itemHandler := itemhttp.NewItemHandler(itemPortIn)
 
+	requisitionRepo := requisitionpostgres.NewRequisitionRepository(baseRepo)
+	createRequisitionUC := requisitionusecase.NewCreateRequisitionUsecase(
+		requisitionRepo, itemCategoryRepo, itemRepo, membershipRepo, idGen,
+	)
+	listRequisitionsByUserUC := requisitionusecase.NewListRequisitionsByUserUsecase(requisitionRepo, nil)
+	listRequisitionsUC := requisitionusecase.NewListRequisitionsUsecase(requisitionRepo)
+	requisitionPortIn := requisitionin.NewRequisitionPortIn(createRequisitionUC, listRequisitionsByUserUC, listRequisitionsUC)
+	requisitionHandler := requisitionhttp.NewRequisitionHandler(requisitionPortIn)
+
 	return requisition.NewRequisitionModule(
 		itemCategoryPortIn,
 		itemCategoryHandler,
 		itemPortIn,
 		itemHandler,
+		requisitionPortIn,
+		requisitionHandler,
 	)
 }

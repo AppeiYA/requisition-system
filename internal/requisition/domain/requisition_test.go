@@ -24,6 +24,7 @@ func Test_NewRequisition(t *testing.T) {
 	requisition, err := NewRequisition(
 		"req_123",
 		"usr_123",
+		"dpt_123",
 		"itm_123",
 		"cat_123",
 		name,
@@ -47,6 +48,9 @@ func Test_NewRequisition(t *testing.T) {
 	}
 	if requisition.RequestedBy() != "usr_123" {
 		t.Errorf("Requisition.RequestedBy() = %q, want %q", requisition.RequestedBy(), "usr_123")
+	}
+	if requisition.DepartmentID() != "dpt_123" {
+		t.Errorf("Requisition.DepartmentID() = %q, want %q", requisition.DepartmentID(), "dpt_123")
 	}
 	if requisition.ItemID() != "itm_123" {
 		t.Errorf("Requisition.ItemID() = %q, want %q", requisition.ItemID(), "itm_123")
@@ -89,14 +93,15 @@ func Test_NewRequisition(t *testing.T) {
 	}
 }
 
-func Test_NewRequisition_AllowsEmptyOptionalIDs(t *testing.T) {
+func Test_NewRequisition_AllowsEmptyItemID(t *testing.T) {
 	t.Parallel()
 
 	requisition, err := NewRequisition(
 		"req_123",
 		"usr_123",
+		"dpt_123",
 		"",
-		"",
+		"cat_123",
 		mustItemName(t, "Laptop"),
 		mustItemDescription(t, "Business laptop"),
 		mustRequisitionQuantity(t, 1),
@@ -112,8 +117,8 @@ func Test_NewRequisition_AllowsEmptyOptionalIDs(t *testing.T) {
 	if requisition.ItemID() != "" {
 		t.Errorf("Requisition.ItemID() = %q, want empty", requisition.ItemID())
 	}
-	if requisition.CategoryID() != "" {
-		t.Errorf("Requisition.CategoryID() = %q, want empty", requisition.CategoryID())
+	if requisition.CategoryID() != "cat_123" {
+		t.Errorf("Requisition.CategoryID() = %q, want %q", requisition.CategoryID(), "cat_123")
 	}
 }
 
@@ -123,6 +128,7 @@ func Test_NewRequisition_Validation(t *testing.T) {
 	type input struct {
 		id            string
 		requestedBy   string
+		departmentID  string
 		itemID        string
 		categoryID    string
 		name          *ItemName
@@ -138,6 +144,7 @@ func Test_NewRequisition_Validation(t *testing.T) {
 		return input{
 			id:            "req_123",
 			requestedBy:   "usr_123",
+			departmentID:  "dpt_123",
 			itemID:        "itm_123",
 			categoryID:    "cat_123",
 			name:          mustItemName(t, "Laptop"),
@@ -169,6 +176,21 @@ func Test_NewRequisition_Validation(t *testing.T) {
 			name:       "empty requestedBy",
 			mutate:     func(in *input) { in.requestedBy = "" },
 			wantErrMsg: ErrRequestedIDCannotBeEmpty.Error(),
+		},
+		{
+			name:       "empty departmentID",
+			mutate:     func(in *input) { in.departmentID = "" },
+			wantErrMsg: ErrDepartmentIDCannotBeEmpty.Error(),
+		},
+		{
+			name:       "invalid department id prefix",
+			mutate:     func(in *input) { in.departmentID = "dept_123" },
+			wantErrMsg: ErrInvalidDepartmentID.Error(),
+		},
+		{
+			name:       "empty category id",
+			mutate:     func(in *input) { in.categoryID = "" },
+			wantErrMsg: ErrInvalidCategoryID.Error(),
 		},
 		{
 			name:       "invalid category id prefix",
@@ -207,7 +229,7 @@ func Test_NewRequisition_Validation(t *testing.T) {
 		},
 		{
 			name:       "neededBy date in the past",
-			mutate:     func(in *input) { in.neededBy = time.Now().Add(-time.Hour) },
+			mutate:     func(in *input) { in.neededBy = time.Now().AddDate(0, 0, -1) },
 			wantErrMsg: ErrInvalidNeededByDate.Error(),
 		},
 	}
@@ -222,6 +244,7 @@ func Test_NewRequisition_Validation(t *testing.T) {
 			requisition, err := NewRequisition(
 				in.id,
 				in.requestedBy,
+				in.departmentID,
 				in.itemID,
 				in.categoryID,
 				in.name,
@@ -256,6 +279,7 @@ func Test_ReconstituteRequisition(t *testing.T) {
 	type input struct {
 		id                       string
 		requestedBy              string
+		departmentID             string
 		itemID                   string
 		categoryID               string
 		requestedItemName        string
@@ -274,6 +298,7 @@ func Test_ReconstituteRequisition(t *testing.T) {
 		return input{
 			id:                       "req_123",
 			requestedBy:              "usr_123",
+			departmentID:             "dpt_123",
 			itemID:                   "itm_123",
 			categoryID:               "cat_123",
 			requestedItemName:        "Laptop",
@@ -302,10 +327,9 @@ func Test_ReconstituteRequisition(t *testing.T) {
 			wantPriority: PriorityNormal,
 		},
 		{
-			name: "valid requisition with empty optional IDs",
+			name: "valid requisition with empty item ID",
 			mutate: func(in *input) {
 				in.itemID = ""
-				in.categoryID = ""
 				in.priority = "low"
 				in.status = "pending"
 			},
@@ -326,6 +350,16 @@ func Test_ReconstituteRequisition(t *testing.T) {
 			name:    "empty requestedBy",
 			mutate:  func(in *input) { in.requestedBy = "" },
 			wantErr: ErrRequestedIDCannotBeEmpty,
+		},
+		{
+			name:    "empty departmentID",
+			mutate:  func(in *input) { in.departmentID = "" },
+			wantErr: ErrDepartmentIDCannotBeEmpty,
+		},
+		{
+			name:    "invalid department id prefix",
+			mutate:  func(in *input) { in.departmentID = "dept_123" },
+			wantErr: ErrInvalidDepartmentID,
 		},
 		{
 			name:    "invalid category id prefix",
@@ -401,6 +435,7 @@ func Test_ReconstituteRequisition(t *testing.T) {
 			requisition, err := ReconstituteRequisition(
 				in.id,
 				in.requestedBy,
+				in.departmentID,
 				in.itemID,
 				in.categoryID,
 				in.requestedItemName,
@@ -436,6 +471,9 @@ func Test_ReconstituteRequisition(t *testing.T) {
 			}
 			if requisition.RequestedBy() != in.requestedBy {
 				t.Errorf("Requisition.RequestedBy() = %q, want %q", requisition.RequestedBy(), in.requestedBy)
+			}
+			if requisition.DepartmentID() != in.departmentID {
+				t.Errorf("Requisition.DepartmentID() = %q, want %q", requisition.DepartmentID(), in.departmentID)
 			}
 			if requisition.ItemID() != in.itemID {
 				t.Errorf("Requisition.ItemID() = %q, want %q", requisition.ItemID(), in.itemID)
@@ -567,4 +605,126 @@ func Test_Requisition_UpdateStatus_UnknownStatus(t *testing.T) {
 	if !requisition.UpdatedAt().Equal(now) {
 		t.Errorf("Requisition.UpdatedAt() = %v, want %v", requisition.UpdatedAt(), now)
 	}
+}
+
+func Test_Requisition_UpdateRequisition(t *testing.T) {
+	t.Parallel()
+
+	t.Run("successful update with all fields", func(t *testing.T) {
+		t.Parallel()
+		now := time.Now().Add(-1 * time.Hour)
+		req := mustRequisitionWithStatus(t, RequisitionStatusPending, now, now)
+
+		newQty := mustRequisitionQuantity(t, 5)
+		newCost := mustNairaMoney(t, 3000)
+		newJust := mustRequisitionJustification(t, "Updated justification")
+		newPriority := PriorityUrgent
+		newNeededBy := time.Now().Add(48 * time.Hour)
+
+		before := time.Now()
+		err := req.UpdateRequisition(&UpdateRequisitionInput{
+			Quantity:      newQty,
+			EstimatedCost: newCost,
+			Justification: newJust,
+			Priority:      &newPriority,
+			NeededBy:      &newNeededBy,
+		})
+		after := time.Now()
+
+		if err != nil {
+			t.Fatalf("UpdateRequisition() unexpected error: %v", err)
+		}
+		if req.Quantity() != newQty {
+			t.Errorf("Quantity() = %v, want %v", req.Quantity(), newQty)
+		}
+		if req.EstimatedCost() != newCost {
+			t.Errorf("EstimatedCost() = %v, want %v", req.EstimatedCost(), newCost)
+		}
+		if req.Justification() != newJust {
+			t.Errorf("Justification() = %v, want %v", req.Justification(), newJust)
+		}
+		if req.Priority() != PriorityUrgent {
+			t.Errorf("Priority() = %v, want %v", req.Priority(), PriorityUrgent)
+		}
+		if !req.NeededBy().Equal(newNeededBy) {
+			t.Errorf("NeededBy() = %v, want %v", req.NeededBy(), newNeededBy)
+		}
+		if req.UpdatedAt().Before(before) || req.UpdatedAt().After(after) {
+			t.Errorf("UpdatedAt() = %v, expected between %v and %v", req.UpdatedAt(), before, after)
+		}
+	})
+
+	t.Run("partial update without priority or neededBy", func(t *testing.T) {
+		t.Parallel()
+		now := time.Now().Add(-1 * time.Hour)
+		req := mustRequisitionWithStatus(t, RequisitionStatusPending, now, now)
+		originalPriority := req.Priority()
+		originalNeededBy := req.NeededBy()
+
+		newQty := mustRequisitionQuantity(t, 10)
+		err := req.UpdateRequisition(&UpdateRequisitionInput{
+			Quantity: newQty,
+		})
+
+		if err != nil {
+			t.Fatalf("UpdateRequisition() unexpected error: %v", err)
+		}
+		if req.Quantity() != newQty {
+			t.Errorf("Quantity() = %v, want %v", req.Quantity(), newQty)
+		}
+		if req.Priority() != originalPriority {
+			t.Errorf("Priority() should remain %v, got %v", originalPriority, req.Priority())
+		}
+		if !req.NeededBy().Equal(originalNeededBy) {
+			t.Errorf("NeededBy() should remain %v, got %v", originalNeededBy, req.NeededBy())
+		}
+	})
+
+	t.Run("fails when updating neededBy to past date", func(t *testing.T) {
+		t.Parallel()
+		req := mustRequisitionWithStatus(t, RequisitionStatusPending, time.Now(), time.Now())
+		past := time.Now().AddDate(0, 0, -1)
+
+		err := req.UpdateRequisition(&UpdateRequisitionInput{
+			NeededBy: &past,
+		})
+		if err == nil {
+			t.Fatal("expected error for past neededBy date, got nil")
+		}
+	})
+
+	t.Run("fails when updating with invalid priority", func(t *testing.T) {
+		t.Parallel()
+		req := mustRequisitionWithStatus(t, RequisitionStatusPending, time.Now(), time.Now())
+		invalidPriority := RequisitionPriority("invalid")
+
+		err := req.UpdateRequisition(&UpdateRequisitionInput{
+			Priority: &invalidPriority,
+		})
+		if err == nil {
+			t.Fatal("expected error for invalid priority, got nil")
+		}
+	})
+
+	t.Run("fails when requisition is not in pending status", func(t *testing.T) {
+		t.Parallel()
+		req := mustRequisitionWithStatus(t, RequisitionStatusApproved, time.Now(), time.Now())
+
+		err := req.UpdateRequisition(&UpdateRequisitionInput{
+			Quantity: mustRequisitionQuantity(t, 5),
+		})
+		if err == nil {
+			t.Fatal("expected error when updating approved requisition, got nil")
+		}
+	})
+
+	t.Run("fails with nil input", func(t *testing.T) {
+		t.Parallel()
+		req := mustRequisitionWithStatus(t, RequisitionStatusPending, time.Now(), time.Now())
+
+		err := req.UpdateRequisition(nil)
+		if err == nil {
+			t.Fatal("expected error for nil input, got nil")
+		}
+	})
 }

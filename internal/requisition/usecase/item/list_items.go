@@ -6,6 +6,7 @@ import (
 	"github.com/AppeiYA/requisition-system/internal/requisition/domain"
 	itemin "github.com/AppeiYA/requisition-system/internal/requisition/ports/in/item"
 	requisitionout "github.com/AppeiYA/requisition-system/internal/requisition/ports/out"
+	shareddomain "github.com/AppeiYA/requisition-system/internal/shared/domain"
 )
 
 type ListItemsUsecase struct {
@@ -28,5 +29,6 @@ func (uc *ListItemsUsecase) Execute(
 		return nil, err
 	}
 
-	return uc.itemRepo.ListItems(ctx, query.Limit, query.Offset)
+	limit, offset := shareddomain.Clamp(query.Limit, query.Offset)
+	return uc.itemRepo.ListItems(ctx, limit, offset)
 }

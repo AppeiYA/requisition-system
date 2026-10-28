@@ -7,6 +7,7 @@ type ItemCategoryPortIn struct {
 	UpdateItemCategoryUsecase     UpdateItemCategoryUsecaseInt
 	ActivateItemCategoryUsecase   ActivateItemCategoryUsecaseInt
 	DeactivateItemCategoryUsecase DeactivateItemCategoryUsecaseInt
+	ListItemsInCategoryUsecase    ListItemsInCategoryUsecaseInt
 }
 
 func NewItemCategoryPortIn(
@@ -16,6 +17,7 @@ func NewItemCategoryPortIn(
 	updateItemCategoryUsecase UpdateItemCategoryUsecaseInt,
 	activateItemCategoryUsecase ActivateItemCategoryUsecaseInt,
 	deactivateItemCategoryUsecase DeactivateItemCategoryUsecaseInt,
+	listItemsInCategoryUsecase ListItemsInCategoryUsecaseInt,
 ) *ItemCategoryPortIn {
 	return &ItemCategoryPortIn{
 		CreateItemCategoryUsecase:     createItemCategoryUsecase,
@@ -24,5 +26,6 @@ func NewItemCategoryPortIn(
 		UpdateItemCategoryUsecase:     updateItemCategoryUsecase,
 		ActivateItemCategoryUsecase:   activateItemCategoryUsecase,
 		DeactivateItemCategoryUsecase: deactivateItemCategoryUsecase,
+		ListItemsInCategoryUsecase:    listItemsInCategoryUsecase,
 	}
 }

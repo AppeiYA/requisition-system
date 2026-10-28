@@ -23,3 +23,13 @@ func MembershipFromDomain(membership *departmentdomain.DepartmentMembership) *Me
 		CreatedAt:    membership.CreatedAt(),
 	}
 }
+
+func (m MembershipModel) ToDomain() (*departmentdomain.DepartmentMembership, error) {
+	return departmentdomain.ReconstituteDepartmentMembership(
+		m.UserID,
+		m.DepartmentID,
+		m.JobTitle,
+		m.Status,
+		m.CreatedAt,
+	)
+}
