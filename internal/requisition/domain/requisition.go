@@ -8,20 +8,31 @@ import (
 	customerrors "github.com/AppeiYA/requisition-system/internal/shared/infrastructure/errors"
 )
 
-var RequisitionPrefixID = "req"
+var (
+	RequisitionPrefixID = "req"
+	DepartmentPrefixID  = "dpt"
+)
 
 var (
-	ErrInvalidRequisitionID     = customerrors.NewBadRequestError("invalid requisition ID")
-	ErrRequestedIDCannotBeEmpty = customerrors.NewBadRequestError("requestedBy cannot be empty")
-	ErrNilFields                = func(fieldName string) error {
+	ErrInvalidRequisitionID      = customerrors.NewBadRequestError("invalid requisition ID")
+	ErrRequestedIDCannotBeEmpty  = customerrors.NewBadRequestError("requestedBy cannot be empty")
+	ErrDepartmentIDCannotBeEmpty = customerrors.NewBadRequestError("departmentID cannot be empty")
+	ErrInvalidDepartmentID       = customerrors.NewBadRequestError("invalid department ID")
+	ErrNilFields                 = func(fieldName string) error {
 		return customerrors.NewBadRequestError(fieldName + " cannot be nil")
 	}
-	ErrInvalidNeededByDate = customerrors.NewBadRequestError("neededBy date cannot be in the past")
+	ErrInvalidNeededByDate      = customerrors.NewBadRequestError("neededBy date cannot be in the past")
+	ErrCannotUpdateRequisition  = customerrors.NewBadRequestError("cannot update requisition that is not in pending status")
+	ErrCannotTransitionToStatus = func(currentStatus, newStatus string) error {
+		return customerrors.NewBadRequestError("cannot transition from " + currentStatus + " to " + newStatus)
+	}
+	ErrUpdateInputCannotBeNil = customerrors.NewBadRequestError("update input cannot be nil")
 )
 
 type Requisition struct {
 	id                       string
 	requestedBy              string
+	departmentID             string
 	itemID                   string
 	categoryID               string
 	requestedItemName        *ItemName
@@ -36,7 +47,15 @@ type Requisition struct {
 	updatedAt                time.Time
 }
 
-func NewRequisition(id string, requestedBy string, itemID string, categoryID string, requestedItemName *ItemName, requestedItemDescription *ItemDescription, quantity *RequisitionQuantity, estimatedCost *shareddomain.Money, justification *RequisitionJustification, priority RequisitionPriority, neededBy time.Time) (*Requisition, error) {
+type UpdateRequisitionInput struct {
+	Quantity      *RequisitionQuantity
+	EstimatedCost *shareddomain.Money
+	Justification *RequisitionJustification
+	Priority      *RequisitionPriority
+	NeededBy      *time.Time
+}
+
+func NewRequisition(id string, requestedBy string, departmentID string, itemID string, categoryID string, requestedItemName *ItemName, requestedItemDescription *ItemDescription, quantity *RequisitionQuantity, estimatedCost *shareddomain.Money, justification *RequisitionJustification, priority RequisitionPriority, neededBy time.Time) (*Requisition, error) {
 	if id == "" || !strings.HasPrefix(id, RequisitionPrefixID) {
 		return nil, ErrInvalidRequisitionID
 	}
@@ -45,7 +64,14 @@ func NewRequisition(id string, requestedBy string, itemID string, categoryID str
 		return nil, ErrRequestedIDCannotBeEmpty
 	}
 
-	if categoryID != "" && !strings.HasPrefix(categoryID, CategoryPrefixID) {
+	if departmentID == "" {
+		return nil, ErrDepartmentIDCannotBeEmpty
+	}
+	if !strings.HasPrefix(departmentID, DepartmentPrefixID) {
+		return nil, ErrInvalidDepartmentID
+	}
+
+	if categoryID == "" || !strings.HasPrefix(categoryID, CategoryPrefixID) {
 		return nil, ErrInvalidCategoryID
 	}
 
@@ -69,7 +95,7 @@ func NewRequisition(id string, requestedBy string, itemID string, categoryID str
 		return nil, ErrNilFields("estimatedCost")
 	}
 
-	if neededBy.Before(time.Now()) {
+	if isDateBeforeToday(neededBy) {
 		return nil, ErrInvalidNeededByDate
 	}
 
@@ -84,6 +110,7 @@ func NewRequisition(id string, requestedBy string, itemID string, categoryID str
 	return &Requisition{
 		id:                       id,
 		requestedBy:              requestedBy,
+		departmentID:             departmentID,
 		categoryID:               categoryID,
 		itemID:                   itemID,
 		requestedItemName:        requestedItemName,
@@ -102,6 +129,7 @@ func NewRequisition(id string, requestedBy string, itemID string, categoryID str
 func ReconstituteRequisition(
 	id string,
 	requestedBy string,
+	departmentID string,
 	itemID string,
 	categoryID string,
 	requestedItemName string,
@@ -123,7 +151,14 @@ func ReconstituteRequisition(
 		return nil, ErrRequestedIDCannotBeEmpty
 	}
 
-	if categoryID != "" && !strings.HasPrefix(categoryID, CategoryPrefixID) {
+	if departmentID == "" {
+		return nil, ErrDepartmentIDCannotBeEmpty
+	}
+	if !strings.HasPrefix(departmentID, DepartmentPrefixID) {
+		return nil, ErrInvalidDepartmentID
+	}
+
+	if categoryID == "" || !strings.HasPrefix(categoryID, CategoryPrefixID) {
 		return nil, ErrInvalidCategoryID
 	}
 
@@ -164,6 +199,7 @@ func ReconstituteRequisition(
 	return &Requisition{
 		id:                       id,
 		requestedBy:              requestedBy,
+		departmentID:             departmentID,
 		itemID:                   itemID,
 		categoryID:               categoryID,
 		requestedItemName:        requestedItemNameObj,
@@ -185,6 +221,10 @@ func (r *Requisition) ID() string {
 
 func (r *Requisition) RequestedBy() string {
 	return r.requestedBy
+}
+
+func (r *Requisition) DepartmentID() string {
+	return r.departmentID
 }
 
 func (r *Requisition) ItemID() string {
@@ -233,6 +273,102 @@ func (r *Requisition) CreatedAt() time.Time {
 
 func (r *Requisition) UpdatedAt() time.Time {
 	return r.updatedAt
+}
+
+func (r *Requisition) UpdateRequisition(input *UpdateRequisitionInput) error {
+	if input == nil {
+		return ErrUpdateInputCannotBeNil
+	}
+
+	if r.status != RequisitionStatusPending {
+		return ErrCannotUpdateRequisition
+	}
+
+	if input.Quantity != nil {
+		r.quantity = input.Quantity
+	}
+
+	if input.EstimatedCost != nil {
+		r.estimatedCost = input.EstimatedCost
+	}
+
+	if input.Justification != nil {
+		r.justification = input.Justification
+	}
+
+	if input.Priority != nil {
+		if !input.Priority.IsValid() {
+			return ErrInvalidRequisitionPriority
+		}
+		r.priority = *input.Priority
+	}
+
+	if input.NeededBy != nil {
+		if isDateBeforeToday(*input.NeededBy) {
+			return ErrInvalidNeededByDate
+		}
+		r.neededBy = *input.NeededBy
+	}
+
+	r.updatedAt = time.Now()
+	return nil
+}
+
+func isDateBeforeToday(value time.Time) bool {
+	valueDate := value.UTC()
+	today := time.Now().UTC()
+	if valueDate.Year() != today.Year() {
+		return valueDate.Year() < today.Year()
+	}
+	if valueDate.Month() != today.Month() {
+		return valueDate.Month() < today.Month()
+	}
+	return valueDate.Day() < today.Day()
+}
+
+func (r *Requisition) SetApproved() error {
+	if !r.status.CanTransitionTo(RequisitionStatusApproved) {
+		return ErrCannotTransitionToStatus(r.status.String(), RequisitionStatusApproved.String())
+	}
+	r.status = RequisitionStatusApproved
+	r.updatedAt = time.Now()
+	return nil
+}
+
+func (r *Requisition) SetRejected() error {
+	if !r.status.CanTransitionTo(RequisitionStatusRejected) {
+		return ErrCannotTransitionToStatus(r.status.String(), RequisitionStatusRejected.String())
+	}
+	r.status = RequisitionStatusRejected
+	r.updatedAt = time.Now()
+	return nil
+}
+
+func (r *Requisition) SetInFulfillment() error {
+	if !r.status.CanTransitionTo(RequisitionStatusInFulfillment) {
+		return ErrCannotTransitionToStatus(r.status.String(), RequisitionStatusInFulfillment.String())
+	}
+	r.status = RequisitionStatusInFulfillment
+	r.updatedAt = time.Now()
+	return nil
+}
+
+func (r *Requisition) SetCompleted() error {
+	if !r.status.CanTransitionTo(RequisitionStatusCompleted) {
+		return ErrCannotTransitionToStatus(r.status.String(), RequisitionStatusCompleted.String())
+	}
+	r.status = RequisitionStatusCompleted
+	r.updatedAt = time.Now()
+	return nil
+}
+
+func (r *Requisition) SetCancelled() error {
+	if !r.status.CanTransitionTo(RequisitionStatusCancelled) {
+		return ErrCannotTransitionToStatus(r.status.String(), RequisitionStatusCancelled.String())
+	}
+	r.status = RequisitionStatusCancelled
+	r.updatedAt = time.Now()
+	return nil
 }
 
 func (r *Requisition) UpdateStatus(newStatus RequisitionStatus) bool {

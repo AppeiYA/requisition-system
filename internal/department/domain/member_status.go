@@ -3,10 +3,11 @@ package domain
 import customerrors "github.com/AppeiYA/requisition-system/internal/shared/infrastructure/errors"
 
 type MembershipStatus string
+
 const (
-	MembershipStatusActive MembershipStatus = "active"
+	MembershipStatusActive    MembershipStatus = "active"
 	MembershipStatusSuspended MembershipStatus = "suspended"
-	MembershipStatusInactive MembershipStatus = "inactive"
+	MembershipStatusInactive  MembershipStatus = "inactive"
 )
 
 var (

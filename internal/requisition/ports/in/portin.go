@@ -1,28 +1,19 @@
 package requisitionin
 
-type ItemCategoryPortIn struct {
-	CreateItemCategoryUsecase     CreateItemCategoryUsecaseInt
-	GetItemCategoryUsecase        GetItemCategoryUsecaseInt
-	ListItemCategoriesUsecase     ListItemCategoriesUsecaseInt
-	UpdateItemCategoryUsecase     UpdateItemCategoryUsecaseInt
-	ActivateItemCategoryUsecase   ActivateItemCategoryUsecaseInt
-	DeactivateItemCategoryUsecase DeactivateItemCategoryUsecaseInt
+type RequisitionPortIn struct {
+	CreateRequisitionUsecase      CreateRequisitionUsecaseInt
+	ListRequisitionsByUserUsecase ListRequisitionsByUserUsecaseInt
+	ListRequisitionsUsecase       ListRequisitionsUsecaseInt
 }
 
-func NewItemCategoryPortIn(
-	createItemCategoryUsecase CreateItemCategoryUsecaseInt,
-	getItemCategoryUsecase GetItemCategoryUsecaseInt,
-	listItemCategoriesUsecase ListItemCategoriesUsecaseInt,
-	updateItemCategoryUsecase UpdateItemCategoryUsecaseInt,
-	activateItemCategoryUsecase ActivateItemCategoryUsecaseInt,
-	deactivateItemCategoryUsecase DeactivateItemCategoryUsecaseInt,
-) *ItemCategoryPortIn {
-	return &ItemCategoryPortIn{
-		CreateItemCategoryUsecase:     createItemCategoryUsecase,
-		GetItemCategoryUsecase:        getItemCategoryUsecase,
-		ListItemCategoriesUsecase:     listItemCategoriesUsecase,
-		UpdateItemCategoryUsecase:     updateItemCategoryUsecase,
-		ActivateItemCategoryUsecase:   activateItemCategoryUsecase,
-		DeactivateItemCategoryUsecase: deactivateItemCategoryUsecase,
+func NewRequisitionPortIn(
+	createRequisitionUsecase CreateRequisitionUsecaseInt,
+	listRequisitionsByUserUsecase ListRequisitionsByUserUsecaseInt,
+	listRequisitionsUsecase ListRequisitionsUsecaseInt,
+) *RequisitionPortIn {
+	return &RequisitionPortIn{
+		CreateRequisitionUsecase:      createRequisitionUsecase,
+		ListRequisitionsByUserUsecase: listRequisitionsByUserUsecase,
+		ListRequisitionsUsecase:       listRequisitionsUsecase,
 	}
 }

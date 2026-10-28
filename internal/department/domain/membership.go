@@ -10,11 +10,11 @@ import (
 var UserIDPrefix = "usr"
 
 type DepartmentMembership struct {
-	userID string
+	userID       string
 	departmentID string
-	jobTitle *MemberJobTitle
-	status MembershipStatus
-	createdAt time.Time
+	jobTitle     *MemberJobTitle
+	status       MembershipStatus
+	createdAt    time.Time
 }
 
 var (
@@ -35,11 +35,37 @@ func NewDepartmentMembership(userID, departmentID string, jobTitle *MemberJobTit
 	}
 
 	return &DepartmentMembership{
-		userID: userID,
+		userID:       userID,
 		departmentID: departmentID,
-		jobTitle: jobTitle,
-		status: status,
-		createdAt: time.Now(),
+		jobTitle:     jobTitle,
+		status:       status,
+		createdAt:    time.Now(),
+	}, nil
+}
+
+func ReconstituteDepartmentMembership(userID, departmentID, jobTitle, status string, createdAt time.Time) (*DepartmentMembership, error) {
+	if userID == "" || !strings.HasPrefix(userID, UserIDPrefix) {
+		return nil, ErrInvalidUserID
+	}
+	if departmentID == "" || !strings.HasPrefix(departmentID, DepartmentIDPrefix) {
+		return nil, ErrInvalidDepartmentID
+	}
+
+	validJobTitle, err := NewMemberJobTitle(jobTitle)
+	if err != nil {
+		return nil, err
+	}
+	validStatus, err := NewMembershipStatus(status)
+	if err != nil {
+		return nil, err
+	}
+
+	return &DepartmentMembership{
+		userID:       userID,
+		departmentID: departmentID,
+		jobTitle:     validJobTitle,
+		status:       validStatus,
+		createdAt:    createdAt,
 	}, nil
 }
 
@@ -61,4 +87,4 @@ func (dm *DepartmentMembership) Status() MembershipStatus {
 
 func (dm *DepartmentMembership) CreatedAt() time.Time {
 	return dm.createdAt
-}	
+}

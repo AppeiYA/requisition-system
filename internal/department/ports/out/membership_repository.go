@@ -8,4 +8,5 @@ import (
 
 type MembershipRepository interface {
 	SaveMembership(ctx context.Context, membership *departmentdomain.DepartmentMembership) error
+	GetMembershipByUserID(ctx context.Context, userID string) (*departmentdomain.DepartmentMembership, error)
 }

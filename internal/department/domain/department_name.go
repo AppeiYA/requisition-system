@@ -7,7 +7,7 @@ type DepartmentName struct {
 }
 
 var (
-	ErrEmptyDepartmentName = customerrors.NewBadRequestError("Department name cannot be empty")
+	ErrEmptyDepartmentName   = customerrors.NewBadRequestError("Department name cannot be empty")
 	ErrDepartmentNameTooLong = customerrors.NewBadRequestError("Department name cannot exceed 60 characters")
 )
 

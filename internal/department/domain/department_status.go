@@ -2,9 +2,10 @@ package domain
 
 import customerrors "github.com/AppeiYA/requisition-system/internal/shared/infrastructure/errors"
 
-type DepartmentStatus string 
+type DepartmentStatus string
+
 const (
-	DepartmentStatusActive DepartmentStatus = "active"
+	DepartmentStatusActive   DepartmentStatus = "active"
 	DepartmentStatusInactive DepartmentStatus = "inactive"
 )
 

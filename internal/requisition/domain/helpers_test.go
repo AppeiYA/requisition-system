@@ -101,6 +101,7 @@ func mustItemWithStatus(t *testing.T, status ItemStatus) *Item {
 		"Laptop",
 		"Business laptop",
 		"cat_123",
+		0,
 		status.String(),
 		time.Now(),
 	)
@@ -121,6 +122,7 @@ func mustRequisitionWithStatus(
 	requisition, err := ReconstituteRequisition(
 		"req_123",
 		"usr_123",
+		"dpt_123",
 		"itm_123",
 		"cat_123",
 		"Laptop",

@@ -124,7 +124,7 @@ func (a *App) Run() error {
 
 	departmentModule := a.buildDepartment(baseRepo, idGen, redisCache)
 
-	requisitionModule := a.buildRequisition(baseRepo, idGen, redisCache)
+	requisitionModule := a.buildRequisition(baseRepo, idGen, redisCache, departmentModule.MembershipRepository())
 
 	invitationModule := a.buildInvitation(
 		baseRepo,
@@ -153,6 +153,8 @@ func (a *App) Run() error {
 		adminModule.Handler(),
 		departmentModule.Handler(),
 		requisitionModule.ItemCategoryHandler(),
+		requisitionModule.ItemHandler(),
+		requisitionModule.RequisitionHandler(),
 		identityModule.AuthMiddleware(),
 	); err != nil {
 		return err

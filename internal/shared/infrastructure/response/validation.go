@@ -48,6 +48,17 @@ func ValidationErrors(err error) []FieldError {
 		return nil
 	}
 
+	var fieldValidationErr interface {
+		ValidationField() string
+		ValidationMessage() string
+	}
+	if errors.As(err, &fieldValidationErr) {
+		return []FieldError{{
+			Field:   fieldValidationErr.ValidationField(),
+			Message: fieldValidationErr.ValidationMessage(),
+		}}
+	}
+
 	var validationErrs validator.ValidationErrors
 	if errors.As(err, &validationErrs) {
 		return fromValidationErrors(validationErrs)
