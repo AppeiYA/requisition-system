@@ -22,6 +22,7 @@ func (a *App) buildRequisition(
 	idGen requisitionout.IDGenerator,
 	cache cache.Cache,
 	membershipRepo requisitionout.MembershipLookup,
+	txManager requisitionout.TransactionManager,
 ) *requisition.RequisitionModule {
 	itemCategoryRepo := requisitionpostgres.NewItemCategoryRepository(baseRepo, cache)
 	itemRepo := requisitionpostgres.NewItemRepository(baseRepo, cache)
@@ -66,7 +67,7 @@ func (a *App) buildRequisition(
 
 	requisitionRepo := requisitionpostgres.NewRequisitionRepository(baseRepo)
 	createRequisitionUC := requisitionusecase.NewCreateRequisitionUsecase(
-		requisitionRepo, itemCategoryRepo, itemRepo, membershipRepo, idGen,
+		requisitionRepo, itemCategoryRepo, itemRepo, membershipRepo, idGen, txManager,
 	)
 	listRequisitionsByUserUC := requisitionusecase.NewListRequisitionsByUserUsecase(requisitionRepo, nil)
 	listRequisitionsUC := requisitionusecase.NewListRequisitionsUsecase(requisitionRepo)

@@ -9,6 +9,8 @@ import (
 
 type CreateRequisitionCommand struct {
 	UserID                   string
+	ReferenceCode            string
+	Lines                    []CreateRequisitionLine
 	CategoryID               string
 	ItemID                   string
 	RequestedItemName        string
@@ -18,6 +20,16 @@ type CreateRequisitionCommand struct {
 	Justification            string
 	Priority                 string
 	NeededBy                 time.Time
+}
+
+type CreateRequisitionLine struct {
+	CategoryID               string
+	ItemID                   string
+	RequestedItemName        string
+	RequestedItemDescription string
+	Quantity                 int
+	EstimatedUnitAmount      float64
+	Notes                    string
 }
 
 type CreateRequisitionUsecaseInt interface {

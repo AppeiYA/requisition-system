@@ -22,101 +22,202 @@ func NewRequisitionRepository(repository db.Repository) *RequisitionRepository {
 	return &RequisitionRepository{repository: repository}
 }
 
+const requisitionColumns = `
+	id, reference_code, requested_by, department_id, justification,
+	priority, needed_by, status, created_at, updated_at
+`
+
 var saveRequisitionQuery = `
 	INSERT INTO requisitions (
-		id, requested_by, department_id, item_id, category_id, requested_item_name,
-		requested_item_description, quantity, estimated_cost, justification,
+		id, reference_code, requested_by, department_id, justification,
 		priority, needed_by, status, created_at, updated_at
 	) VALUES (
-		:id, :requested_by, :department_id, :item_id, :category_id, :requested_item_name,
-		:requested_item_description, :quantity, :estimated_cost, :justification,
+		:id, :reference_code, :requested_by, :department_id, :justification,
 		:priority, :needed_by, :status, :created_at, :updated_at
 	)
 `
 
 func (r *RequisitionRepository) SaveRequisition(ctx context.Context, requisition *requisitiondomain.Requisition) error {
-	_, err := r.repository.Executor(ctx).NamedExecContext(ctx, saveRequisitionQuery, models.RequisitionFromDomain(requisition))
-	return err
+	executor := r.repository.Executor(ctx)
+	if _, err := executor.NamedExecContext(ctx, saveRequisitionQuery, models.RequisitionFromDomain(requisition)); err != nil {
+		return err
+	}
+
+	for _, requestedItem := range requisition.RequestedItems() {
+		if _, err := executor.NamedExecContext(ctx, `
+			INSERT INTO requested_items (
+				id, name, category_id, description, created_by,
+				review_status, promoted_item_id, created_at
+			) VALUES (
+				:id, :name, :category_id, :description, :created_by,
+				:review_status, :promoted_item_id, :created_at
+			)
+		`, models.RequestedItemFromDomain(requestedItem)); err != nil {
+			return err
+		}
+	}
+
+	for _, item := range requisition.Items() {
+		if item.RequestedItemID() != "" && !hasRequestedItem(requisition.RequestedItems(), item.RequestedItemID()) {
+			return customerrors.NewBadRequestError("requested item is missing from requisition aggregate")
+		}
+		model, err := models.RequisitionItemFromDomain(item)
+		if err != nil {
+			return err
+		}
+		if _, err := executor.NamedExecContext(ctx, `
+			INSERT INTO requisition_items (
+				id, requisition_id, line_number, item_id, requested_item_id,
+				item_name_snapshot, quantity, estimated_unit_amount, notes, created_at
+			) VALUES (
+				:id, :requisition_id, :line_number, :item_id, :requested_item_id,
+				:item_name_snapshot, :quantity, :estimated_unit_amount, :notes, :created_at
+			)
+		`, model); err != nil {
+			return err
+		}
+	}
+
+	for _, history := range requisition.StatusHistory() {
+		if _, err := executor.NamedExecContext(ctx, `
+			INSERT INTO requisition_status_history (
+				id, requisition_id, sequence, from_status, to_status,
+				acted_by, actor_role, reason, created_at
+			) VALUES (
+				:id, :requisition_id, :sequence, :from_status, :to_status,
+				:acted_by, :actor_role, :reason, :created_at
+			)
+		`, models.StatusHistoryFromDomain(history)); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
-var getRequisitionByIDQuery = `
-	SELECT id, requested_by, department_id, item_id, category_id, requested_item_name,
-		requested_item_description, quantity, estimated_cost, justification,
-		priority, needed_by, status, created_at, updated_at
-	FROM requisitions WHERE id = $1
-`
+func hasRequestedItem(items []*requisitiondomain.RequestedItem, id string) bool {
+	for _, item := range items {
+		if item != nil && item.ID() == id {
+			return true
+		}
+	}
+	return false
+}
 
 func (r *RequisitionRepository) GetRequisitionByID(ctx context.Context, id string) (*requisitiondomain.Requisition, error) {
 	var model models.RequisitionModel
-	if err := r.repository.Executor(ctx).GetContext(ctx, &model, getRequisitionByIDQuery, id); err != nil {
+	if err := r.repository.Executor(ctx).GetContext(ctx, &model,
+		`SELECT `+requisitionColumns+` FROM requisitions WHERE id = $1`, id); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrRequisitionNotFound
 		}
 		return nil, err
 	}
-	return model.ToDomain()
+	return r.loadAggregate(ctx, model)
 }
 
 func (r *RequisitionRepository) UpdateRequisition(ctx context.Context, requisition *requisitiondomain.Requisition) error {
 	_, err := r.repository.Executor(ctx).NamedExecContext(ctx, `
-		UPDATE requisitions SET quantity = :quantity, estimated_cost = :estimated_cost,
-			justification = :justification, priority = :priority, needed_by = :needed_by,
-			status = :status, updated_at = :updated_at WHERE id = :id
+		UPDATE requisitions
+		SET justification = :justification, priority = :priority,
+			needed_by = :needed_by, updated_at = :updated_at
+		WHERE id = :id
 	`, models.RequisitionFromDomain(requisition))
 	return err
 }
 
-var listRequisitionsByUserIDQuery = `
-	SELECT id, requested_by, department_id, item_id, category_id, requested_item_name,
-		requested_item_description, quantity, estimated_cost, justification,
-		priority, needed_by, status, created_at, updated_at
-	FROM requisitions
-	WHERE requested_by = $1
-	ORDER BY created_at DESC
-	LIMIT $2 OFFSET $3
-`
-
 func (r *RequisitionRepository) ListRequisitionsByUserID(ctx context.Context, userID string, limit int, offset int) ([]*requisitiondomain.Requisition, error) {
-	var modelsList []models.RequisitionModel
-	if err := r.repository.Executor(ctx).SelectContext(ctx, &modelsList, listRequisitionsByUserIDQuery, userID, limit, offset); err != nil {
+	var rows []models.RequisitionModel
+	if err := r.repository.Executor(ctx).SelectContext(ctx, &rows,
+		`SELECT `+requisitionColumns+` FROM requisitions
+		 WHERE requested_by = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3`,
+		userID, limit, offset); err != nil {
 		return nil, err
 	}
-
-	requisitions := make([]*requisitiondomain.Requisition, 0, len(modelsList))
-	for _, model := range modelsList {
-		requisition, err := model.ToDomain()
-		if err != nil {
-			return nil, err
-		}
-		requisitions = append(requisitions, requisition)
-	}
-	return requisitions, nil
+	return r.loadAggregates(ctx, rows)
 }
 
-var listRequisitionsQuery = `
-	SELECT id, requested_by, department_id, item_id, category_id, requested_item_name,
-		requested_item_description, quantity, estimated_cost, justification,
-		priority, needed_by, status, created_at, updated_at
-	FROM requisitions
-	ORDER BY created_at DESC
-	LIMIT $1 OFFSET $2
-`
-
 func (r *RequisitionRepository) ListRequisitions(ctx context.Context, limit int, offset int) ([]*requisitiondomain.Requisition, error) {
-	var modelsList []models.RequisitionModel
-	if err := r.repository.Executor(ctx).SelectContext(ctx, &modelsList, listRequisitionsQuery, limit, offset); err != nil {
+	var rows []models.RequisitionModel
+	if err := r.repository.Executor(ctx).SelectContext(ctx, &rows,
+		`SELECT `+requisitionColumns+` FROM requisitions
+		 ORDER BY created_at DESC LIMIT $1 OFFSET $2`, limit, offset); err != nil {
 		return nil, err
 	}
+	return r.loadAggregates(ctx, rows)
+}
 
-	requisitions := make([]*requisitiondomain.Requisition, 0, len(modelsList))
-	for _, model := range modelsList {
-		requisition, err := model.ToDomain()
+func (r *RequisitionRepository) loadAggregates(ctx context.Context, rows []models.RequisitionModel) ([]*requisitiondomain.Requisition, error) {
+	result := make([]*requisitiondomain.Requisition, 0, len(rows))
+	for _, row := range rows {
+		requisition, err := r.loadAggregate(ctx, row)
 		if err != nil {
 			return nil, err
 		}
-		requisitions = append(requisitions, requisition)
+		result = append(result, requisition)
 	}
-	return requisitions, nil
+	return result, nil
+}
+
+func (r *RequisitionRepository) loadAggregate(ctx context.Context, model models.RequisitionModel) (*requisitiondomain.Requisition, error) {
+	executor := r.repository.Executor(ctx)
+	var itemModels []models.RequisitionItemModel
+	if err := executor.SelectContext(ctx, &itemModels, `
+		SELECT id, requisition_id, line_number, item_id, requested_item_id,
+			item_name_snapshot, quantity, estimated_unit_amount, notes, created_at
+		FROM requisition_items WHERE requisition_id = $1 ORDER BY line_number
+	`, model.ID); err != nil {
+		return nil, err
+	}
+	items := make([]*requisitiondomain.RequisitionItem, 0, len(itemModels))
+	for _, itemModel := range itemModels {
+		item, err := itemModel.ToDomain()
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+
+	var historyModels []models.RequisitionStatusHistoryModel
+	if err := executor.SelectContext(ctx, &historyModels, `
+		SELECT id, requisition_id, sequence, from_status, to_status,
+			acted_by, actor_role, reason, created_at
+		FROM requisition_status_history WHERE requisition_id = $1 ORDER BY sequence
+	`, model.ID); err != nil {
+		return nil, err
+	}
+	history := make([]*requisitiondomain.RequisitionStatusHistory, 0, len(historyModels))
+	for _, historyModel := range historyModels {
+		entry, err := historyModel.ToDomain()
+		if err != nil {
+			return nil, err
+		}
+		history = append(history, entry)
+	}
+	var requestedItemModels []models.RequestedItemModel
+	if err := executor.SelectContext(ctx, &requestedItemModels, `
+		SELECT DISTINCT ri.requested_item_id AS id, req.name, req.category_id,
+			req.description, req.created_by, req.review_status,
+			req.promoted_item_id, req.created_at
+		FROM requisition_items ri
+		JOIN requested_items req ON req.id = ri.requested_item_id
+		WHERE ri.requisition_id = $1 AND ri.requested_item_id IS NOT NULL
+	`, model.ID); err != nil {
+		return nil, err
+	}
+	requestedItems := make([]*requisitiondomain.RequestedItem, 0, len(requestedItemModels))
+	for _, requestedItemModel := range requestedItemModels {
+		requestedItem, err := requestedItemModel.ToDomain()
+		if err != nil {
+			return nil, err
+		}
+		requestedItems = append(requestedItems, requestedItem)
+	}
+
+	return requisitiondomain.ReconstituteRequisitionAggregateWithRequestedItems(
+		model.ID, model.ReferenceCode, model.RequestedBy, model.DepartmentID,
+		model.Priority, model.NeededBy, model.Justification, model.Status,
+		model.CreatedAt, model.UpdatedAt, items, requestedItems, history,
+	)
 }
 
 var _ requisitionout.RequisitionRepository = (*RequisitionRepository)(nil)

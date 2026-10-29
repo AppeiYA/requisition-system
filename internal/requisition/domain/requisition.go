@@ -14,23 +14,26 @@ var (
 )
 
 var (
-	ErrInvalidRequisitionID      = customerrors.NewBadRequestError("invalid requisition ID")
-	ErrRequestedIDCannotBeEmpty  = customerrors.NewBadRequestError("requestedBy cannot be empty")
-	ErrDepartmentIDCannotBeEmpty = customerrors.NewBadRequestError("departmentID cannot be empty")
 	ErrInvalidDepartmentID       = customerrors.NewBadRequestError("invalid department ID")
 	ErrNilFields                 = func(fieldName string) error {
 		return customerrors.NewBadRequestError(fieldName + " cannot be nil")
 	}
-	ErrInvalidNeededByDate      = customerrors.NewBadRequestError("neededBy date cannot be in the past")
-	ErrCannotUpdateRequisition  = customerrors.NewBadRequestError("cannot update requisition that is not in pending status")
 	ErrCannotTransitionToStatus = func(currentStatus, newStatus string) error {
 		return customerrors.NewBadRequestError("cannot transition from " + currentStatus + " to " + newStatus)
 	}
+	ErrInvalidReferenceCode   = customerrors.NewBadRequestError("invalid requisition reference code")
+	ErrRequisitionNeedsItem   = customerrors.NewBadRequestError("requisition must contain at least one item")
+	ErrInvalidRequisitionID    = customerrors.NewBadRequestError("invalid requisition ID")
+	ErrInvalidNeededByDate       = customerrors.NewBadRequestError("needed by date cannot be in the past")
+	ErrDepartmentIDCannotBeEmpty = customerrors.NewBadRequestError("department ID cannot be empty")
+	ErrRequestedIDCannotBeEmpty = customerrors.NewBadRequestError("requested by ID cannot be empty")
 	ErrUpdateInputCannotBeNil = customerrors.NewBadRequestError("update input cannot be nil")
+	ErrCannotUpdateRequisition = customerrors.NewBadRequestError("cannot update requisition")
 )
 
 type Requisition struct {
 	id                       string
+	referenceCode            string
 	requestedBy              string
 	departmentID             string
 	itemID                   string
@@ -45,6 +48,9 @@ type Requisition struct {
 	status                   RequisitionStatus
 	createdAt                time.Time
 	updatedAt                time.Time
+	items                    []*RequisitionItem
+	requestedItems           []*RequestedItem
+	statusHistory            []*RequisitionStatusHistory
 }
 
 type UpdateRequisitionInput struct {
