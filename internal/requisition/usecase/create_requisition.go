@@ -19,6 +19,7 @@ var (
 	ErrItemNotInCategory  = customerrors.NewBadRequestError("selected item does not belong to the selected category")
 	ErrInactiveItem       = customerrors.NewBadRequestError("selected item is inactive")
 	ErrInactiveMembership = customerrors.NewForbiddenError("department membership is not active")
+	ErrDepartmentMismatch = customerrors.NewForbiddenError("requisition department does not match the authenticated user's department")
 )
 
 type CreateRequisitionUsecase struct {
@@ -56,19 +57,25 @@ func (uc *CreateRequisitionUsecase) Execute(ctx context.Context, cmd requisition
 		return nil, ErrInactiveMembership
 	}
 
+	departmentID := cmd.DepartmentID
+	if departmentID == "" {
+		departmentID = membership.DepartmentID()
+	}
+	if !strings.HasPrefix(departmentID, domain.DepartmentPrefixID) {
+		return nil, domain.ErrInvalidDepartmentID
+	}
+	if departmentID != membership.DepartmentID() {
+		return nil, ErrDepartmentMismatch
+	}
+
 	lines := cmd.Lines
 	if len(lines) == 0 {
-		lines = []requisitionin.CreateRequisitionLine{{
-			CategoryID: cmd.CategoryID, ItemID: cmd.ItemID,
-			RequestedItemName:        cmd.RequestedItemName,
-			RequestedItemDescription: cmd.RequestedItemDescription,
-			Quantity:                 cmd.Quantity, EstimatedUnitAmount: cmd.EstimatedCost,
-		}}
+		return nil, domain.ErrRequisitionNeedsItem
 	}
 	priority := cmd.Priority
 	if priority == "" {
 		priority = domain.PriorityMedium.String()
-	} else if priority == "normal" {
+	} else if priority == domain.PriorityNormal.String() {
 		priority = domain.PriorityMedium.String()
 	}
 	referenceCode := cmd.ReferenceCode
@@ -105,7 +112,7 @@ func (uc *CreateRequisitionUsecase) Execute(ctx context.Context, cmd requisition
 		return nil, err
 	}
 	requisition, err := domain.NewSubmittedRequisitionWithRequestedItems(
-		requisitionID, referenceCode, cmd.UserID, membership.DepartmentID(),
+		requisitionID, referenceCode, cmd.UserID, departmentID,
 		priorityValue, cmd.NeededBy, justification, items, requestedItems,
 	)
 	if err != nil {
@@ -143,51 +150,78 @@ func (uc *CreateRequisitionUsecase) buildLine(
 	lineNumber int,
 	cmd requisitionin.CreateRequisitionLine,
 ) (*domain.RequisitionItem, *domain.RequestedItem, error) {
-	if cmd.CategoryID == "" || !strings.HasPrefix(cmd.CategoryID, domain.CategoryPrefixID) {
-		return nil, nil, domain.ErrInvalidCategoryID
-	}
-	category, err := uc.categoryRepo.GetItemCategoryByID(ctx, cmd.CategoryID)
-	if err != nil {
-		return nil, nil, err
-	}
-	if category.Status() != domain.CategoryStatusActive {
-		return nil, nil, ErrInactiveCategory
+	return buildRequisitionLine(
+		ctx, uc.categoryRepo, uc.itemRepo, uc.idGenerator,
+		requisitionID, createdBy, lineNumber, cmd,
+	)
+}
+
+func buildRequisitionLine(
+	ctx context.Context,
+	categoryRepo requisitionout.ItemCategoryRepository,
+	itemRepo requisitionout.ItemRepository,
+	idGenerator requisitionout.IDGenerator,
+	requisitionID string,
+	createdBy string,
+	lineNumber int,
+	cmd requisitionin.CreateRequisitionLine,
+) (*domain.RequisitionItem, *domain.RequestedItem, error) {
+	hasCatalogueItem := cmd.ItemID != ""
+	hasRequestedItem := cmd.RequestedItem != nil
+	if hasCatalogueItem == hasRequestedItem {
+		return nil, nil, domain.ErrInvalidItemSelection
 	}
 
 	itemID := cmd.ItemID
 	requestedItemID := ""
 	var name *domain.ItemName
 	var requestedItem *domain.RequestedItem
-	if itemID != "" {
+
+	if hasCatalogueItem {
 		if !strings.HasPrefix(itemID, domain.ItemPrefixID) {
 			return nil, nil, domain.ErrInvalidItemID
 		}
-		item, err := uc.itemRepo.GetItemByID(ctx, itemID)
+		item, err := itemRepo.GetItemByID(ctx, itemID)
 		if err != nil {
 			return nil, nil, err
 		}
 		if item.Status() != domain.ItemStatusActive {
 			return nil, nil, ErrInactiveItem
 		}
-		if item.CategoryID() != cmd.CategoryID {
-			return nil, nil, ErrItemNotInCategory
+		category, err := categoryRepo.GetItemCategoryByID(ctx, item.CategoryID())
+		if err != nil {
+			return nil, nil, err
+		}
+		if category.Status() != domain.CategoryStatusActive {
+			return nil, nil, ErrInactiveCategory
 		}
 		name = item.Name()
 	} else {
-		name, err = domain.NewItemName(cmd.RequestedItemName)
+		requested := cmd.RequestedItem
+		if !strings.HasPrefix(requested.CategoryID, domain.CategoryPrefixID) {
+			return nil, nil, domain.ErrInvalidCategoryID
+		}
+		category, err := categoryRepo.GetItemCategoryByID(ctx, requested.CategoryID)
 		if err != nil {
 			return nil, nil, err
 		}
-		description, err := domain.NewItemDescription(cmd.RequestedItemDescription)
+		if category.Status() != domain.CategoryStatusActive {
+			return nil, nil, ErrInactiveCategory
+		}
+		name, err = domain.NewItemName(requested.Name)
 		if err != nil {
 			return nil, nil, err
 		}
-		requestedItemID, err = uc.idGenerator.GenerateID(domain.RequestedItemPrefixID)
+		description, err := domain.NewItemDescription(requested.Description)
+		if err != nil {
+			return nil, nil, err
+		}
+		requestedItemID, err = idGenerator.GenerateID(domain.RequestedItemPrefixID)
 		if err != nil {
 			return nil, nil, err
 		}
 		requestedItem, err = domain.NewRequestedItem(
-			requestedItemID, name, cmd.CategoryID, description, createdBy,
+			requestedItemID, name, requested.CategoryID, description, createdBy,
 		)
 		if err != nil {
 			return nil, nil, err
@@ -198,11 +232,11 @@ func (uc *CreateRequisitionUsecase) buildLine(
 	if err != nil {
 		return nil, nil, err
 	}
-	amount, err := newNonNegativeMoney(cmd.EstimatedUnitAmount)
+	amount, err := shareddomain.NewNairaMoney(cmd.EstimatedUnitAmount)
 	if err != nil {
 		return nil, nil, err
 	}
-	lineID, err := uc.idGenerator.GenerateID(domain.RequisitionItemPrefixID)
+	lineID, err := idGenerator.GenerateID(domain.RequisitionItemPrefixID)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -211,8 +245,4 @@ func (uc *CreateRequisitionUsecase) buildLine(
 		name, quantity, amount, cmd.Notes,
 	)
 	return line, requestedItem, err
-}
-
-func newNonNegativeMoney(amount float64) (*shareddomain.Money, error) {
-	return shareddomain.NewNairaMoney(amount)
 }

@@ -139,6 +139,7 @@ Base URL: `http://localhost:8080/api/v1` — interactive docs at
 | PATCH  | `/api/v1/items/:id`         | admin        | Partially update an item's name/description/category/unit cost |
 | PATCH  | `/api/v1/items/:id/activate`   | admin | Activate an item |
 | PATCH  | `/api/v1/items/:id/deactivate` | admin | Deactivate an item |
+| PATCH  | `/api/v1/requisitions/:id` | access token | Update an owned pending requisition |
 
 Authenticated requests need `Authorization: Bearer <access token>`.
 

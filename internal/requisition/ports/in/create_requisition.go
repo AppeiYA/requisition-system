@@ -8,28 +8,33 @@ import (
 )
 
 type CreateRequisitionCommand struct {
-	UserID                   string
-	ReferenceCode            string
-	Lines                    []CreateRequisitionLine
-	CategoryID               string
-	ItemID                   string
-	RequestedItemName        string
-	RequestedItemDescription string
-	Quantity                 int
-	EstimatedCost            float64
-	Justification            string
-	Priority                 string
-	NeededBy                 time.Time
+	UserID        string
+	ReferenceCode string
+	DepartmentID  string
+	Lines         []CreateRequisitionLine
+	Justification string
+	Priority      string
+	NeededBy      time.Time
 }
 
+// CreateRequisitionLine describes one requisition line. Exactly one of ItemID
+// and RequestedItem must be set. EstimatedUnitAmount is expressed in the
+// currency's major unit (naira for NGN); persistence converts it to minor
+// units.
 type CreateRequisitionLine struct {
-	CategoryID               string
-	ItemID                   string
-	RequestedItemName        string
-	RequestedItemDescription string
-	Quantity                 int
-	EstimatedUnitAmount      float64
-	Notes                    string
+	ItemID              string
+	RequestedItem       *CreateRequestedItem
+	Quantity            int
+	EstimatedUnitAmount float64
+	Notes               string
+}
+
+// CreateRequestedItem is the free-filled item payload for a requisition line
+// that does not reference the catalogue.
+type CreateRequestedItem struct {
+	Name        string
+	CategoryID  string
+	Description string
 }
 
 type CreateRequisitionUsecaseInt interface {

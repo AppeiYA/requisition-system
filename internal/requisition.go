@@ -69,9 +69,21 @@ func (a *App) buildRequisition(
 	createRequisitionUC := requisitionusecase.NewCreateRequisitionUsecase(
 		requisitionRepo, itemCategoryRepo, itemRepo, membershipRepo, idGen, txManager,
 	)
+	updateRequisitionUC := requisitionusecase.NewUpdateRequisitionUsecase(
+		requisitionRepo, itemCategoryRepo, itemRepo, membershipRepo, idGen, txManager,
+	)
 	listRequisitionsByUserUC := requisitionusecase.NewListRequisitionsByUserUsecase(requisitionRepo, nil)
 	listRequisitionsUC := requisitionusecase.NewListRequisitionsUsecase(requisitionRepo)
-	requisitionPortIn := requisitionin.NewRequisitionPortIn(createRequisitionUC, listRequisitionsByUserUC, listRequisitionsUC)
+	getRequisitionUC := requisitionusecase.NewGetRequisitionUsecase(requisitionRepo)
+	transitionRequisitionUC := requisitionusecase.NewTransitionRequisitionUsecase(requisitionRepo, idGen, txManager)
+	requisitionPortIn := requisitionin.NewRequisitionPortIn(
+		createRequisitionUC,
+		updateRequisitionUC,
+		listRequisitionsByUserUC,
+		listRequisitionsUC,
+		getRequisitionUC,
+		transitionRequisitionUC,
+	)
 	requisitionHandler := requisitionhttp.NewRequisitionHandler(requisitionPortIn)
 
 	return requisition.NewRequisitionModule(

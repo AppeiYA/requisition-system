@@ -19,7 +19,8 @@ var (
 	ErrInvalidStatusSequence  = customerrors.NewBadRequestError("status history sequence must be greater than zero")
 	ErrStatusReasonRequired   = customerrors.NewBadRequestError("reason is required for rejected or cancelled status")
 	ErrStatusMustChange       = customerrors.NewBadRequestError("status must change")
-	ErrInvalidActorRole	  = customerrors.NewBadRequestError("invalid actor role")
+	ErrInvalidActorRole       = customerrors.NewBadRequestError("invalid actor role")
+	ErrStatusHistoryRequired  = customerrors.NewBadRequestError("requisition must have an initial status history before transitioning")
 )
 
 const StatusHistoryPrefixID = "rsh"

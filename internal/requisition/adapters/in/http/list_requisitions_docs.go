@@ -14,7 +14,7 @@ var (
 // listMyRequisitionsDoc documents the listMy handler in requisition_handler.go.
 //
 //	@Summary		List my requisitions
-//	@Description	Returns requisitions created by the authenticated user, ordered by creation time (newest first). Requires an access token.
+//	@Description	Returns requisitions created by the authenticated user, ordered by creation time (newest first), including lines, derived totals, and status history. Amounts are expressed in major currency units (naira for NGN) while stored internally as minor units. Requires an access token.
 //	@Tags			requisition
 //	@Produce		json
 //	@Security		BearerAuth

@@ -268,6 +268,25 @@ func (r *Requisition) IsEditable() bool {
 	return r.status == RequisitionStatusPending
 }
 
+func (r *Requisition) ReplaceItems(items []*RequisitionItem, requestedItems []*RequestedItem) error {
+	if !r.IsEditable() {
+		return ErrCannotUpdateRequisition
+	}
+	if len(items) == 0 {
+		return ErrRequisitionNeedsItem
+	}
+	if err := validateRequisitionItems(r.id, items); err != nil {
+		return err
+	}
+	if err := validateRequestedItems(items, requestedItems); err != nil {
+		return err
+	}
+	r.items = append([]*RequisitionItem(nil), items...)
+	r.requestedItems = append([]*RequestedItem(nil), requestedItems...)
+	r.updatedAt = time.Now()
+	return nil
+}
+
 func (r *Requisition) TotalEstimatedAmount() (*shareddomain.Money, error) {
 	if len(r.items) == 0 {
 		return shareddomain.NewNairaMoney(0)
@@ -314,21 +333,30 @@ func (r *Requisition) RecordInitialStatusHistory(history *RequisitionStatusHisto
 	return nil
 }
 
+// ApplyStatusTransition records the next status-history entry and updates the
+// aggregate status. The next sequence is derived from the existing history so
+// callers cannot skip, reuse, or fabricate a sequence, and a status change is
+// never possible without the matching history entry.
 func (r *Requisition) ApplyStatusTransition(
 	id string,
-	sequence int,
 	newStatus RequisitionStatus,
 	actedBy string,
 	actorRole RequisitionActorRole,
 	reason string,
 	createdAt time.Time,
 ) (*RequisitionStatusHistory, error) {
+	if !newStatus.IsValid() {
+		return nil, ErrInvalidRequisitionStatus
+	}
+	if len(r.statusHistory) == 0 {
+		return nil, ErrStatusHistoryRequired
+	}
 	if !r.status.CanTransitionTo(newStatus) {
 		return nil, ErrCannotTransitionToStatus(r.status.String(), newStatus.String())
 	}
 	fromStatus := r.status
 	history, err := NewRequisitionStatusHistory(
-		id, r.id, sequence, &fromStatus, newStatus,
+		id, r.id, r.nextStatusSequence(), &fromStatus, newStatus,
 		actedBy, actorRole, reason, createdAt,
 	)
 	if err != nil {
@@ -338,4 +366,14 @@ func (r *Requisition) ApplyStatusTransition(
 	r.updatedAt = createdAt
 	r.statusHistory = append(r.statusHistory, history)
 	return history, nil
+}
+
+func (r *Requisition) nextStatusSequence() int {
+	next := 1
+	for _, history := range r.statusHistory {
+		if history != nil && history.Sequence() >= next {
+			next = history.Sequence() + 1
+		}
+	}
+	return next
 }

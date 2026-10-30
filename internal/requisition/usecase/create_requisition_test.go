@@ -55,6 +55,7 @@ func (createItemRepo) UpdateItem(context.Context, *requisitiondomain.Item) error
 
 type createRequisitionRepo struct {
 	saved *requisitiondomain.Requisition
+	get   *requisitiondomain.Requisition
 	err   error
 }
 
@@ -62,10 +63,16 @@ func (r *createRequisitionRepo) SaveRequisition(_ context.Context, requisition *
 	r.saved = requisition
 	return r.err
 }
-func (*createRequisitionRepo) GetRequisitionByID(context.Context, string) (*requisitiondomain.Requisition, error) {
-	return nil, nil
+func (r *createRequisitionRepo) GetRequisitionByID(context.Context, string) (*requisitiondomain.Requisition, error) {
+	return r.get, r.err
+}
+func (r *createRequisitionRepo) GetRequisitionByIDForUpdate(context.Context, string) (*requisitiondomain.Requisition, error) {
+	return r.get, r.err
 }
 func (*createRequisitionRepo) UpdateRequisition(context.Context, *requisitiondomain.Requisition) error {
+	return nil
+}
+func (*createRequisitionRepo) UpdateRequisitionAggregate(context.Context, *requisitiondomain.Requisition) error {
 	return nil
 }
 func (*createRequisitionRepo) ListRequisitionsByUserID(context.Context, string, int, int) ([]*requisitiondomain.Requisition, error) {
@@ -126,13 +133,14 @@ func TestCreateRequisitionUsecasePersistsAggregateTransactionally(t *testing.T) 
 	)
 
 	requisition, err := usecase.Execute(context.Background(), requisitionin.CreateRequisitionCommand{
-		UserID: "usr-123",
+		UserID:       "usr-123",
+		DepartmentID: "dpt-123",
 		Lines: []requisitionin.CreateRequisitionLine{{
-			CategoryID:               "cat-123",
-			RequestedItemName:        "Pens",
-			RequestedItemDescription: "Blue pens",
-			Quantity:                 3,
-			EstimatedUnitAmount:      25,
+			RequestedItem: &requisitionin.CreateRequestedItem{
+				Name: "Pens", CategoryID: "cat-123", Description: "Blue pens",
+			},
+			Quantity:            3,
+			EstimatedUnitAmount: 2500,
 		}},
 		Justification: "Office supplies",
 		Priority:      "medium",
@@ -150,6 +158,9 @@ func TestCreateRequisitionUsecasePersistsAggregateTransactionally(t *testing.T) 
 	if len(repository.saved.Items()) != 1 || len(repository.saved.RequestedItems()) != 1 {
 		t.Fatalf("saved aggregate has %d lines and %d requested items", len(repository.saved.Items()), len(repository.saved.RequestedItems()))
 	}
+	if got := repository.saved.Items()[0].EstimatedUnitAmount().Amount(); got != 250000 {
+		t.Fatalf("saved estimated unit amount = %d, want 250000 minor units", got)
+	}
 	if len(repository.saved.StatusHistory()) != 1 {
 		t.Fatal("expected initial status history")
 	}
@@ -158,6 +169,44 @@ func TestCreateRequisitionUsecasePersistsAggregateTransactionally(t *testing.T) 
 	}
 	if total, err := requisition.TotalEstimatedAmount(); err != nil || total == nil {
 		t.Fatal("expected derived total")
+	}
+}
+
+func TestCreateRequisitionUsecaseBuildsCatalogueAndRequestedLines(t *testing.T) {
+	repository := &createRequisitionRepo{}
+	usecase := NewCreateRequisitionUsecase(
+		repository, createCategoryRepo{}, createItemRepo{},
+		createMembership{membership: validCreateMembership(t)},
+		&createIDGenerator{}, &createTransactionManager{},
+	)
+
+	requisition, err := usecase.Execute(context.Background(), requisitionin.CreateRequisitionCommand{
+		UserID:       "usr-123",
+		DepartmentID: "dpt-123",
+		Lines: []requisitionin.CreateRequisitionLine{
+			{ItemID: "itm-123", Quantity: 2, EstimatedUnitAmount: 150000},
+			{RequestedItem: &requisitionin.CreateRequestedItem{
+				Name: "Laptop stand", CategoryID: "cat-123", Description: "Adjustable laptop stand",
+			}, Quantity: 1, EstimatedUnitAmount: 850000},
+		},
+		Justification: "Office setup",
+		Priority:      "urgent",
+		NeededBy:      time.Now().AddDate(0, 0, 2),
+	})
+	if err != nil {
+		t.Fatalf("Execute() unexpected error = %v", err)
+	}
+	if len(requisition.Items()) != 2 {
+		t.Fatalf("Items() length = %d, want 2", len(requisition.Items()))
+	}
+	if requisition.Items()[0].ItemID() != "itm-123" || requisition.Items()[0].RequestedItemID() != "" {
+		t.Fatal("first line should reference the catalogue item")
+	}
+	if requisition.Items()[1].RequestedItemID() == "" || requisition.Items()[1].ItemID() != "" {
+		t.Fatal("second line should reference a requested item")
+	}
+	if got := requisition.Items()[1].ItemNameSnapshot().Value(); got != "Laptop stand" {
+		t.Fatalf("item name snapshot = %q, want Laptop stand", got)
 	}
 }
 
@@ -171,15 +220,16 @@ func TestCreateRequisitionUsecaseRollsBackOnRepositoryError(t *testing.T) {
 	)
 
 	_, err := usecase.Execute(context.Background(), requisitionin.CreateRequisitionCommand{
-		UserID:                   "usr-123",
-		CategoryID:               "cat-123",
-		RequestedItemName:        "Pens",
-		RequestedItemDescription: "Blue pens",
-		Quantity:                 1,
-		EstimatedCost:            25,
-		Justification:            "Office supplies",
-		Priority:                 "normal",
-		NeededBy:                 time.Now().AddDate(0, 0, 2),
+		UserID: "usr-123",
+		Lines: []requisitionin.CreateRequisitionLine{{
+			RequestedItem: &requisitionin.CreateRequestedItem{
+				Name: "Pens", CategoryID: "cat-123", Description: "Blue pens",
+			},
+			Quantity: 1, EstimatedUnitAmount: 2500,
+		}},
+		Justification: "Office supplies",
+		Priority:      "normal",
+		NeededBy:      time.Now().AddDate(0, 0, 2),
 	})
 	if !errors.Is(err, repository.err) {
 		t.Fatalf("Execute() error = %v, want %v", err, repository.err)
@@ -204,11 +254,36 @@ func TestCreateRequisitionUsecaseRejectsInactiveMembership(t *testing.T) {
 	)
 
 	_, err = usecase.Execute(context.Background(), requisitionin.CreateRequisitionCommand{
-		UserID: "usr-123", CategoryID: "cat-123", RequestedItemName: "Pens",
-		RequestedItemDescription: "Blue pens", Quantity: 1, EstimatedCost: 25,
+		UserID: "usr-123",
+		Lines: []requisitionin.CreateRequisitionLine{{
+			RequestedItem: &requisitionin.CreateRequestedItem{
+				Name: "Pens", CategoryID: "cat-123", Description: "Blue pens",
+			},
+			Quantity: 1, EstimatedUnitAmount: 2500,
+		}},
 		Justification: "Office supplies", NeededBy: time.Now().AddDate(0, 0, 2),
 	})
 	if err != ErrInactiveMembership {
 		t.Fatalf("Execute() error = %v, want %v", err, ErrInactiveMembership)
+	}
+}
+
+func TestCreateRequisitionUsecaseRejectsDepartmentMismatch(t *testing.T) {
+	usecase := NewCreateRequisitionUsecase(
+		&createRequisitionRepo{}, createCategoryRepo{}, createItemRepo{},
+		createMembership{membership: validCreateMembership(t)},
+		&createIDGenerator{}, &createTransactionManager{},
+	)
+
+	_, err := usecase.Execute(context.Background(), requisitionin.CreateRequisitionCommand{
+		UserID:       "usr-123",
+		DepartmentID: "dpt-other",
+		Lines: []requisitionin.CreateRequisitionLine{{
+			ItemID: "itm-123", Quantity: 1, EstimatedUnitAmount: 150000,
+		}},
+		Justification: "Office supplies", NeededBy: time.Now().AddDate(0, 0, 2),
+	})
+	if err != ErrDepartmentMismatch {
+		t.Fatalf("Execute() error = %v, want %v", err, ErrDepartmentMismatch)
 	}
 }

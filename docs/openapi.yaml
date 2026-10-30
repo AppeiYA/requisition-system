@@ -242,71 +242,160 @@ components:
                     minimum: 0
                     type: number
             type: object
-        requisitionhttp.CreateRequisitionRequest:
+        requisitionhttp.CreateRequestedItemRequest:
             properties:
                 category_id:
+                    example: cat_123
+                    minLength: 1
                     type: string
-                estimated_cost:
+                description:
+                    example: Adjustable laptop stand
+                    maxLength: 200
+                    minLength: 1
+                    type: string
+                name:
+                    example: Laptop stand
+                    maxLength: 100
+                    minLength: 1
+                    type: string
+            type: object
+        requisitionhttp.CreateRequisitionLineRequest:
+            properties:
+                estimated_unit_amount:
+                    example: 150000
                     minimum: 0
-                    type: number
+                    type: integer
                 item_id:
+                    example: itm_123
                     type: string
-                justification:
-                    type: string
-                needed_by:
-                    type: string
-                priority:
+                notes:
+                    example: Optional note
                     type: string
                 quantity:
+                    example: 2
+                    maximum: 1000
                     minimum: 1
                     type: integer
-                requested_item_description:
+                requested_item:
+                    $ref: '#/components/schemas/requisitionhttp.CreateRequestedItemRequest'
+            type: object
+        requisitionhttp.CreateRequisitionRequest:
+            properties:
+                department_id:
+                    example: dpt_123
+                    minLength: 1
                     type: string
-                requested_item_name:
+                justification:
+                    example: Replacement laptops for the new hires
+                    maxLength: 500
+                    minLength: 1
+                    type: string
+                lines:
+                    items:
+                        $ref: '#/components/schemas/requisitionhttp.CreateRequisitionLineRequest'
+                    minItems: 1
+                    type: array
+                needed_by:
+                    example: "2026-11-15"
+                    type: string
+                priority:
+                    enum:
+                        - low
+                        - normal
+                        - medium
+                        - high
+                        - urgent
+                    example: medium
                     type: string
             required:
-                - category_id
+                - department_id
                 - justification
+                - lines
                 - needed_by
-                - priority
-                - quantity
-                - requested_item_description
-                - requested_item_name
+            type: object
+        requisitionhttp.RequisitionLineResponse:
+            properties:
+                estimated_unit_amount:
+                    type: integer
+                id:
+                    type: string
+                item_id:
+                    type: string
+                item_name:
+                    type: string
+                line_number:
+                    type: integer
+                line_total:
+                    type: integer
+                notes:
+                    type: string
+                quantity:
+                    type: integer
+                requested_item_id:
+                    type: string
             type: object
         requisitionhttp.RequisitionResponse:
             properties:
-                category_id:
-                    type: string
                 created_at:
                     type: string
                 currency:
                     type: string
                 department_id:
                     type: string
-                estimated_cost:
-                    type: number
                 id:
-                    type: string
-                item_id:
                     type: string
                 justification:
                     type: string
+                lines:
+                    items:
+                        $ref: '#/components/schemas/requisitionhttp.RequisitionLineResponse'
+                    type: array
                 needed_by:
                     type: string
                 priority:
                     type: string
-                quantity:
-                    type: integer
+                reference_code:
+                    type: string
                 requested_by:
-                    type: string
-                requested_item_description:
-                    type: string
-                requested_item_name:
                     type: string
                 status:
                     type: string
+                status_history:
+                    items:
+                        $ref: '#/components/schemas/requisitionhttp.RequisitionStatusHistoryResponse'
+                    type: array
+                total_estimated_amount:
+                    type: integer
                 updated_at:
                     type: string
+            type: object
+        requisitionhttp.RequisitionStatusHistoryResponse:
+            properties:
+                acted_by:
+                    type: string
+                actor_role:
+                    type: string
+                created_at:
+                    type: string
+                from_status:
+                    type: string
+                reason:
+                    type: string
+                sequence:
+                    type: integer
+                to_status:
+                    type: string
+            type: object
+        requisitionhttp.TransitionRequisitionStatusRequest:
+            properties:
+                reason:
+                    example: Approved by department administrator
+                    type: string
+                to_status:
+                    example: approved
+                    type: string
+            required:
+                - to_status
             type: object
         response.ErrorResponse:
             properties:
@@ -1358,7 +1447,7 @@ paths:
                 - item
     /requisitions:
         get:
-            description: Returns requisitions created by the authenticated user, ordered by creation time (newest first). Requires an access token.
+            description: Returns requisitions created by the authenticated user, ordered by creation time (newest first), including lines, derived totals, and status history. Amounts are integer minor units (kobo for NGN). Requires an access token.
             parameters:
                 - description: Maximum number of requisitions to return (default 100, max 100)
                   in: query
@@ -1402,7 +1491,7 @@ paths:
             tags:
                 - requisition
         post:
-            description: Creates a requisition for the authenticated user's department. The category is required; item_id is optional. needed_by must be a calendar date in YYYY-MM-DD format and cannot be before today.
+            description: Creates a multi-line requisition for the authenticated user's department. Each line references either a catalogue item (item_id) or a free-filled requested item (requested_item), never both. Amounts are integer minor units (kobo for NGN). needed_by must be a calendar date in YYYY-MM-DD format and must be in the future.
             requestBody:
                 content:
                     application/json:
@@ -1435,6 +1524,12 @@ paths:
                             schema:
                                 $ref: '#/components/schemas/response.Response'
                     description: Missing or invalid access token
+                "403":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Department membership is inactive or belongs to another department
                 "404":
                     content:
                         application/json:
@@ -1446,9 +1541,125 @@ paths:
             summary: Create a requisition
             tags:
                 - requisition
+    /requisitions/{id}:
+        get:
+            description: Returns a single requisition with its lines, derived totals, and status history. Requesters may only fetch their own requisitions; administrators may fetch any. Amounts are integer minor units (kobo for NGN).
+            parameters:
+                - description: Requisition ID
+                  in: path
+                  name: id
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                allOf:
+                                    - $ref: '#/components/schemas/response.Response'
+                                    - properties:
+                                        data:
+                                            $ref: '#/components/schemas/requisitionhttp.RequisitionResponse'
+                                      type: object
+                    description: OK
+                "400":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Invalid requisition ID
+                "401":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Missing or invalid access token
+                "403":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Requisition belongs to another user
+                "404":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Requisition not found
+            security:
+                - BearerAuth: []
+            summary: Get a requisition
+            tags:
+                - requisition
+    /requisitions/{id}/status:
+        post:
+            description: Applies a status transition and records it in the append-only status history. A reason is required for rejected and cancelled. Requesters may only cancel their own pending requisition; approval, rejection, fulfillment, and completion require an administrator. Returns the complete updated requisition. Amounts are integer minor units (kobo for NGN).
+            parameters:
+                - description: Requisition ID
+                  in: path
+                  name: id
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/requisitionhttp.TransitionRequisitionStatusRequest'
+                description: Target status and optional reason
+                required: true
+                x-originalParamName: request
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                allOf:
+                                    - $ref: '#/components/schemas/response.Response'
+                                    - properties:
+                                        data:
+                                            $ref: '#/components/schemas/requisitionhttp.RequisitionResponse'
+                                      type: object
+                    description: OK
+                "400":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.ErrorResponse'
+                    description: Invalid status, missing reason, or invalid transition
+                "401":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Missing or invalid access token
+                "403":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Actor is not authorized for this transition
+                "404":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Requisition not found
+                "409":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Concurrent status change
+            security:
+                - BearerAuth: []
+            summary: Transition a requisition status
+            tags:
+                - requisition
     /requisitions/all:
         get:
-            description: Returns all requisitions ordered by creation time (newest first). Requires an access token and admin role.
+            description: Returns all requisitions ordered by creation time (newest first), including lines, derived totals, and status history. Amounts are integer minor units (kobo for NGN). Requires an access token and admin role.
             parameters:
                 - description: Maximum number of requisitions to return (default 100, max 100)
                   in: query

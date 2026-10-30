@@ -110,34 +110,3 @@ func mustItemWithStatus(t *testing.T, status ItemStatus) *Item {
 	}
 	return item
 }
-
-func mustRequisitionWithStatus(
-	t *testing.T,
-	status RequisitionStatus,
-	createdAt time.Time,
-	updatedAt time.Time,
-) *Requisition {
-	t.Helper()
-
-	requisition, err := ReconstituteRequisition(
-		"req_123",
-		"usr_123",
-		"dpt_123",
-		"itm_123",
-		"cat_123",
-		"Laptop",
-		"Business laptop",
-		2,
-		mustNairaMoney(t, 1500),
-		"Required for the new hire",
-		PriorityNormal.String(),
-		createdAt.Add(24*time.Hour),
-		status.String(),
-		createdAt,
-		updatedAt,
-	)
-	if err != nil {
-		t.Fatalf("ReconstituteRequisition() unexpected error = %v", err)
-	}
-	return requisition
-}

@@ -10,6 +10,7 @@ import (
 	requisitionout "github.com/AppeiYA/requisition-system/internal/requisition/ports/out"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/db"
 	customerrors "github.com/AppeiYA/requisition-system/internal/shared/infrastructure/errors"
+	"github.com/lib/pq"
 )
 
 var ErrRequisitionNotFound = customerrors.NewNotFoundError("requisition not found")
@@ -125,6 +126,124 @@ func (r *RequisitionRepository) UpdateRequisition(ctx context.Context, requisiti
 	return err
 }
 
+func (r *RequisitionRepository) UpdateRequisitionAggregate(ctx context.Context, requisition *requisitiondomain.Requisition) error {
+	executor := r.repository.Executor(ctx)
+	if _, err := executor.NamedExecContext(ctx, `
+		UPDATE requisitions
+		SET department_id = :department_id, justification = :justification,
+			priority = :priority, needed_by = :needed_by, updated_at = :updated_at
+		WHERE id = :id
+	`, models.RequisitionFromDomain(requisition)); err != nil {
+		return err
+	}
+	if _, err := executor.ExecContext(ctx,
+		`DELETE FROM requisition_items WHERE requisition_id = $1`, requisition.ID(),
+	); err != nil {
+		return err
+	}
+	for _, requestedItem := range requisition.RequestedItems() {
+		if _, err := executor.NamedExecContext(ctx, `
+			INSERT INTO requested_items (
+				id, name, category_id, description, created_by,
+				review_status, promoted_item_id, created_at
+			) VALUES (
+				:id, :name, :category_id, :description, :created_by,
+				:review_status, :promoted_item_id, :created_at
+			)
+		`, models.RequestedItemFromDomain(requestedItem)); err != nil {
+			return err
+		}
+	}
+	for _, item := range requisition.Items() {
+		if item.RequestedItemID() != "" && !hasRequestedItem(requisition.RequestedItems(), item.RequestedItemID()) {
+			return customerrors.NewBadRequestError("requested item is missing from requisition aggregate")
+		}
+		model, err := models.RequisitionItemFromDomain(item)
+		if err != nil {
+			return err
+		}
+		if _, err := executor.NamedExecContext(ctx, `
+			INSERT INTO requisition_items (
+				id, requisition_id, line_number, item_id, requested_item_id,
+				item_name_snapshot, quantity, estimated_unit_amount, notes, created_at
+			) VALUES (
+				:id, :requisition_id, :line_number, :item_id, :requested_item_id,
+				:item_name_snapshot, :quantity, :estimated_unit_amount, :notes, :created_at
+			)
+		`, model); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// GetRequisitionByIDForUpdate loads the aggregate while holding a row lock on
+// the requisition header. Concurrent transitions therefore serialize before
+// they calculate the next history sequence.
+func (r *RequisitionRepository) GetRequisitionByIDForUpdate(ctx context.Context, id string) (*requisitiondomain.Requisition, error) {
+	var model models.RequisitionModel
+	if err := r.repository.Executor(ctx).GetContext(ctx, &model,
+		`SELECT `+requisitionColumns+` FROM requisitions WHERE id = $1 FOR UPDATE`, id); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrRequisitionNotFound
+		}
+		return nil, err
+	}
+	return r.loadAggregate(ctx, model)
+}
+
+// UpdateRequisitionStatus writes the header status and the new history entry
+// through the same executor. Callers run it inside a transaction so both rows
+// commit or roll back together, and the append-only history triggers remain
+// the final consistency check.
+func (r *RequisitionRepository) UpdateRequisitionStatus(
+	ctx context.Context,
+	requisition *requisitiondomain.Requisition,
+	history *requisitiondomain.RequisitionStatusHistory,
+) error {
+	if history == nil {
+		return customerrors.NewBadRequestError("status history is required")
+	}
+	executor := r.repository.Executor(ctx)
+
+	result, err := executor.NamedExecContext(ctx, `
+		UPDATE requisitions
+		SET status = :status, updated_at = :updated_at
+		WHERE id = :id
+	`, models.RequisitionFromDomain(requisition))
+	if err != nil {
+		return err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return ErrRequisitionNotFound
+	}
+
+	if _, err := executor.NamedExecContext(ctx, `
+		INSERT INTO requisition_status_history (
+			id, requisition_id, sequence, from_status, to_status,
+			acted_by, actor_role, reason, created_at
+		) VALUES (
+			:id, :requisition_id, :sequence, :from_status, :to_status,
+			:acted_by, :actor_role, :reason, :created_at
+		)
+	`, models.StatusHistoryFromDomain(history)); err != nil {
+		return mapStatusHistoryWriteError(err)
+	}
+	return nil
+}
+
+func mapStatusHistoryWriteError(err error) error {
+	var pqErr *pq.Error
+	if errors.As(err, &pqErr) && pqErr.Code == "23505" {
+		return customerrors.NewConflictError("requisition status changed concurrently; retry the transition")
+	}
+	return err
+}
+
 func (r *RequisitionRepository) ListRequisitionsByUserID(ctx context.Context, userID string, limit int, offset int) ([]*requisitiondomain.Requisition, error) {
 	var rows []models.RequisitionModel
 	if err := r.repository.Executor(ctx).SelectContext(ctx, &rows,
@@ -221,3 +340,4 @@ func (r *RequisitionRepository) loadAggregate(ctx context.Context, model models.
 }
 
 var _ requisitionout.RequisitionRepository = (*RequisitionRepository)(nil)
+var _ requisitionout.RequisitionTransitionRepository = (*RequisitionRepository)(nil)

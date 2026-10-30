@@ -125,8 +125,16 @@ func TestRequisitionStatusTransitionCreatesHistory(t *testing.T) {
 	t.Parallel()
 
 	requisition := validSubmittedRequisition(t)
+	initial, err := requisition.InitialStatusHistory("rsh_1", "usr_123", ActorRoleStaff, time.Now())
+	if err != nil {
+		t.Fatalf("InitialStatusHistory() unexpected error = %v", err)
+	}
+	if err := requisition.RecordInitialStatusHistory(initial); err != nil {
+		t.Fatalf("RecordInitialStatusHistory() unexpected error = %v", err)
+	}
+
 	history, err := requisition.ApplyStatusTransition(
-		"rsh_1", 1, RequisitionStatusRejected, "usr_123",
+		"rsh_2", RequisitionStatusRejected, "usr_123",
 		ActorRoleStaff, "No budget available", time.Now(),
 	)
 	if err != nil {
@@ -135,20 +143,78 @@ func TestRequisitionStatusTransitionCreatesHistory(t *testing.T) {
 	if requisition.Status() != RequisitionStatusRejected {
 		t.Fatalf("Status() = %q, want rejected", requisition.Status())
 	}
-	if len(requisition.StatusHistory()) != 1 || requisition.StatusHistory()[0] != history {
+	if len(requisition.StatusHistory()) != 2 || requisition.StatusHistory()[1] != history {
 		t.Fatal("status history was not appended")
+	}
+	if history.Sequence() != 2 {
+		t.Fatalf("Sequence() = %d, want 2", history.Sequence())
 	}
 	if history.FromStatus() == nil || *history.FromStatus() != RequisitionStatusPending {
 		t.Fatal("history should record pending as the previous status")
 	}
 	if _, err := requisition.ApplyStatusTransition(
-		"rsh_2", 2, RequisitionStatusApproved, "usr_123",
+		"rsh_3", RequisitionStatusApproved, "usr_123",
 		ActorRoleStaff, "", time.Now(),
 	); err == nil {
 		t.Fatal("expected terminal requisition transition to fail")
 	}
 	if requisition.IsEditable() {
 		t.Error("rejected requisition should not be editable")
+	}
+}
+
+func TestRequisitionStatusTransitionRequiresInitialHistory(t *testing.T) {
+	t.Parallel()
+
+	requisition := validSubmittedRequisition(t)
+	_, err := requisition.ApplyStatusTransition(
+		"rsh_1", RequisitionStatusApproved, "usr_123",
+		ActorRoleAdmin, "", time.Now(),
+	)
+	if err != ErrStatusHistoryRequired {
+		t.Fatalf("ApplyStatusTransition() error = %v, want %v", err, ErrStatusHistoryRequired)
+	}
+	if requisition.Status() != RequisitionStatusPending {
+		t.Fatalf("Status() = %q, want pending after rejected transition", requisition.Status())
+	}
+}
+
+func TestRequisitionStatusTransitionDerivesNextSequence(t *testing.T) {
+	t.Parallel()
+
+	requisition := validSubmittedRequisition(t)
+	initial, err := requisition.InitialStatusHistory("rsh_1", "usr_123", ActorRoleStaff, time.Now())
+	if err != nil {
+		t.Fatalf("InitialStatusHistory() unexpected error = %v", err)
+	}
+	if err := requisition.RecordInitialStatusHistory(initial); err != nil {
+		t.Fatalf("RecordInitialStatusHistory() unexpected error = %v", err)
+	}
+
+	approved, err := requisition.ApplyStatusTransition(
+		"rsh_2", RequisitionStatusApproved, "usr_admin", ActorRoleAdmin, "", time.Now(),
+	)
+	if err != nil {
+		t.Fatalf("approval transition unexpected error = %v", err)
+	}
+	if approved.Sequence() != 2 {
+		t.Fatalf("approval sequence = %d, want 2", approved.Sequence())
+	}
+
+	fulfillment, err := requisition.ApplyStatusTransition(
+		"rsh_3", RequisitionStatusInFulfillment, "usr_admin", ActorRoleAdmin, "", time.Now(),
+	)
+	if err != nil {
+		t.Fatalf("fulfillment transition unexpected error = %v", err)
+	}
+	if fulfillment.Sequence() != 3 {
+		t.Fatalf("fulfillment sequence = %d, want 3", fulfillment.Sequence())
+	}
+	if fulfillment.FromStatus() == nil || *fulfillment.FromStatus() != RequisitionStatusApproved {
+		t.Fatal("fulfillment history should record approved as the previous status")
+	}
+	if len(requisition.StatusHistory()) != 3 {
+		t.Fatalf("history length = %d, want 3", len(requisition.StatusHistory()))
 	}
 }
 
