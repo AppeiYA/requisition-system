@@ -14,7 +14,7 @@ var (
 // listAllRequisitionsDoc documents the listAll handler in requisition_handler.go.
 //
 //	@Summary		List all requisitions
-//	@Description	Returns all requisitions ordered by creation time (newest first). Requires an access token and admin role.
+//	@Description	Returns all requisitions ordered by creation time (newest first), including lines, derived totals, and status history. Amounts are expressed in major currency units (naira for NGN) while stored internally as minor units. Requires an access token and admin role.
 //	@Tags			requisition
 //	@Produce		json
 //	@Security		BearerAuth
