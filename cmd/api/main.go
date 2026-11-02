@@ -21,8 +21,31 @@ package main
 import app "github.com/AppeiYA/requisition-system/internal"
 
 func main() {
-	err := app.NewApp().Run()
+	launchApp := app.NewApp()
+	cfg, err := launchApp.Config()
 	if err != nil {
+		panic(err)
+	}
+
+	if cfg.App.Binaries == 1 {
+		errCh := make(chan error, 2)
+
+		go func() {
+			errCh <- launchApp.Run()
+		}()
+		go func() {
+			errCh <- app.NewWorker().Run()
+		}()
+
+		for range 2 {
+			if err := <-errCh; err != nil {
+				panic(err)
+			}
+		}
+		return
+	}
+
+	if err := launchApp.Run(); err != nil {
 		panic(err)
 	}
 }
