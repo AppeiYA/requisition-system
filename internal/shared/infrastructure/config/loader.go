@@ -248,6 +248,10 @@ func LoadRedisConfig() (*RedisConfig, error) {
 	if err != nil {
 		return nil, err
 	}
+	tls, err := getBoolEnv("REDIS_TLS", false)
+	if err != nil {
+		return nil, err
+	}
 
 	return &RedisConfig{
 		Host:     host,
@@ -255,6 +259,7 @@ func LoadRedisConfig() (*RedisConfig, error) {
 		Username: getEnv("REDIS_USERNAME", ""),
 		Password: getEnv("REDIS_PASSWORD", ""),
 		DB:       db,
+		TLS:      tls,
 	}, nil
 }
 
