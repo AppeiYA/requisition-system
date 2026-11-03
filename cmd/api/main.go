@@ -21,7 +21,8 @@ package main
 import app "github.com/AppeiYA/requisition-system/internal"
 
 func main() {
-	err := app.NewApp().Run()
+	launchApp := app.NewApp()
+	err := launchApp.Run()
 	if err != nil {
 		panic(err)
 	}

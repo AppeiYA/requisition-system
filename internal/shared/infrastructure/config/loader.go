@@ -172,9 +172,18 @@ func LoadDBConfig() (*DBConfig, error) {
 
 func LoadAppConfig() (*AppConfig, error) {
 	env := getEnv("APP_ENV", "development")
+	binaries, err := getIntEnv("APP_BINARIES", 1)
+	if err != nil {
+		return nil, err
+	}
+	validBinary := AppBinaries(binaries)
+	if !validBinary.IsValid() {
+		return nil, fmt.Errorf("invalid value for APP_BINARIES: %d", binaries)
+	}
 
 	return &AppConfig{
 		Env: env,
+		Binaries: validBinary,
 	}, nil
 }
 

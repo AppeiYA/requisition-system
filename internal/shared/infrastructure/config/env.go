@@ -5,6 +5,15 @@ import (
 	"time"
 )
 
+type AppBinaries int
+const (
+	OneBinary AppBinaries = 1
+	TwoBinaries AppBinaries = 2
+)
+func (b AppBinaries) IsValid() bool {
+	return b == OneBinary || b == TwoBinaries
+}
+
 const (
 	TelemetryExporterStdout = "stdout"
 	TelemetryExporterOTLP   = "otlp"
@@ -31,6 +40,7 @@ type Config struct {
 
 type AppConfig struct {
 	Env string // "development", "staging", "production"
+	Binaries AppBinaries
 }
 
 type APIConfig struct {

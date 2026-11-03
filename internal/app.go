@@ -35,6 +35,17 @@ func NewApp() *App {
 	return &App{}
 }
 
+func (a *App) Config() (*config.Config, error) {
+	if a.config == nil {
+		cfg, err := config.Load()
+		if err != nil {
+			return nil, err
+		}
+		a.config = cfg
+	}
+	return a.config, nil
+}
+
 func (a *App) Run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -124,7 +135,7 @@ func (a *App) Run() error {
 
 	departmentModule := a.buildDepartment(baseRepo, idGen, redisCache)
 
-	requisitionModule := a.buildRequisition(baseRepo, idGen, redisCache, departmentModule.MembershipRepository())
+	requisitionModule := a.buildRequisition(baseRepo, idGen, redisCache, departmentModule.MembershipRepository(), txManager)
 
 	invitationModule := a.buildInvitation(
 		baseRepo,

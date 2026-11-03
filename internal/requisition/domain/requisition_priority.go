@@ -8,6 +8,7 @@ const (
 	PriorityLow    RequisitionPriority = "low"
 	PriorityNormal RequisitionPriority = "normal"
 	PriorityMedium RequisitionPriority = "medium"
+	PriorityHigh   RequisitionPriority = "high"
 	PriorityUrgent RequisitionPriority = "urgent"
 )
 
@@ -17,7 +18,7 @@ var (
 
 func (rp RequisitionPriority) IsValid() bool {
 	switch rp {
-	case PriorityLow, PriorityNormal, PriorityMedium, PriorityUrgent:
+	case PriorityLow, PriorityNormal, PriorityMedium, PriorityHigh, PriorityUrgent:
 		return true
 	default:
 		return false
