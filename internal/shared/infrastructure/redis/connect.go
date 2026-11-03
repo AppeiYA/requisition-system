@@ -2,6 +2,7 @@ package redis
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/config"
@@ -15,6 +16,13 @@ func Connect(cfg config.RedisConfig) (*Redis, error) {
 		Username: cfg.Username,
 		Password: cfg.Password,
 		DB:       cfg.DB,
+	}
+
+	if cfg.TLS {
+		tlsConfig := &tls.Config{
+			MinVersion: tls.VersionTLS12,
+		}
+		opts.TLSConfig = tlsConfig
 	}
 
 	client := redis.NewClient(opts)
