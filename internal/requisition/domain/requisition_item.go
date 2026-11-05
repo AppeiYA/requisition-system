@@ -14,7 +14,7 @@ var (
 	ErrDuplicateRequisitionItem   = customerrors.NewBadRequestError("catalogue item cannot appear more than once in a requisition")
 	ErrDuplicateRequestedItem     = customerrors.NewBadRequestError("requested item cannot belong to more than one line")
 	ErrInvalidEstimatedUnitAmount = customerrors.NewBadRequestError("estimated unit amount cannot be negative")
-	ErrInvalidLineNumber		  = customerrors.NewBadRequestError("line number must be greater than zero")
+	ErrInvalidLineNumber          = customerrors.NewBadRequestError("line number must be greater than zero")
 )
 
 const RequisitionItemPrefixID = "reqitem"
@@ -100,7 +100,7 @@ func newRequisitionItem(
 		return nil, ErrNilFields("quantity")
 	}
 	if estimatedUnitAmount == nil {
-		return nil, ErrNilFields("estimatedUnitAmount")
+		return nil, ErrNilFields("estimated_unit_amount")
 	}
 	if estimatedUnitAmount.IsNegative() {
 		return nil, ErrInvalidEstimatedUnitAmount

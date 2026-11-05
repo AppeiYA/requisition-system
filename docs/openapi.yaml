@@ -2,27 +2,27 @@ components:
     schemas:
         adminhttp.InviteRequest:
             properties:
-                departmentId:
+                department_id:
                     type: string
                 email:
                     type: string
-                firstName:
+                first_name:
                     type: string
-                jobTitle:
+                job_title:
                     maxLength: 60
                     type: string
-                lastName:
+                last_name:
                     type: string
                 phone:
                     type: string
-                staffId:
+                staff_id:
                     type: string
             required:
-                - departmentId
+                - department_id
                 - email
-                - firstName
-                - jobTitle
-                - lastName
+                - first_name
+                - job_title
+                - last_name
             type: object
         adminin.InviteMemberResult:
             properties:
@@ -179,19 +179,19 @@ components:
             type: object
         invitationhttp.ValidateInvitationResponse:
             properties:
-                departmentId:
+                department_id:
                     type: string
                 email:
                     type: string
-                firstName:
+                first_name:
                     type: string
-                jobTitle:
+                job_title:
                     type: string
-                lastName:
+                last_name:
                     type: string
                 phone:
                     type: string
-                staffId:
+                staff_id:
                     type: string
                 valid:
                     type: boolean
@@ -262,9 +262,8 @@ components:
         requisitionhttp.CreateRequisitionLineRequest:
             properties:
                 estimated_unit_amount:
-                    example: 150000
-                    minimum: 0
-                    type: integer
+                    example: 50000
+                    type: number
                 item_id:
                     example: itm_123
                     type: string
@@ -316,7 +315,7 @@ components:
         requisitionhttp.RequisitionLineResponse:
             properties:
                 estimated_unit_amount:
-                    type: integer
+                    type: number
                 id:
                     type: string
                 item_id:
@@ -326,7 +325,7 @@ components:
                 line_number:
                     type: integer
                 line_total:
-                    type: integer
+                    type: number
                 notes:
                     type: string
                 quantity:
@@ -365,7 +364,7 @@ components:
                         $ref: '#/components/schemas/requisitionhttp.RequisitionStatusHistoryResponse'
                     type: array
                 total_estimated_amount:
-                    type: integer
+                    type: number
                 updated_at:
                     type: string
             type: object
@@ -384,6 +383,31 @@ components:
                 sequence:
                     type: integer
                 to_status:
+                    type: string
+            type: object
+        requisitionhttp.RequisitionSummaryResponse:
+            properties:
+                created_at:
+                    type: string
+                department_id:
+                    type: string
+                id:
+                    type: string
+                justification:
+                    type: string
+                needed_by:
+                    type: string
+                priority:
+                    type: string
+                reference_code:
+                    type: string
+                requested_by:
+                    type: string
+                status:
+                    type: string
+                total_estimated_amount:
+                    type: number
+                updated_at:
                     type: string
             type: object
         requisitionhttp.TransitionRequisitionStatusRequest:
@@ -1447,7 +1471,7 @@ paths:
                 - item
     /requisitions:
         get:
-            description: Returns requisitions created by the authenticated user, ordered by creation time (newest first), including lines, derived totals, and status history. Amounts are integer minor units (kobo for NGN). Requires an access token.
+            description: Returns header summaries for requisitions created by the authenticated user, ordered by creation time (newest first), including the derived total but excluding lines and status history. Use GET /requisitions/{id} for the full detail. Amounts are expressed in major currency units (naira for NGN) while stored internally as minor units. Requires an access token.
             parameters:
                 - description: Maximum number of requisitions to return (default 100, max 100)
                   in: query
@@ -1469,7 +1493,7 @@ paths:
                                     - properties:
                                         data:
                                             items:
-                                                $ref: '#/components/schemas/requisitionhttp.RequisitionResponse'
+                                                $ref: '#/components/schemas/requisitionhttp.RequisitionSummaryResponse'
                                             type: array
                                       type: object
                     description: OK
@@ -1491,7 +1515,7 @@ paths:
             tags:
                 - requisition
         post:
-            description: Creates a multi-line requisition for the authenticated user's department. Each line references either a catalogue item (item_id) or a free-filled requested item (requested_item), never both. Amounts are integer minor units (kobo for NGN). needed_by must be a calendar date in YYYY-MM-DD format and must be in the future.
+            description: Creates a multi-line requisition for the authenticated user's department. Each line references either a catalogue item (item_id) or a free-filled requested item (requested_item), never both. Amounts are expressed in major currency units (naira for NGN) and stored internally as minor units. needed_by must be a calendar date in YYYY-MM-DD format and must be in the future.
             requestBody:
                 content:
                     application/json:
@@ -1543,7 +1567,7 @@ paths:
                 - requisition
     /requisitions/{id}:
         get:
-            description: Returns a single requisition with its lines, derived totals, and status history. Requesters may only fetch their own requisitions; administrators may fetch any. Amounts are integer minor units (kobo for NGN).
+            description: Returns a single requisition with its lines, derived totals, and status history. Requesters may only fetch their own requisitions; administrators may fetch any. Amounts are expressed in major currency units (naira for NGN) while stored internally as minor units.
             parameters:
                 - description: Requisition ID
                   in: path
@@ -1592,9 +1616,67 @@ paths:
             summary: Get a requisition
             tags:
                 - requisition
+        patch:
+            description: Replaces the header and line values of a pending requisition owned by the authenticated requester. Amounts are expressed in major currency units (naira for NGN) and stored internally as minor units.
+            parameters:
+                - description: Requisition ID
+                  in: path
+                  name: id
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/requisitionhttp.CreateRequisitionRequest'
+                description: Updated requisition details
+                required: true
+                x-originalParamName: request
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                allOf:
+                                    - $ref: '#/components/schemas/response.Response'
+                                    - properties:
+                                        data:
+                                            $ref: '#/components/schemas/requisitionhttp.RequisitionResponse'
+                                      type: object
+                    description: OK
+                "400":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.ErrorResponse'
+                    description: Validation error
+                "401":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Missing or invalid access token
+                "403":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Requester does not own the requisition
+                "409":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Requisition is no longer pending
+            security:
+                - BearerAuth: []
+            summary: Update a pending requisition
+            tags:
+                - requisition
     /requisitions/{id}/status:
         post:
-            description: Applies a status transition and records it in the append-only status history. A reason is required for rejected and cancelled. Requesters may only cancel their own pending requisition; approval, rejection, fulfillment, and completion require an administrator. Returns the complete updated requisition. Amounts are integer minor units (kobo for NGN).
+            description: Applies a status transition and records it in the append-only status history. A reason is required for rejected and cancelled. Requesters may only cancel their own pending requisition; approval, rejection, fulfillment, and completion require an administrator. Returns the complete updated requisition. Amounts are expressed in major currency units (naira for NGN) while stored internally as minor units.
             parameters:
                 - description: Requisition ID
                   in: path
@@ -1659,7 +1741,7 @@ paths:
                 - requisition
     /requisitions/all:
         get:
-            description: Returns all requisitions ordered by creation time (newest first), including lines, derived totals, and status history. Amounts are integer minor units (kobo for NGN). Requires an access token and admin role.
+            description: Returns header summaries for all requisitions, ordered by creation time (newest first), including the derived total but excluding lines and status history. Use GET /requisitions/{id} for the full detail. Amounts are expressed in major currency units (naira for NGN) while stored internally as minor units. Requires an access token and admin role.
             parameters:
                 - description: Maximum number of requisitions to return (default 100, max 100)
                   in: query
@@ -1681,7 +1763,7 @@ paths:
                                     - properties:
                                         data:
                                             items:
-                                                $ref: '#/components/schemas/requisitionhttp.RequisitionResponse'
+                                                $ref: '#/components/schemas/requisitionhttp.RequisitionSummaryResponse'
                                             type: array
                                       type: object
                     description: OK

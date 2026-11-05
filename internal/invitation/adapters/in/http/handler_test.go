@@ -39,7 +39,7 @@ func newTestRouter(accept invitationin.AcceptInvitationUseCaseInt, validate invi
 
 	router := gin.New()
 	port := &invitationin.InvitationPortIn{
-		AcceptInvitationUsecase: accept,
+		AcceptInvitationUsecase:   accept,
 		ValidateInvitationUsecase: validate,
 	}
 	NewInvitationHandler(port).Register(router.Group("/api/v1"))
@@ -82,7 +82,7 @@ func Test_AcceptInvitation_InvalidBody(t *testing.T) {
 
 	router := newTestRouter(&stubAcceptInvitation{}, &stubValidateInvitation{})
 
-	rec := doJSON(t, router, http.MethodPost, "/api/v1/invitations/token-123/accept", `{"firstName":"Jane"}`)
+	rec := doJSON(t, router, http.MethodPost, "/api/v1/invitations/token-123/accept", `{"first_name":"Jane"}`)
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400: %s", rec.Code, rec.Body.String())
 	}
@@ -94,7 +94,7 @@ func Test_AcceptInvitation_UsecaseError(t *testing.T) {
 	accept := &stubAcceptInvitation{err: customerrors.NewForbiddenError("invitation has expired")}
 	router := newTestRouter(accept, &stubValidateInvitation{})
 
-	rec := doJSON(t, router, http.MethodPost, "/api/v1/invitations/token-123/accept", `{"firstName":"Jane","lastName":"Doe","password":"Password123$"}`)
+	rec := doJSON(t, router, http.MethodPost, "/api/v1/invitations/token-123/accept", `{"first_name":"Jane","last_name":"Doe","password":"Password123$"}`)
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("status = %d, want 403: %s", rec.Code, rec.Body.String())
 	}

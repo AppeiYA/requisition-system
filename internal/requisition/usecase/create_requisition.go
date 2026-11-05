@@ -2,7 +2,6 @@ package usecase
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"time"
 
@@ -74,13 +73,11 @@ func (uc *CreateRequisitionUsecase) Execute(ctx context.Context, cmd requisition
 	}
 	priority := cmd.Priority
 	if priority == "" {
-		priority = domain.PriorityMedium.String()
-	} else if priority == domain.PriorityNormal.String() {
-		priority = domain.PriorityMedium.String()
+		return nil, domain.ErrPriorityCannotBeEmpty
 	}
 	referenceCode := cmd.ReferenceCode
 	if referenceCode == "" {
-		referenceCode, err = uc.idGenerator.GenerateID(fmt.Sprintf("REQ-%d", time.Now().Year()))
+		referenceCode, err = uc.idGenerator.GenerateID(domain.NewReferenceCodePrefix())
 		if err != nil {
 			return nil, err
 		}

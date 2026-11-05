@@ -265,6 +265,99 @@ func (r *RequisitionRepository) ListRequisitions(ctx context.Context, limit int,
 	return r.loadAggregates(ctx, rows)
 }
 
+var listRequisitionSummariesQuery = `
+	SELECT
+		r.id,
+		r.reference_code,
+		r.requested_by,
+		r.department_id,
+		r.status,
+		r.priority,
+		r.needed_by,
+		r.justification,
+		COALESCE(SUM(ri.estimated_unit_amount * ri.quantity), 0)::bigint AS total_estimated_amount,
+		r.created_at,
+		r.updated_at
+	FROM requisitions r
+	LEFT JOIN requisition_items ri
+		ON ri.requisition_id = r.id
+	GROUP BY
+		r.id,
+		r.reference_code,
+		r.requested_by,
+		r.department_id,
+		r.status,
+		r.priority,
+		r.needed_by,
+		r.justification,
+		r.created_at,
+		r.updated_at
+	ORDER BY r.created_at DESC
+	LIMIT $1 OFFSET $2
+`
+
+var listRequisitionSummariesByUserIDQuery = `
+	SELECT
+		r.id,
+		r.reference_code,
+		r.requested_by,
+		r.department_id,
+		r.status,
+		r.priority,
+		r.needed_by,
+		r.justification,
+		COALESCE(SUM(ri.estimated_unit_amount * ri.quantity), 0)::bigint AS total_estimated_amount,
+		r.created_at,
+		r.updated_at
+	FROM requisitions r
+	LEFT JOIN requisition_items ri
+		ON ri.requisition_id = r.id
+	WHERE r.requested_by = $1
+	GROUP BY
+		r.id,
+		r.reference_code,
+		r.requested_by,
+		r.department_id,
+		r.status,
+		r.priority,
+		r.needed_by,
+		r.justification,
+		r.created_at,
+		r.updated_at
+	ORDER BY r.created_at DESC
+	LIMIT $2 OFFSET $3
+`
+
+func (r *RequisitionRepository) ListRequisitionSummariesByUserID(ctx context.Context, userID string, limit int, offset int) ([]*requisitiondomain.RequisitionSummary, error) {
+	var rows []models.RequisitionSummaryModel
+	if err := r.repository.Executor(ctx).SelectContext(ctx, &rows,
+		listRequisitionSummariesByUserIDQuery, userID, limit, offset); err != nil {
+		return nil, err
+	}
+	return requisitionSummariesFromModels(rows)
+}
+
+func (r *RequisitionRepository) ListRequisitionSummaries(ctx context.Context, limit int, offset int) ([]*requisitiondomain.RequisitionSummary, error) {
+	var rows []models.RequisitionSummaryModel
+	if err := r.repository.Executor(ctx).SelectContext(ctx, &rows,
+		listRequisitionSummariesQuery, limit, offset); err != nil {
+		return nil, err
+	}
+	return requisitionSummariesFromModels(rows)
+}
+
+func requisitionSummariesFromModels(rows []models.RequisitionSummaryModel) ([]*requisitiondomain.RequisitionSummary, error) {
+	result := make([]*requisitiondomain.RequisitionSummary, 0, len(rows))
+	for _, row := range rows {
+		summary, err := row.ToDomain()
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, summary)
+	}
+	return result, nil
+}
+
 func (r *RequisitionRepository) loadAggregates(ctx context.Context, rows []models.RequisitionModel) ([]*requisitiondomain.Requisition, error) {
 	result := make([]*requisitiondomain.Requisition, 0, len(rows))
 	for _, row := range rows {

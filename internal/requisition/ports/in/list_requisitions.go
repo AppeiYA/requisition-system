@@ -12,5 +12,5 @@ type ListRequisitionsQuery struct {
 }
 
 type ListRequisitionsUsecaseInt interface {
-	Execute(ctx context.Context, query ListRequisitionsQuery) ([]*domain.Requisition, error)
+	Execute(ctx context.Context, query ListRequisitionsQuery) ([]*domain.RequisitionSummary, error)
 }

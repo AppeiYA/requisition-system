@@ -13,4 +13,6 @@ type RequisitionRepository interface {
 	UpdateRequisitionAggregate(ctx context.Context, requisition *domain.Requisition) error
 	ListRequisitionsByUserID(ctx context.Context, userID string, limit int, offset int) ([]*domain.Requisition, error)
 	ListRequisitions(ctx context.Context, limit int, offset int) ([]*domain.Requisition, error)
+	ListRequisitionSummariesByUserID(ctx context.Context, userID string, limit int, offset int) ([]*domain.RequisitionSummary, error)
+	ListRequisitionSummaries(ctx context.Context, limit int, offset int) ([]*domain.RequisitionSummary, error)
 }

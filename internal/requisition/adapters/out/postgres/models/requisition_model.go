@@ -20,6 +20,42 @@ type RequisitionModel struct {
 	UpdatedAt     time.Time `db:"updated_at"`
 }
 
+// RequisitionSummaryModel is the flat projection used by list queries. The
+// total is stored in minor units, matching the requisition_items column.
+type RequisitionSummaryModel struct {
+	ID                   string    `db:"id"`
+	ReferenceCode        string    `db:"reference_code"`
+	RequestedBy          string    `db:"requested_by"`
+	DepartmentID         string    `db:"department_id"`
+	Status               string    `db:"status"`
+	Priority             string    `db:"priority"`
+	NeededBy             time.Time `db:"needed_by"`
+	Justification        string    `db:"justification"`
+	TotalEstimatedAmount int64     `db:"total_estimated_amount"`
+	CreatedAt            time.Time `db:"created_at"`
+	UpdatedAt            time.Time `db:"updated_at"`
+}
+
+func (m RequisitionSummaryModel) ToDomain() (*requisitiondomain.RequisitionSummary, error) {
+	total, err := shareddomain.NewNairaMoneyFromMinorUnits(m.TotalEstimatedAmount)
+	if err != nil {
+		return nil, err
+	}
+	return &requisitiondomain.RequisitionSummary{
+		ID:                   m.ID,
+		ReferenceCode:        m.ReferenceCode,
+		RequestedBy:          m.RequestedBy,
+		DepartmentID:         m.DepartmentID,
+		Status:               m.Status,
+		Priority:             m.Priority,
+		NeededBy:             m.NeededBy,
+		Justification:        m.Justification,
+		TotalEstimatedAmount: total.ToFloat64(),
+		CreatedAt:            m.CreatedAt,
+		UpdatedAt:            m.UpdatedAt,
+	}, nil
+}
+
 type RequisitionItemModel struct {
 	ID                  string    `db:"id"`
 	RequisitionID       string    `db:"requisition_id"`
@@ -61,7 +97,7 @@ func RequisitionFromDomain(requisition *requisitiondomain.Requisition) *Requisit
 		ID: requisition.ID(), ReferenceCode: requisition.ReferenceCode(),
 		RequestedBy: requisition.RequestedBy(), DepartmentID: requisition.DepartmentID(),
 		Justification: requisition.Justification().Value(),
-		Priority:      requisition.Priority().String(), NeededBy: requisition.NeededBy(),
+		Priority:      requisition.Priority().String(), NeededBy: *requisition.NeededBy().Value(),
 		Status: requisition.Status().String(), CreatedAt: requisition.CreatedAt(),
 		UpdatedAt: requisition.UpdatedAt(),
 	}
