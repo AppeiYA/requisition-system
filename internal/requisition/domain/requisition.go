@@ -11,6 +11,8 @@ var (
 	DepartmentPrefixID  = "dpt"
 )
 
+const MaxRequestedItems = 5
+
 var (
 	ErrInvalidDepartmentID = customerrors.NewBadRequestError("invalid department ID")
 	ErrNilFields           = func(fieldName string) error {
@@ -21,6 +23,7 @@ var (
 	}
 	ErrInvalidReferenceCode      = customerrors.NewBadRequestError("invalid requisition reference code")
 	ErrRequisitionNeedsItem      = customerrors.NewBadRequestError("requisition must contain at least one item")
+	ErrTooManyRequestedItems     = customerrors.NewBadRequestError("requisition cannot contain more than 5 requested items")
 	ErrInvalidRequisitionID      = customerrors.NewBadRequestError("invalid requisition ID")
 	ErrInvalidNeededByDate       = customerrors.NewBadRequestError("needed by date cannot be in the past")
 	ErrDepartmentIDCannotBeEmpty = customerrors.NewBadRequestError("department ID cannot be empty")
@@ -36,7 +39,7 @@ type Requisition struct {
 	departmentID   string
 	justification  *RequisitionJustification
 	priority       RequisitionPriority
-	neededBy       time.Time
+	neededBy       *NeedBy
 	status         RequisitionStatus
 	createdAt      time.Time
 	updatedAt      time.Time
@@ -71,7 +74,7 @@ func (r *Requisition) Priority() RequisitionPriority {
 	return r.priority
 }
 
-func (r *Requisition) NeededBy() time.Time {
+func (r *Requisition) NeededBy() *NeedBy {
 	return r.neededBy
 }
 
@@ -108,10 +111,11 @@ func (r *Requisition) UpdateRequisition(input *UpdateRequisitionInput) error {
 	}
 
 	if input.NeededBy != nil {
-		if isDateNotFuture(*input.NeededBy) {
-			return ErrInvalidNeededByDate
+		newNeedBy, err := NewNeedBy(input.NeededBy)
+		if err != nil {
+			return err
 		}
-		r.neededBy = *input.NeededBy
+		r.neededBy = newNeedBy
 	}
 
 	r.updatedAt = time.Now()

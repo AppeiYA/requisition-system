@@ -172,7 +172,7 @@ func Test_TransitionRequisition_Approved(t *testing.T) {
 	transition := &stubTransitionRequisition{res: transitionedRequisition(t, domain.RequisitionStatusApproved, "")}
 	router := newRequisitionActorRouter("usr-admin", "admin", &stubGetRequisition{}, transition)
 
-	rec := doReqJSON(t, router, http.MethodPost, "/api/v1/requisitions/req_123/status", `{"toStatus":"approved"}`)
+	rec := doReqJSON(t, router, http.MethodPost, "/api/v1/requisitions/req_123/status", `{"to_status":"approved"}`)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
 	}

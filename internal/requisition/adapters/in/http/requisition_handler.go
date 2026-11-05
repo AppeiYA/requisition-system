@@ -404,12 +404,7 @@ func (h *RequisitionHandler) listMy(c *gin.Context) {
 		return
 	}
 
-	result, err := requisitionResponsesFromDomain(requisitions)
-	if err != nil {
-		response.ErrorFrom(c, err)
-		c.Abort()
-		return
-	}
+	result := requisitionSummaryResponsesFromDomain(requisitions)
 
 	response.SuccessWithPagination(c, "requisitions fetched successfully", http.StatusOK, result, response.NewPaginationMeta(q.Limit, q.Offset))
 }
@@ -430,24 +425,15 @@ func (h *RequisitionHandler) listAll(c *gin.Context) {
 		return
 	}
 
-	result, err := requisitionResponsesFromDomain(requisitions)
-	if err != nil {
-		response.ErrorFrom(c, err)
-		c.Abort()
-		return
-	}
+	result := requisitionSummaryResponsesFromDomain(requisitions)
 
 	response.SuccessWithPagination(c, "requisitions fetched successfully", http.StatusOK, result, response.NewPaginationMeta(q.Limit, q.Offset))
 }
 
-func requisitionResponsesFromDomain(requisitions []*domain.Requisition) ([]*RequisitionResponse, error) {
-	result := make([]*RequisitionResponse, 0, len(requisitions))
-	for _, requisition := range requisitions {
-		mapped, err := RequisitionResponseFromDomainWithError(requisition)
-		if err != nil {
-			return nil, err
-		}
-		result = append(result, mapped)
+func requisitionSummaryResponsesFromDomain(summaries []*domain.RequisitionSummary) []*RequisitionSummaryResponse {
+	result := make([]*RequisitionSummaryResponse, 0, len(summaries))
+	for _, summary := range summaries {
+		result = append(result, RequisitionSummaryResponseFromDomain(summary))
 	}
-	return result, nil
+	return result
 }

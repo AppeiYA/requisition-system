@@ -54,9 +54,16 @@ func (createItemRepo) ListItems(context.Context, int, int) ([]*requisitiondomain
 func (createItemRepo) UpdateItem(context.Context, *requisitiondomain.Item) error { return nil }
 
 type createRequisitionRepo struct {
-	saved *requisitiondomain.Requisition
-	get   *requisitiondomain.Requisition
-	err   error
+	saved          *requisitiondomain.Requisition
+	get            *requisitiondomain.Requisition
+	summaries      []*requisitiondomain.RequisitionSummary
+	userSummaries  []*requisitiondomain.RequisitionSummary
+	summaryUserID  string
+	summaryLimit   int
+	summaryOffset  int
+	listCalled     bool
+	userListCalled bool
+	err            error
 }
 
 func (r *createRequisitionRepo) SaveRequisition(_ context.Context, requisition *requisitiondomain.Requisition) error {
@@ -80,6 +87,19 @@ func (*createRequisitionRepo) ListRequisitionsByUserID(context.Context, string, 
 }
 func (*createRequisitionRepo) ListRequisitions(context.Context, int, int) ([]*requisitiondomain.Requisition, error) {
 	return nil, nil
+}
+func (r *createRequisitionRepo) ListRequisitionSummaries(_ context.Context, limit int, offset int) ([]*requisitiondomain.RequisitionSummary, error) {
+	r.listCalled = true
+	r.summaryLimit = limit
+	r.summaryOffset = offset
+	return r.summaries, r.err
+}
+func (r *createRequisitionRepo) ListRequisitionSummariesByUserID(_ context.Context, userID string, limit int, offset int) ([]*requisitiondomain.RequisitionSummary, error) {
+	r.userListCalled = true
+	r.summaryUserID = userID
+	r.summaryLimit = limit
+	r.summaryOffset = offset
+	return r.userSummaries, r.err
 }
 
 type createTransactionManager struct {

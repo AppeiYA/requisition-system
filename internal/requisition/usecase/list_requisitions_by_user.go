@@ -22,7 +22,7 @@ func NewListRequisitionsByUserUsecase(requisitionRepo requisitionout.Requisition
 	return &ListRequisitionsByUserUsecase{requisitionRepo: requisitionRepo, userLookup: userLookup}
 }
 
-func (uc *ListRequisitionsByUserUsecase) Execute(ctx context.Context, query requisitionin.ListRequisitionsByUserQuery) ([]*domain.Requisition, error) {
+func (uc *ListRequisitionsByUserUsecase) Execute(ctx context.Context, query requisitionin.ListRequisitionsByUserQuery) ([]*domain.RequisitionSummary, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -39,5 +39,5 @@ func (uc *ListRequisitionsByUserUsecase) Execute(ctx context.Context, query requ
 		}
 	}
 	limit, offset := shareddomain.Clamp(query.Limit, query.Offset)
-	return uc.requisitionRepo.ListRequisitionsByUserID(ctx, query.UserID, limit, offset)
+	return uc.requisitionRepo.ListRequisitionSummariesByUserID(ctx, query.UserID, limit, offset)
 }

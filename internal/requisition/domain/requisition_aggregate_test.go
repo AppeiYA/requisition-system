@@ -121,6 +121,21 @@ func TestNewSubmittedRequisitionRejectsEmptyOrNonFuture(t *testing.T) {
 	}
 }
 
+func TestNewSubmittedRequisitionRejectsMoreThanFiveRequestedItems(t *testing.T) {
+	t.Parallel()
+
+	_, err := NewSubmittedRequisitionWithRequestedItems(
+		"req_123", "REQ-2026-10001", "usr_123", "dpt_123",
+		PriorityMedium, time.Now().UTC().AddDate(0, 0, 1),
+		mustRequisitionJustification(t, "Office supplies"),
+		[]*RequisitionItem{aggregateItem(t, "", "ritem_1", 1)},
+		make([]*RequestedItem, MaxRequestedItems+1),
+	)
+	if err != ErrTooManyRequestedItems {
+		t.Fatalf("too many requested items error = %v, want %v", err, ErrTooManyRequestedItems)
+	}
+}
+
 func TestRequisitionStatusTransitionCreatesHistory(t *testing.T) {
 	t.Parallel()
 

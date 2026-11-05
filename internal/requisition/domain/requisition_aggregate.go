@@ -133,9 +133,13 @@ func ReconstituteRequisitionAggregateWithRequestedItems(
 	if !strings.HasPrefix(departmentID, DepartmentPrefixID) {
 		return nil, ErrInvalidDepartmentID
 	}
+	validNeedBy, err := NewNeedBy(&neededBy)
+	if err != nil {
+		return nil, err
+	}
 	requisition := &Requisition{
 		id: id, referenceCode: referenceCode, requestedBy: requestedBy,
-		departmentID: departmentID, priority: priorityValue, neededBy: neededBy,
+		departmentID: departmentID, priority: priorityValue, neededBy: validNeedBy,
 		justification: justificationValue, status: statusValue,
 		createdAt: createdAt, updatedAt: updatedAt,
 		items:          append([]*RequisitionItem(nil), items...),
@@ -146,13 +150,16 @@ func ReconstituteRequisitionAggregateWithRequestedItems(
 }
 
 func validateRequestedItems(items []*RequisitionItem, requestedItems []*RequestedItem) error {
+	if err := capRequestedItemsCount(requestedItems); err != nil {
+		return err
+	}
 	if requestedItems == nil {
 		return nil
 	}
 	available := make(map[string]*RequestedItem, len(requestedItems))
 	for _, requestedItem := range requestedItems {
 		if requestedItem == nil {
-			return ErrNilFields("requestedItem")
+			return ErrNilFields("requested_item")
 		}
 		if _, exists := available[requestedItem.ID()]; exists {
 			return ErrDuplicateRequestedItem
@@ -166,6 +173,13 @@ func validateRequestedItems(items []*RequisitionItem, requestedItems []*Requeste
 		if _, exists := available[item.RequestedItemID()]; !exists {
 			return ErrInvalidRequestedItemID
 		}
+	}
+	return nil
+}
+
+func capRequestedItemsCount(requestedItems []*RequestedItem) error {
+	if len(requestedItems) > MaxRequestedItems {
+		return ErrTooManyRequestedItems
 	}
 	return nil
 }
@@ -196,13 +210,14 @@ func newRequisitionHeader(
 	if justification == nil {
 		return nil, ErrNilFields("justification")
 	}
-	if isDateNotFuture(neededBy) {
-		return nil, ErrInvalidNeededByDate
+	validNeedBy, err := NewNeedBy(&neededBy)
+	if err != nil {
+		return nil, err
 	}
 	now := time.Now()
 	return &Requisition{
 		id: id, requestedBy: requestedBy, departmentID: departmentID,
-		priority: priority, neededBy: neededBy, justification: justification,
+		priority: priority, neededBy: validNeedBy, justification: justification,
 		status: RequisitionStatusPending, createdAt: now, updatedAt: now,
 	}, nil
 }
@@ -236,18 +251,6 @@ func validateRequisitionItems(requisitionID string, items []*RequisitionItem) er
 		}
 	}
 	return nil
-}
-
-func isDateNotFuture(value time.Time) bool {
-	today := time.Now().UTC()
-	date := value.UTC()
-	if date.Year() != today.Year() {
-		return date.Year() <= today.Year()
-	}
-	if date.Month() != today.Month() {
-		return date.Month() <= today.Month()
-	}
-	return date.Day() <= today.Day()
 }
 
 func (r *Requisition) ReferenceCode() string { return r.referenceCode }

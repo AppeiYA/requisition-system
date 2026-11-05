@@ -42,8 +42,8 @@ type logoutRequest struct {
 
 type AcceptInvitationRequest struct {
 	Token     string `json:"token" binding:"required"`
-	FirstName string `json:"firstName" binding:"required"`
-	LastName  string `json:"lastName" binding:"required"`
+	FirstName string `json:"first_name" binding:"required"`
+	LastName  string `json:"last_name" binding:"required"`
 	Password  string `json:"password" binding:"required"`
 }
 

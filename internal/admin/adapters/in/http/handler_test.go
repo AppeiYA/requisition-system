@@ -62,7 +62,7 @@ func Test_Invite_Success(t *testing.T) {
 	invite := &stubInvite{res: &adminin.InviteMemberResult{InvitationID: "inv-1"}}
 	router := newTestRouter(invite, withUserID("usr-1"))
 
-	rec := doJSON(t, router, http.MethodPost, "/api/v1/admin/invitations", `{"email":"invitee@example.com","firstName":"Jane","lastName":"Doe","phone":"+14155551234","staffId":"STF-1234","departmentId":"dpt-1","jobTitle":"Software Engineer"}`)
+	rec := doJSON(t, router, http.MethodPost, "/api/v1/admin/invitations", `{"email":"invitee@example.com","first_name":"Jane","last_name":"Doe","phone":"+14155551234","staff_id":"STF-1234","department_id":"dpt-1","job_title":"Software Engineer"}`)
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("status = %d, want 201: %s", rec.Code, rec.Body.String())
 	}
@@ -127,7 +127,7 @@ func Test_Invite_Conflict(t *testing.T) {
 	invite := &stubInvite{err: customerrors.NewConflictError("user with this email already exists")}
 	router := newTestRouter(invite, withUserID("usr-1"))
 
-	rec := doJSON(t, router, http.MethodPost, "/api/v1/admin/invitations", `{"email":"invitee@example.com","firstName":"Jane","lastName":"Doe","departmentId":"dpt-1","jobTitle":"Software Engineer"}`)
+	rec := doJSON(t, router, http.MethodPost, "/api/v1/admin/invitations", `{"email":"invitee@example.com","first_name":"Jane","last_name":"Doe","department_id":"dpt-1","job_title":"Software Engineer"}`)
 	if rec.Code != http.StatusConflict {
 		t.Fatalf("status = %d, want 409: %s", rec.Code, rec.Body.String())
 	}

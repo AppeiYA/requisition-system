@@ -80,131 +80,6 @@ type TransitionRequisitionStatusRequest struct {
 	Reason   string `json:"reason" example:"Approved by department administrator"`
 }
 
-// UnmarshalJSON accepts both to_status and toStatus.
-func (r *TransitionRequisitionStatusRequest) UnmarshalJSON(data []byte) error {
-	var raw struct {
-		ToStatus      *string `json:"to_status"`
-		ToStatusCamel *string `json:"toStatus"`
-		Reason        *string `json:"reason"`
-	}
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return err
-	}
-	*r = TransitionRequisitionStatusRequest{
-		ToStatus: firstString(raw.ToStatus, raw.ToStatusCamel),
-		Reason:   firstString(raw.Reason, nil),
-	}
-	return nil
-}
-
-// UnmarshalJSON accepts both the API's snake_case field names and their
-// camelCase equivalents so older clients can migrate without a flag day.
-func (r *CreateRequisitionRequest) UnmarshalJSON(data []byte) error {
-	var raw struct {
-		DepartmentID      *string                        `json:"department_id"`
-		DepartmentIDCamel *string                        `json:"departmentId"`
-		Priority          *string                        `json:"priority"`
-		NeededBy          *Date                          `json:"needed_by"`
-		NeededByCamel     *Date                          `json:"neededBy"`
-		Justification     *string                        `json:"justification"`
-		Lines             []CreateRequisitionLineRequest `json:"lines"`
-	}
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return err
-	}
-	*r = CreateRequisitionRequest{
-		DepartmentID:  firstString(raw.DepartmentID, raw.DepartmentIDCamel),
-		Priority:      firstString(raw.Priority, nil),
-		NeededBy:      firstDate(raw.NeededBy, raw.NeededByCamel),
-		Justification: firstString(raw.Justification, nil),
-		Lines:         raw.Lines,
-	}
-	return nil
-}
-
-// UnmarshalJSON accepts both item_id/requested_item/estimated_unit_amount and
-// itemId/requestedItem/estimatedUnitAmount.
-func (l *CreateRequisitionLineRequest) UnmarshalJSON(data []byte) error {
-	var raw struct {
-		ItemID                   *string                     `json:"item_id"`
-		ItemIDCamel              *string                     `json:"itemId"`
-		RequestedItem            *CreateRequestedItemRequest `json:"requested_item"`
-		RequestedItemCamel       *CreateRequestedItemRequest `json:"requestedItem"`
-		Quantity                 *int                        `json:"quantity"`
-		EstimatedUnitAmount      *float64                    `json:"estimated_unit_amount"`
-		EstimatedUnitAmountCamel *float64                    `json:"estimatedUnitAmount"`
-		Notes                    *string                     `json:"notes"`
-	}
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return err
-	}
-	requestedItem := raw.RequestedItem
-	if requestedItem == nil {
-		requestedItem = raw.RequestedItemCamel
-	}
-	*l = CreateRequisitionLineRequest{
-		ItemID:              firstString(raw.ItemID, raw.ItemIDCamel),
-		RequestedItem:       requestedItem,
-		Quantity:            firstInt(raw.Quantity),
-		EstimatedUnitAmount: firstFloat64(raw.EstimatedUnitAmount, raw.EstimatedUnitAmountCamel),
-		Notes:               firstString(raw.Notes, nil),
-	}
-	return nil
-}
-
-// UnmarshalJSON accepts both category_id and categoryId.
-func (i *CreateRequestedItemRequest) UnmarshalJSON(data []byte) error {
-	var raw struct {
-		Name            *string `json:"name"`
-		CategoryID      *string `json:"category_id"`
-		CategoryIDCamel *string `json:"categoryId"`
-		Description     *string `json:"description"`
-	}
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return err
-	}
-	*i = CreateRequestedItemRequest{
-		Name:        firstString(raw.Name, nil),
-		CategoryID:  firstString(raw.CategoryID, raw.CategoryIDCamel),
-		Description: firstString(raw.Description, nil),
-	}
-	return nil
-}
-
-func firstString(values ...*string) string {
-	for _, value := range values {
-		if value != nil {
-			return *value
-		}
-	}
-	return ""
-}
-
-func firstDate(values ...*Date) Date {
-	for _, value := range values {
-		if value != nil {
-			return *value
-		}
-	}
-	return ""
-}
-
-func firstInt(value *int) int {
-	if value == nil {
-		return 0
-	}
-	return *value
-}
-
-func firstFloat64(values ...*float64) float64 {
-	for _, value := range values {
-		if value != nil {
-			return *value
-		}
-	}
-	return 0
-}
-
 type RequisitionResponse struct {
 	ID                   string                             `json:"id"`
 	ReferenceCode        string                             `json:"reference_code"`
@@ -220,6 +95,22 @@ type RequisitionResponse struct {
 	StatusHistory        []RequisitionStatusHistoryResponse `json:"status_history"`
 	CreatedAt            time.Time                          `json:"created_at"`
 	UpdatedAt            time.Time                          `json:"updated_at"`
+}
+
+// RequisitionSummaryResponse is the list projection. It intentionally omits
+// lines and status history so list responses stay header-oriented.
+type RequisitionSummaryResponse struct {
+	ID                   string    `json:"id"`
+	ReferenceCode        string    `json:"reference_code"`
+	RequestedBy          string    `json:"requested_by"`
+	DepartmentID         string    `json:"department_id"`
+	Status               string    `json:"status"`
+	Priority             string    `json:"priority"`
+	NeededBy             string    `json:"needed_by"`
+	Justification        string    `json:"justification"`
+	TotalEstimatedAmount float64   `json:"total_estimated_amount"`
+	CreatedAt            time.Time `json:"created_at"`
+	UpdatedAt            time.Time `json:"updated_at"`
 }
 
 type RequisitionLineResponse struct {
@@ -242,6 +133,25 @@ type RequisitionStatusHistoryResponse struct {
 	ActorRole  string    `json:"actor_role"`
 	Reason     string    `json:"reason"`
 	CreatedAt  time.Time `json:"created_at"`
+}
+
+func RequisitionSummaryResponseFromDomain(summary *domain.RequisitionSummary) *RequisitionSummaryResponse {
+	if summary == nil {
+		return nil
+	}
+	return &RequisitionSummaryResponse{
+		ID:                   summary.ID,
+		ReferenceCode:        summary.ReferenceCode,
+		RequestedBy:          summary.RequestedBy,
+		DepartmentID:         summary.DepartmentID,
+		Status:               summary.Status,
+		Priority:             summary.Priority,
+		NeededBy:             summary.NeededBy.UTC().Format(dateOnlyLayout),
+		Justification:        summary.Justification,
+		TotalEstimatedAmount: summary.TotalEstimatedAmount,
+		CreatedAt:            summary.CreatedAt,
+		UpdatedAt:            summary.UpdatedAt,
+	}
 }
 
 func RequisitionResponseFromDomain(requisition *domain.Requisition) *RequisitionResponse {
@@ -311,7 +221,7 @@ func RequisitionResponseFromDomainWithError(requisition *domain.Requisition) (*R
 		DepartmentID:         requisition.DepartmentID(),
 		Status:               requisition.Status().String(),
 		Priority:             requisition.Priority().String(),
-		NeededBy:             requisition.NeededBy().UTC().Format(dateOnlyLayout),
+		NeededBy:             requisition.NeededBy().Value().UTC().Format(dateOnlyLayout),
 		Justification:        requisition.Justification().Value(),
 		Currency:             currency,
 		Lines:                lines,

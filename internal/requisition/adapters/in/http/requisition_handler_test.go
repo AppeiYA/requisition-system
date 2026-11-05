@@ -19,23 +19,23 @@ import (
 )
 
 type stubListRequisitionsByUser struct {
-	res []*domain.Requisition
+	res []*domain.RequisitionSummary
 	err error
 	got requisitionin.ListRequisitionsByUserQuery
 }
 
-func (s *stubListRequisitionsByUser) Execute(ctx context.Context, query requisitionin.ListRequisitionsByUserQuery) ([]*domain.Requisition, error) {
+func (s *stubListRequisitionsByUser) Execute(ctx context.Context, query requisitionin.ListRequisitionsByUserQuery) ([]*domain.RequisitionSummary, error) {
 	s.got = query
 	return s.res, s.err
 }
 
 type stubListRequisitions struct {
-	res []*domain.Requisition
+	res []*domain.RequisitionSummary
 	err error
 	got requisitionin.ListRequisitionsQuery
 }
 
-func (s *stubListRequisitions) Execute(ctx context.Context, query requisitionin.ListRequisitionsQuery) ([]*domain.Requisition, error) {
+func (s *stubListRequisitions) Execute(ctx context.Context, query requisitionin.ListRequisitionsQuery) ([]*domain.RequisitionSummary, error) {
 	s.got = query
 	return s.res, s.err
 }
@@ -150,6 +150,23 @@ func validRequisition() *domain.Requisition {
 	return requisition
 }
 
+func validRequisitionSummary() *domain.RequisitionSummary {
+	now := time.Now().UTC()
+	return &domain.RequisitionSummary{
+		ID:                   "req_123",
+		ReferenceCode:        "REQ-2026-10001",
+		RequestedBy:          "usr_123",
+		DepartmentID:         "dpt_123",
+		Status:               "pending",
+		Priority:             "medium",
+		NeededBy:             now.AddDate(0, 0, 5),
+		Justification:        "Needed for office",
+		TotalEstimatedAmount: 11500,
+		CreatedAt:            now,
+		UpdatedAt:            now,
+	}
+}
+
 func createRequestBody(lines string) string {
 	return `{
 		"department_id": "dpt_123",
@@ -220,19 +237,19 @@ func Test_CreateRequisition_CatalogueAndRequestedLines(t *testing.T) {
 	}
 }
 
-func Test_CreateRequisition_AcceptsCamelCaseAliases(t *testing.T) {
+func Test_CreateRequisition_AcceptsSnakeCasePayload(t *testing.T) {
 	t.Parallel()
 	create := &stubCreateRequisition{res: validRequisition()}
 	router := newRequisitionTestRouter(create, &stubListRequisitionsByUser{}, &stubListRequisitions{})
 
 	body := `{
-		"departmentId": "dpt_123",
+		"department_id": "dpt_123",
 		"priority": "medium",
-		"neededBy": "` + time.Now().UTC().AddDate(0, 0, 5).Format(dateOnlyLayout) + `",
+		"needed_by": "` + time.Now().UTC().AddDate(0, 0, 5).Format(dateOnlyLayout) + `",
 		"justification": "Office setup",
 		"lines": [
-			{"itemId":"itm_123","quantity":2,"estimatedUnitAmount":150000},
-			{"requestedItem":{"name":"Laptop stand","categoryId":"cat_123","description":"Adjustable laptop stand"},"quantity":1,"estimatedUnitAmount":850000}
+			{"item_id":"itm_123","quantity":2,"estimated_unit_amount":150000},
+			{"requested_item":{"name":"Laptop stand","category_id":"cat_123","description":"Adjustable laptop stand"},"quantity":1,"estimated_unit_amount":850000}
 		]
 	}`
 	rec := doReqJSON(t, router, http.MethodPost, "/api/v1/requisitions", body)
@@ -528,9 +545,9 @@ func assertValidationField(t *testing.T, body []byte, field string) {
 	t.Fatalf("validation details = %+v, want field %q", response.Details, field)
 }
 
-func Test_ListMyRequisitions_Success(t *testing.T) {
+func Test_ListMyRequisitions_ReturnsSummariesOnly(t *testing.T) {
 	t.Parallel()
-	listByUser := &stubListRequisitionsByUser{res: []*domain.Requisition{validRequisition()}}
+	listByUser := &stubListRequisitionsByUser{res: []*domain.RequisitionSummary{validRequisitionSummary()}}
 	router := newRequisitionTestRouter(&stubCreateRequisition{}, listByUser, &stubListRequisitions{})
 	rec := doReqJSON(t, router, http.MethodGet, "/api/v1/requisitions", "")
 	if rec.Code != http.StatusOK {
@@ -542,8 +559,9 @@ func Test_ListMyRequisitions_Success(t *testing.T) {
 	if listByUser.got.Limit != 100 || listByUser.got.Offset != 0 {
 		t.Errorf("expected default pagination, got limit=%d offset=%d", listByUser.got.Limit, listByUser.got.Offset)
 	}
+
 	var resp struct {
-		Data []*RequisitionResponse `json:"data"`
+		Data []RequisitionSummaryResponse `json:"data"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("unmarshal: %v", err)
@@ -551,17 +569,27 @@ func Test_ListMyRequisitions_Success(t *testing.T) {
 	if len(resp.Data) != 1 {
 		t.Fatalf("expected 1 requisition, got %d", len(resp.Data))
 	}
-	if resp.Data[0] == nil {
-		t.Fatal("expected non-nil requisition")
+	if resp.Data[0].ID != "req_123" || resp.Data[0].TotalEstimatedAmount != 11500 {
+		t.Fatalf("unexpected summary response: %+v", resp.Data[0])
 	}
-	if len(resp.Data[0].Lines) != 2 || resp.Data[0].TotalEstimatedAmount != 11500 {
-		t.Fatalf("unexpected aggregate response: %+v", resp.Data[0])
+
+	var raw struct {
+		Data []map[string]json.RawMessage `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &raw); err != nil {
+		t.Fatalf("unmarshal raw response: %v", err)
+	}
+	if _, exists := raw.Data[0]["lines"]; exists {
+		t.Fatal("list response must not include lines")
+	}
+	if _, exists := raw.Data[0]["status_history"]; exists {
+		t.Fatal("list response must not include status_history")
 	}
 }
 
 func Test_ListMyRequisitions_Empty(t *testing.T) {
 	t.Parallel()
-	listByUser := &stubListRequisitionsByUser{res: []*domain.Requisition{}}
+	listByUser := &stubListRequisitionsByUser{res: []*domain.RequisitionSummary{}}
 	router := newRequisitionTestRouter(&stubCreateRequisition{}, listByUser, &stubListRequisitions{})
 	rec := doReqJSON(t, router, http.MethodGet, "/api/v1/requisitions", "")
 	if rec.Code != http.StatusOK {
@@ -578,7 +606,7 @@ func Test_ListMyRequisitions_Empty(t *testing.T) {
 
 func Test_ListMyRequisitions_Pagination(t *testing.T) {
 	t.Parallel()
-	listByUser := &stubListRequisitionsByUser{res: []*domain.Requisition{}}
+	listByUser := &stubListRequisitionsByUser{res: []*domain.RequisitionSummary{}}
 	router := newRequisitionTestRouter(&stubCreateRequisition{}, listByUser, &stubListRequisitions{})
 	rec := doReqJSON(t, router, http.MethodGet, "/api/v1/requisitions?limit=10&offset=20", "")
 	if rec.Code != http.StatusOK {
@@ -589,9 +617,9 @@ func Test_ListMyRequisitions_Pagination(t *testing.T) {
 	}
 }
 
-func Test_ListAllRequisitions_Admin(t *testing.T) {
+func Test_ListAllRequisitions_AdminReturnsSummariesOnly(t *testing.T) {
 	t.Parallel()
-	listAll := &stubListRequisitions{res: []*domain.Requisition{validRequisition()}}
+	listAll := &stubListRequisitions{res: []*domain.RequisitionSummary{validRequisitionSummary()}}
 	router := newRequisitionTestRouterAdmin(&stubCreateRequisition{}, &stubListRequisitionsByUser{}, listAll)
 	rec := doReqJSON(t, router, http.MethodGet, "/api/v1/requisitions/all", "")
 	if rec.Code != http.StatusOK {
@@ -599,6 +627,51 @@ func Test_ListAllRequisitions_Admin(t *testing.T) {
 	}
 	if listAll.got.Limit != 100 || listAll.got.Offset != 0 {
 		t.Errorf("expected default pagination, got limit=%d offset=%d", listAll.got.Limit, listAll.got.Offset)
+	}
+
+	var raw struct {
+		Data []map[string]json.RawMessage `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &raw); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(raw.Data) != 1 {
+		t.Fatalf("expected 1 requisition, got %d", len(raw.Data))
+	}
+	if _, exists := raw.Data[0]["lines"]; exists {
+		t.Fatal("list response must not include lines")
+	}
+	if _, exists := raw.Data[0]["status_history"]; exists {
+		t.Fatal("list response must not include status_history")
+	}
+	if _, exists := raw.Data[0]["total_estimated_amount"]; !exists {
+		t.Fatal("list response must include total_estimated_amount")
+	}
+}
+
+func Test_GetRequisition_ReturnsFullDetail(t *testing.T) {
+	t.Parallel()
+
+	router := newRequisitionActorRouter("usr_123", "user", &stubGetRequisition{res: validRequisition()}, &stubTransitionRequisition{})
+	rec := doReqJSON(t, router, http.MethodGet, "/api/v1/requisitions/req_123", "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+
+	var raw struct {
+		Data map[string]json.RawMessage `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &raw); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if _, exists := raw.Data["lines"]; !exists {
+		t.Fatal("detail response must include lines")
+	}
+	if _, exists := raw.Data["status_history"]; !exists {
+		t.Fatal("detail response must include status_history")
+	}
+	if _, exists := raw.Data["total_estimated_amount"]; !exists {
+		t.Fatal("detail response must include total_estimated_amount")
 	}
 }
 

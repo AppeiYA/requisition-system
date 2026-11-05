@@ -17,10 +17,10 @@ func NewListRequisitionsUsecase(requisitionRepo requisitionout.RequisitionReposi
 	return &ListRequisitionsUsecase{requisitionRepo: requisitionRepo}
 }
 
-func (uc *ListRequisitionsUsecase) Execute(ctx context.Context, query requisitionin.ListRequisitionsQuery) ([]*domain.Requisition, error) {
+func (uc *ListRequisitionsUsecase) Execute(ctx context.Context, query requisitionin.ListRequisitionsQuery) ([]*domain.RequisitionSummary, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	limit, offset := shareddomain.Clamp(query.Limit, query.Offset)
-	return uc.requisitionRepo.ListRequisitions(ctx, limit, offset)
+	return uc.requisitionRepo.ListRequisitionSummaries(ctx, limit, offset)
 }

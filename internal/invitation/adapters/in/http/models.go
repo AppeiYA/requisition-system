@@ -11,10 +11,10 @@ type AcceptInvitationRequest struct {
 type ValidateInvitationResponse struct {
 	Valid        bool   `json:"valid"`
 	Email        string `json:"email,omitempty"`
-	FirstName    string `json:"firstName,omitempty"`
-	LastName     string `json:"lastName,omitempty"`
+	FirstName    string `json:"first_name,omitempty"`
+	LastName     string `json:"last_name,omitempty"`
 	Phone        string `json:"phone,omitempty"`
-	StaffID      string `json:"staffId,omitempty"`
-	DepartmentID string `json:"departmentId,omitempty"`
-	JobTitle     string `json:"jobTitle,omitempty"`
+	StaffID      string `json:"staff_id,omitempty"`
+	DepartmentID string `json:"department_id,omitempty"`
+	JobTitle     string `json:"job_title,omitempty"`
 }
