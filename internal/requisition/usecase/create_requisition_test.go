@@ -248,7 +248,7 @@ func TestCreateRequisitionUsecaseRollsBackOnRepositoryError(t *testing.T) {
 			Quantity: 1, EstimatedUnitAmount: 2500,
 		}},
 		Justification: "Office supplies",
-		Priority:      "normal",
+		Priority:      "medium",
 		NeededBy:      time.Now().AddDate(0, 0, 2),
 	})
 	if !errors.Is(err, repository.err) {
