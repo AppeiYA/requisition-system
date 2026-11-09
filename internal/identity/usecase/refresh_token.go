@@ -51,7 +51,11 @@ func (u *RefreshTokenUsecase) Execute(
 		return nil, err
 	}
 
-	access, err := u.accessTokenService.GenerateAccessToken(ctx, &identityout.TokenModel{ID: session.UserID})
+	access, err := u.accessTokenService.GenerateAccessToken(ctx, &identityout.TokenModel{
+		ID:    session.UserID,
+		Role:  session.Role,
+		Email: session.Email,
+	})
 	if err != nil {
 		return nil, err
 	}

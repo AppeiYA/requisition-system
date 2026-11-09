@@ -28,6 +28,12 @@ func Test_RefreshTokenUsecase_Rotates(t *testing.T) {
 		if user.ID != identitymocks.DefaultID {
 			t.Errorf("expected user ID %q, got %q", identitymocks.DefaultID, user.ID)
 		}
+		if user.Role != "admin" {
+			t.Errorf("expected user role %q, got %q", "admin", user.Role)
+		}
+		if user.Email != "admin@example.com" {
+			t.Errorf("expected user email %q, got %q", "admin@example.com", user.Email)
+		}
 		return &identityout.AccessToken{Value: "new-access-token", ExpiresIn: 900}, nil
 	}
 
@@ -41,7 +47,10 @@ func Test_RefreshTokenUsecase_Rotates(t *testing.T) {
 	sessions.RotateFunc = func(ctx context.Context, oldTokenHash, newTokenHash string) (*identityout.RefreshSession, error) {
 		gotOldHash = oldTokenHash
 		gotNewHash = newTokenHash
-		return &identityout.RefreshSession{UserID: identitymocks.DefaultID, FamilyID: "family-id"}, nil
+		return &identityout.RefreshSession{
+			UserID: identitymocks.DefaultID, FamilyID: "family-id",
+			Role: "admin", Email: "admin@example.com",
+		}, nil
 	}
 
 	uc := newRefreshUsecase(accessTokens, sessions, generator)

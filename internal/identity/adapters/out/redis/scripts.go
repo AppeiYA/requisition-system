@@ -36,11 +36,11 @@ end
 
 redis.call('DEL', KEYS[1])
 redis.call('SET', KEYS[3], data['family_id'], 'PX', ARGV[1])
-redis.call('HSET', KEYS[2], 'user_id', data['user_id'], 'family_id', data['family_id'], 'expires_at', ARGV[2])
+redis.call('HSET', KEYS[2], 'user_id', data['user_id'], 'family_id', data['family_id'], 'role', data['role'], 'email', data['email'], 'expires_at', ARGV[2])
 redis.call('PEXPIRE', KEYS[2], ARGV[1])
 redis.call('PEXPIRE', familyKey, ARGV[1])
 
-return {'ok', data['user_id'], data['family_id']}
+return {'ok', data['user_id'], data['family_id'], data['role'], data['email']}
 `
 
 // revokeScript deletes a session and its family, making logout idempotent.

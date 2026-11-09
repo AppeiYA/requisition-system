@@ -58,7 +58,7 @@ func TestRefreshSessionRepository_CreateAndRotate(t *testing.T) {
 
 	first, second, third := randomHash(t), randomHash(t), randomHash(t)
 
-	if err := repo.Create(ctx, "user-1", first); err != nil {
+	if err := repo.Create(ctx, "user-1", "user", "user@example.com", first); err != nil {
 		t.Fatalf("create: %v", err)
 	}
 
@@ -85,7 +85,7 @@ func TestRefreshSessionRepository_ReuseRevokesFamily(t *testing.T) {
 
 	first, second, third := randomHash(t), randomHash(t), randomHash(t)
 
-	if err := repo.Create(ctx, "user-1", first); err != nil {
+	if err := repo.Create(ctx, "user-1", "user", "user@example.com", first); err != nil {
 		t.Fatalf("create: %v", err)
 	}
 	if _, err := repo.Rotate(ctx, first, second); err != nil {
@@ -118,7 +118,7 @@ func TestRefreshSessionRepository_Revoke(t *testing.T) {
 
 	token, next := randomHash(t), randomHash(t)
 
-	if err := repo.Create(ctx, "user-1", token); err != nil {
+	if err := repo.Create(ctx, "user-1", "user", "user@example.com", token); err != nil {
 		t.Fatalf("create: %v", err)
 	}
 	if err := repo.Revoke(ctx, token); err != nil {
@@ -140,7 +140,7 @@ func TestRefreshSessionRepository_Expiry(t *testing.T) {
 	ctx := context.Background()
 
 	token := randomHash(t)
-	if err := repo.Create(ctx, "user-1", token); err != nil {
+	if err := repo.Create(ctx, "user-1", "user", "user@example.com", token); err != nil {
 		t.Fatalf("create: %v", err)
 	}
 
@@ -156,7 +156,7 @@ func TestRefreshSessionRepository_ConcurrentConsumption(t *testing.T) {
 	ctx := context.Background()
 
 	token := randomHash(t)
-	if err := repo.Create(ctx, "user-1", token); err != nil {
+	if err := repo.Create(ctx, "user-1", "user", "user@example.com", token); err != nil {
 		t.Fatalf("create: %v", err)
 	}
 
@@ -195,7 +195,7 @@ func TestRefreshSessionRepository_StoreFailure(t *testing.T) {
 	repo := NewRefreshSessionRepository(client, time.Minute)
 	ctx := context.Background()
 
-	if err := repo.Create(ctx, "user-1", randomHash(t)); !errors.Is(err, identityout.ErrRefreshSessionStore) {
+	if err := repo.Create(ctx, "user-1", "user", "user@example.com", randomHash(t)); !errors.Is(err, identityout.ErrRefreshSessionStore) {
 		t.Fatalf("expected ErrRefreshSessionStore from Create, got: %v", err)
 	}
 	if _, err := repo.Rotate(ctx, randomHash(t), randomHash(t)); !errors.Is(err, identityout.ErrRefreshSessionStore) {

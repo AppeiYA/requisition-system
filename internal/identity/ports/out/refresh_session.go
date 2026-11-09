@@ -34,14 +34,16 @@ var (
 type RefreshSession struct {
 	UserID   string
 	FamilyID string
+	Role     string
+	Email    string
 }
 
 // RefreshSessionRepository persists refresh sessions. Implementations must
 // treat Rotate as an atomic, single-use operation.
 type RefreshSessionRepository interface {
 	// Create starts a new session family for userID and stores the session
-	// identified by tokenHash.
-	Create(ctx context.Context, userID, tokenHash string) error
+	// claims identified by tokenHash.
+	Create(ctx context.Context, userID, role, email, tokenHash string) error
 
 	// Rotate atomically consumes the session for oldTokenHash and stores a
 	// replacement for newTokenHash in the same family, returning the consumed

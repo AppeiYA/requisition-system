@@ -7,20 +7,22 @@ import (
 )
 
 type MockRefreshSessionRepository struct {
-	CreateFunc func(ctx context.Context, userID, tokenHash string) error
+	CreateFunc func(ctx context.Context, userID, role, email, tokenHash string) error
 	RotateFunc func(ctx context.Context, oldTokenHash, newTokenHash string) (*identityout.RefreshSession, error)
 	RevokeFunc func(ctx context.Context, tokenHash string) error
 }
 
 func NewMockRefreshSessionRepository() *MockRefreshSessionRepository {
 	return &MockRefreshSessionRepository{
-		CreateFunc: func(ctx context.Context, userID, tokenHash string) error {
+		CreateFunc: func(ctx context.Context, userID, role, email, tokenHash string) error {
 			return nil
 		},
 		RotateFunc: func(ctx context.Context, oldTokenHash, newTokenHash string) (*identityout.RefreshSession, error) {
 			return &identityout.RefreshSession{
 				UserID:   DefaultID,
 				FamilyID: "family-id",
+				Role:     "user",
+				Email:    DefaultEmail,
 			}, nil
 		},
 		RevokeFunc: func(ctx context.Context, tokenHash string) error {
@@ -29,8 +31,8 @@ func NewMockRefreshSessionRepository() *MockRefreshSessionRepository {
 	}
 }
 
-func (m *MockRefreshSessionRepository) Create(ctx context.Context, userID, tokenHash string) error {
-	return m.CreateFunc(ctx, userID, tokenHash)
+func (m *MockRefreshSessionRepository) Create(ctx context.Context, userID, role, email, tokenHash string) error {
+	return m.CreateFunc(ctx, userID, role, email, tokenHash)
 }
 
 func (m *MockRefreshSessionRepository) Rotate(ctx context.Context, oldTokenHash, newTokenHash string) (*identityout.RefreshSession, error) {

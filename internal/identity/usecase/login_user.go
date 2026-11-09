@@ -67,13 +67,19 @@ func (u *LoginUserUsecase) Execute(ctx context.Context, req identityin.LoginUser
 		return nil, err
 	}
 
-	// issue an opaque refresh token and persist only its hash
+	// issue an opaque refresh token and persist its hash with the session claims
 	refreshToken, err := u.refreshTokenGenerator.Generate()
 	if err != nil {
 		return nil, err
 	}
 
-	if err := u.refreshSessionRepo.Create(ctx, user.ID(), u.refreshTokenGenerator.Hash(refreshToken)); err != nil {
+	if err := u.refreshSessionRepo.Create(
+		ctx,
+		user.ID(),
+		user.Role().String(),
+		user.Email().Value(),
+		u.refreshTokenGenerator.Hash(refreshToken),
+	); err != nil {
 		return nil, err
 	}
 
