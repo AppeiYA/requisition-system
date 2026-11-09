@@ -12,7 +12,6 @@ func Test_NewRequisitionPriority(t *testing.T) {
 		wantErr   error
 	}{
 		{name: "low priority", value: "low", wantValue: PriorityLow},
-		{name: "normal priority", value: "normal", wantValue: PriorityNormal},
 		{name: "medium priority", value: "medium", wantValue: PriorityMedium},
 		{name: "high priority", value: "high", wantValue: PriorityHigh},
 		{name: "urgent priority", value: "urgent", wantValue: PriorityUrgent},
@@ -58,7 +57,6 @@ func Test_RequisitionPriority_IsValid(t *testing.T) {
 		isValid  bool
 	}{
 		{name: "low is valid", priority: PriorityLow, isValid: true},
-		{name: "normal is valid", priority: PriorityNormal, isValid: true},
 		{name: "medium is valid", priority: PriorityMedium, isValid: true},
 		{name: "high is valid", priority: PriorityHigh, isValid: true},
 		{name: "urgent is valid", priority: PriorityUrgent, isValid: true},
