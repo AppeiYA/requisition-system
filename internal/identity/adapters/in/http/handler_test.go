@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	identitydomain "github.com/AppeiYA/requisition-system/internal/identity/domain"
 	identitymocks "github.com/AppeiYA/requisition-system/internal/identity/mocks"
 	identityin "github.com/AppeiYA/requisition-system/internal/identity/ports/in"
 	identityout "github.com/AppeiYA/requisition-system/internal/identity/ports/out"
@@ -114,7 +115,11 @@ func newHandler(login *stubLogin, refresh *stubRefresh, logout *stubLogout, me *
 		GetMeUsecase:        me,
 		RefreshTokenUsecase: refresh,
 	}
-	mw := NewAuthMiddleware(accessTokens)
+	userRepo := identitymocks.NewMockUsersRepository()
+	userRepo.GetUserByIDFunc = func(ctx context.Context, id string) (*identitydomain.User, error) {
+		return identitymocks.ValidUser(), nil
+	}
+	mw := NewAuthMiddleware(accessTokens, userRepo)
 	return NewHandler(port, mw)
 }
 

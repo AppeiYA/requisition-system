@@ -46,6 +46,10 @@ func (u *LoginUserUsecase) Execute(ctx context.Context, req identityin.LoginUser
 		return nil, err
 	}
 
+	if !user.IsActive() {
+		return nil, domain.ErrInactiveUser
+	}
+
 	// create new password vo
 	password, err := domain.NewPassword(req.Password)
 	if err != nil {

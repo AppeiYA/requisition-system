@@ -2,6 +2,7 @@ package identitypostgres
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/AppeiYA/requisition-system/internal/identity/domain"
 )
@@ -14,6 +15,7 @@ var updateUserStatusQuery = `
 `
 
 func (r *UserRepository) UpdateUserStatus(ctx context.Context, user *domain.User) error {
+	key := fmt.Sprintf(`%s%s`, UserKeyPrefix, user.ID())
 	executor := r.repository.Executor(ctx)
 
 	result, err := executor.NamedExecContext(ctx, updateUserStatusQuery, map[string]any{
@@ -30,6 +32,11 @@ func (r *UserRepository) UpdateUserStatus(ctx context.Context, user *domain.User
 	}
 	if rowsAffected == 0 {
 		return ErrUserNotFound
+	}
+
+	err = r.cache.Delete(ctx, key)
+	if err != nil {
+		return err
 	}
 
 	return nil

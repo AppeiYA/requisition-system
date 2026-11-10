@@ -3,6 +3,7 @@ package usecase
 import (
 	"context"
 
+	"github.com/AppeiYA/requisition-system/internal/identity/domain"
 	identityin "github.com/AppeiYA/requisition-system/internal/identity/ports/in"
 	identityout "github.com/AppeiYA/requisition-system/internal/identity/ports/out"
 )
@@ -22,6 +23,10 @@ func (uc *GetMeUsecase) Execute(ctx context.Context, userID string) (*identityin
 	user, err := uc.userRepo.GetUserByID(ctx, userID)
 	if err != nil {
 		return nil, err
+	}
+
+	if !user.IsActive() {
+		return nil, domain.ErrInactiveUser
 	}
 
 	// create response

@@ -8,6 +8,7 @@ import (
 	identityredis "github.com/AppeiYA/requisition-system/internal/identity/adapters/out/redis"
 	identityin "github.com/AppeiYA/requisition-system/internal/identity/ports/in"
 	identityusecase "github.com/AppeiYA/requisition-system/internal/identity/usecase"
+	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/cache"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/config"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/db"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/generator"
@@ -18,6 +19,7 @@ import (
 func (a *App) buildIdentity(
 	cfg *config.Config,
 	baseRepo db.Repository,
+	cache cache.Cache,
 	redisClient *redis.Redis,
 	txManager *db.TransactionManager,
 	accessTokenService *jwtadapter.JWTService,
@@ -25,7 +27,7 @@ func (a *App) buildIdentity(
 ) (
 	*identity.IdentityModule,
 ) {
-	userRepository := identitypostgres.NewUserRepository(baseRepo)
+	userRepository := identitypostgres.NewUserRepository(baseRepo, cache)
 
 	refreshSessionRepository := identityredis.NewRefreshSessionRepository(
 		redisClient.Client(),
@@ -33,7 +35,7 @@ func (a *App) buildIdentity(
 	)
 	refreshTokenGenerator := &generator.TokenGenerator{}
 	passwordHasher := hasher.NewPasswordHasher()
-	authMiddleware := identityhttp.NewAuthMiddleware(accessTokenService)
+	authMiddleware := identityhttp.NewAuthMiddleware(accessTokenService, userRepository)
 
 	loginUsecase := identityusecase.NewLoginUserUsecase(
 		userRepository,

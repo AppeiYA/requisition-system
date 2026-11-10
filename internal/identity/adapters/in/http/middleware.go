@@ -29,11 +29,13 @@ func GetUserRole(c *gin.Context) (string, bool) {
 
 type AuthMiddleware struct {
 	accessTokens identityout.AccessTokenService
+	userRepo identityout.UsersRepository
 }
 
-func NewAuthMiddleware(accessTokens identityout.AccessTokenService) *AuthMiddleware {
+func NewAuthMiddleware(accessTokens identityout.AccessTokenService, userRepo identityout.UsersRepository) *AuthMiddleware {
 	return &AuthMiddleware{
 		accessTokens: accessTokens,
+		userRepo: userRepo,
 	}
 }
 
@@ -51,6 +53,28 @@ func (m *AuthMiddleware) Handle() gin.HandlerFunc {
 		model, err := m.accessTokens.ValidateAccessToken(c.Request.Context(), token)
 		if err != nil {
 			response.ErrorFrom(c, err)
+			c.Abort()
+			return
+		}
+		if model == nil || model.ID == "" {
+			response.Error(c, "invalid access token", http.StatusUnauthorized, nil)
+			c.Abort()
+			return
+		}
+
+		user, err := m.userRepo.GetUserByID(c.Request.Context(), model.ID)
+		if err != nil {
+			response.ErrorFrom(c, err)
+			c.Abort()
+			return
+		}
+		if user == nil {
+			response.Error(c, "authenticated user not found", http.StatusUnauthorized, nil)
+			c.Abort()
+			return
+		}
+		if !user.IsActive() {
+			response.Error(c, "forbidden: user is inactive", http.StatusForbidden, nil)
 			c.Abort()
 			return
 		}
@@ -100,9 +124,31 @@ func (m *AuthMiddleware) IsAdmin() gin.HandlerFunc {
 			c.Abort()
 			return
 		}
+		if model == nil || model.ID == "" {
+			response.Error(c, "invalid access token", http.StatusUnauthorized, nil)
+			c.Abort()
+			return
+		}
 
 		if model.Role != "admin" {
 			response.Error(c, "forbidden: admin access required", http.StatusForbidden, nil)
+			c.Abort()
+			return
+		}
+
+		user, err := m.userRepo.GetUserByID(c.Request.Context(), model.ID)
+		if err != nil {
+			response.ErrorFrom(c, err)
+			c.Abort()
+			return
+		}
+		if user == nil {
+			response.Error(c, "authenticated user not found", http.StatusUnauthorized, nil)
+			c.Abort()
+			return
+		}
+		if !user.IsActive() {
+			response.Error(c, "forbidden: user is inactive", http.StatusForbidden, nil)
 			c.Abort()
 			return
 		}
