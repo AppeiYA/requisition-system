@@ -46,6 +46,7 @@ func (a *App) buildIdentity(
 		accessTokenService,
 		refreshSessionRepository,
 		refreshTokenGenerator,
+		userRepository,
 	)
 	logoutUsecase := identityusecase.NewLogoutUsecase(
 		refreshSessionRepository,

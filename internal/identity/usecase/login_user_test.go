@@ -49,12 +49,10 @@ func Test_LoginUserUsecase_Success(t *testing.T) {
 		return "test-refresh-token", nil
 	}
 
-	var createdUserID, createdRole, createdEmail, createdTokenHash string
+	var createdUserID, createdTokenHash string
 	sessions := identitymocks.NewMockRefreshSessionRepository()
-	sessions.CreateFunc = func(ctx context.Context, userID, role, email, tokenHash string) error {
+	sessions.CreateFunc = func(ctx context.Context, userID, tokenHash string) error {
 		createdUserID = userID
-		createdRole = role
-		createdEmail = email
 		createdTokenHash = tokenHash
 		return nil
 	}
@@ -87,12 +85,6 @@ func Test_LoginUserUsecase_Success(t *testing.T) {
 	// only the hash of the refresh token must be persisted
 	if createdUserID != identitymocks.DefaultID {
 		t.Errorf("expected session for user %q, got %q", identitymocks.DefaultID, createdUserID)
-	}
-	if createdRole != "user" {
-		t.Errorf("expected session role %q, got %q", "user", createdRole)
-	}
-	if createdEmail != identitymocks.DefaultEmail {
-		t.Errorf("expected session email %q, got %q", identitymocks.DefaultEmail, createdEmail)
 	}
 	if createdTokenHash != "hash:test-refresh-token" {
 		t.Errorf("expected persisted token hash %q, got %q", "hash:test-refresh-token", createdTokenHash)
@@ -225,7 +217,7 @@ func Test_LoginUserUsecase_RefreshTokenGeneratorError(t *testing.T) {
 
 	sessionsCreated := false
 	sessions := identitymocks.NewMockRefreshSessionRepository()
-	sessions.CreateFunc = func(ctx context.Context, userID, role, email, tokenHash string) error {
+	sessions.CreateFunc = func(ctx context.Context, userID, tokenHash string) error {
 		sessionsCreated = true
 		return nil
 	}
@@ -260,7 +252,7 @@ func Test_LoginUserUsecase_SessionCreateError(t *testing.T) {
 	}
 
 	sessions := identitymocks.NewMockRefreshSessionRepository()
-	sessions.CreateFunc = func(ctx context.Context, userID, role, email, tokenHash string) error {
+	sessions.CreateFunc = func(ctx context.Context, userID, tokenHash string) error {
 		return storeErr
 	}
 

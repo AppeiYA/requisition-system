@@ -3,6 +3,7 @@ package usecase
 import (
 	"context"
 
+	"github.com/AppeiYA/requisition-system/internal/identity/domain"
 	identityin "github.com/AppeiYA/requisition-system/internal/identity/ports/in"
 	identityout "github.com/AppeiYA/requisition-system/internal/identity/ports/out"
 	customerrors "github.com/AppeiYA/requisition-system/internal/shared/infrastructure/errors"
@@ -12,17 +13,20 @@ type RefreshTokenUsecase struct {
 	accessTokenService    identityout.AccessTokenService
 	refreshSessionRepo    identityout.RefreshSessionRepository
 	refreshTokenGenerator identityout.RefreshTokenGenerator
+	userRepo 			  identityout.UsersRepository
 }
 
 func NewRefreshTokenUsecase(
 	accessTokenService identityout.AccessTokenService,
 	refreshSessionRepo identityout.RefreshSessionRepository,
 	refreshTokenGenerator identityout.RefreshTokenGenerator,
+	userRepo identityout.UsersRepository,
 ) *RefreshTokenUsecase {
 	return &RefreshTokenUsecase{
 		accessTokenService:    accessTokenService,
 		refreshSessionRepo:    refreshSessionRepo,
 		refreshTokenGenerator: refreshTokenGenerator,
+		userRepo: userRepo,
 	}
 }
 
@@ -51,11 +55,23 @@ func (u *RefreshTokenUsecase) Execute(
 		return nil, err
 	}
 
-	access, err := u.accessTokenService.GenerateAccessToken(ctx, &identityout.TokenModel{
-		ID:    session.UserID,
-		Role:  session.Role,
-		Email: session.Email,
-	})
+	user, err := u.userRepo.GetUserByID(ctx, session.UserID)
+	if err != nil {
+		return nil, err
+	}
+
+	if !user.IsActive() {
+		return nil, domain.ErrInactiveUser
+	}
+
+	access, err := u.accessTokenService.GenerateAccessToken(
+		ctx, 
+		&identityout.TokenModel{
+			ID: session.UserID,
+			Role: user.Role().String(),
+			Email: user.Email().Value(),
+		},
+	)
 	if err != nil {
 		return nil, err
 	}

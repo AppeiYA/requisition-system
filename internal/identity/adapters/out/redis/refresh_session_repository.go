@@ -30,7 +30,7 @@ func NewRefreshSessionRepository(client *redis.Client, ttl time.Duration) *Refre
 
 var _ identityout.RefreshSessionRepository = (*RefreshSessionRepository)(nil)
 
-func (r *RefreshSessionRepository) Create(ctx context.Context, userID, role, email, tokenHash string) error {
+func (r *RefreshSessionRepository) Create(ctx context.Context, userID, tokenHash string) error {
 	familyID, err := newFamilyID()
 	if err != nil {
 		return identityout.ErrRefreshSessionStore
@@ -43,8 +43,6 @@ func (r *RefreshSessionRepository) Create(ctx context.Context, userID, role, ema
 	pipe.HSet(ctx, sessionKey, map[string]any{
 		"user_id":    userID,
 		"family_id":  familyID,
-		"role":       role,
-		"email":      email,
 		"expires_at": strconv.FormatInt(time.Now().Add(r.ttl).Unix(), 10),
 	})
 	pipe.PExpire(ctx, sessionKey, r.ttl)
@@ -94,14 +92,12 @@ func parseRotateResult(result any) (*identityout.RefreshSession, error) {
 
 	switch status {
 	case "ok":
-		if len(values) < 5 {
+		if len(values) < 3 {
 			return nil, identityout.ErrRefreshSessionStore
 		}
 		userID, _ := values[1].(string)
 		familyID, _ := values[2].(string)
-		role, _ := values[3].(string)
-		email, _ := values[4].(string)
-		return &identityout.RefreshSession{UserID: userID, FamilyID: familyID, Role: role, Email: email}, nil
+		return &identityout.RefreshSession{UserID: userID, FamilyID: familyID}, nil
 	case "reused":
 		return nil, identityout.ErrRefreshSessionReused
 	case "revoked":

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"testing"
 
+	identitydomain "github.com/AppeiYA/requisition-system/internal/identity/domain"
 	identitymocks "github.com/AppeiYA/requisition-system/internal/identity/mocks"
 	identityin "github.com/AppeiYA/requisition-system/internal/identity/ports/in"
 	identityout "github.com/AppeiYA/requisition-system/internal/identity/ports/out"
@@ -16,8 +17,9 @@ func newRefreshUsecase(
 	accessTokens identityout.AccessTokenService,
 	sessions identityout.RefreshSessionRepository,
 	generator identityout.RefreshTokenGenerator,
+	userRepo identityout.UsersRepository,
 ) *RefreshTokenUsecase {
-	return NewRefreshTokenUsecase(accessTokens, sessions, generator)
+	return NewRefreshTokenUsecase(accessTokens, sessions, generator, userRepo)
 }
 
 func Test_RefreshTokenUsecase_Rotates(t *testing.T) {
@@ -28,12 +30,6 @@ func Test_RefreshTokenUsecase_Rotates(t *testing.T) {
 		if user.ID != identitymocks.DefaultID {
 			t.Errorf("expected user ID %q, got %q", identitymocks.DefaultID, user.ID)
 		}
-		if user.Role != "admin" {
-			t.Errorf("expected user role %q, got %q", "admin", user.Role)
-		}
-		if user.Email != "admin@example.com" {
-			t.Errorf("expected user email %q, got %q", "admin@example.com", user.Email)
-		}
 		return &identityout.AccessToken{Value: "new-access-token", ExpiresIn: 900}, nil
 	}
 
@@ -41,19 +37,20 @@ func Test_RefreshTokenUsecase_Rotates(t *testing.T) {
 	generator.GenerateFunc = func() (string, error) {
 		return "new-refresh-token", nil
 	}
+	userRepo := identitymocks.NewMockUsersRepository()
+	userRepo.GetUserByIDFunc = func(ctx context.Context, id string) (*identitydomain.User, error) {
+		return identitymocks.ValidUser(), nil
+	}
 
 	var gotOldHash, gotNewHash string
 	sessions := identitymocks.NewMockRefreshSessionRepository()
 	sessions.RotateFunc = func(ctx context.Context, oldTokenHash, newTokenHash string) (*identityout.RefreshSession, error) {
 		gotOldHash = oldTokenHash
 		gotNewHash = newTokenHash
-		return &identityout.RefreshSession{
-			UserID: identitymocks.DefaultID, FamilyID: "family-id",
-			Role: "admin", Email: "admin@example.com",
-		}, nil
+		return &identityout.RefreshSession{UserID: identitymocks.DefaultID, FamilyID: "family-id"}, nil
 	}
 
-	uc := newRefreshUsecase(accessTokens, sessions, generator)
+	uc := newRefreshUsecase(accessTokens, sessions, generator, userRepo)
 
 	resp, err := uc.Execute(context.Background(), identityin.RefreshTokenRequest{
 		RefreshToken: "presented-refresh-token",
@@ -83,6 +80,7 @@ func Test_RefreshTokenUsecase_EmptyToken(t *testing.T) {
 		identitymocks.NewMockAccessTokenService(),
 		identitymocks.NewMockRefreshSessionRepository(),
 		identitymocks.NewMockRefreshTokenGenerator(),
+		identitymocks.NewMockUsersRepository(),
 	)
 
 	_, err := uc.Execute(context.Background(), identityin.RefreshTokenRequest{})
@@ -115,6 +113,7 @@ func Test_RefreshTokenUsecase_RejectsInvalidTokens(t *testing.T) {
 				identitymocks.NewMockAccessTokenService(),
 				sessions,
 				identitymocks.NewMockRefreshTokenGenerator(),
+				identitymocks.NewMockUsersRepository(),
 			)
 
 			_, err := uc.Execute(context.Background(), identityin.RefreshTokenRequest{
@@ -139,6 +138,7 @@ func Test_RefreshTokenUsecase_SessionStoreError(t *testing.T) {
 		identitymocks.NewMockAccessTokenService(),
 		sessions,
 		identitymocks.NewMockRefreshTokenGenerator(),
+		identitymocks.NewMockUsersRepository(),
 	)
 
 	_, err := uc.Execute(context.Background(), identityin.RefreshTokenRequest{
@@ -166,7 +166,7 @@ func Test_RefreshTokenUsecase_GeneratorError(t *testing.T) {
 		return "", genErr
 	}
 
-	uc := newRefreshUsecase(identitymocks.NewMockAccessTokenService(), sessions, generator)
+	uc := newRefreshUsecase(identitymocks.NewMockAccessTokenService(), sessions, generator, identitymocks.NewMockUsersRepository())
 
 	_, err := uc.Execute(context.Background(), identityin.RefreshTokenRequest{
 		RefreshToken: "presented-refresh-token",
@@ -183,6 +183,10 @@ func Test_RefreshTokenUsecase_AccessTokenError(t *testing.T) {
 	t.Parallel()
 
 	accessErr := errors.New("signing failed")
+	userRepo := identitymocks.NewMockUsersRepository()
+	userRepo.GetUserByIDFunc = func(ctx context.Context, id string) (*identitydomain.User, error) {
+		return identitymocks.ValidUser(), nil
+	}
 
 	accessTokens := identitymocks.NewMockAccessTokenService()
 	accessTokens.GenerateAccessTokenFunc = func(ctx context.Context, user *identityout.TokenModel) (*identityout.AccessToken, error) {
@@ -193,6 +197,7 @@ func Test_RefreshTokenUsecase_AccessTokenError(t *testing.T) {
 		accessTokens,
 		identitymocks.NewMockRefreshSessionRepository(),
 		identitymocks.NewMockRefreshTokenGenerator(),
+		userRepo,
 	)
 
 	_, err := uc.Execute(context.Background(), identityin.RefreshTokenRequest{
