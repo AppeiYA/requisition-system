@@ -233,6 +233,10 @@ func newRequisitionHeader(
 }
 
 func validateRequisitionItems(requisitionID string, items []*RequisitionItem) error {
+	if len(items) > MaxRequisitionItems {
+		return ErrTooManyRequisitionItems
+	}
+
 	seenItems := make(map[string]struct{}, len(items))
 	seenRequestedItems := make(map[string]struct{}, len(items))
 	seenLines := make(map[int]struct{}, len(items))

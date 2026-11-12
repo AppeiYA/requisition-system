@@ -143,6 +143,24 @@ func TestNewSubmittedRequisitionRejectsMoreThanFiveRequestedItems(t *testing.T) 
 	}
 }
 
+func TestNewSubmittedRequisitionRejectsMoreThanFiveItems(t *testing.T) {
+	t.Parallel()
+
+	items := make([]*RequisitionItem, 0, MaxRequisitionItems+1)
+	for line := 1; line <= MaxRequisitionItems+1; line++ {
+		items = append(items, aggregateItem(t, "itm_"+string(rune('a'+line)), "", line))
+	}
+
+	_, err := NewSubmittedRequisition(
+		"req_123", "REQ-2026-10001", "usr_123", "dpt_123",
+		PriorityMedium, time.Now().UTC().AddDate(0, 0, 1),
+		mustRequisitionJustification(t, "Office supplies"), items,
+	)
+	if err != ErrTooManyRequisitionItems {
+		t.Fatalf("too many items error = %v, want %v", err, ErrTooManyRequisitionItems)
+	}
+}
+
 func TestRequisitionAggregateRejectsMissingRequestedItem(t *testing.T) {
 	t.Parallel()
 
