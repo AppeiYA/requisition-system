@@ -99,12 +99,53 @@ func (uc *UpdateRequisitionUsecase) Execute(
 			return domain.ErrInvalidNeededByDate
 		}
 
+		existingLines := make(map[string]*domain.RequisitionItem, len(requisition.Items()))
+		for _, item := range requisition.Items() {
+			existingLines[item.ID()] = item
+		}
+		existingRequestedItems := make(map[string]*domain.RequestedItem, len(requisition.RequestedItems()))
+		for _, requestedItem := range requisition.RequestedItems() {
+			existingRequestedItems[requestedItem.ID()] = requestedItem
+		}
+
 		items := make([]*domain.RequisitionItem, 0, len(cmd.Lines))
 		requestedItems := make([]*domain.RequestedItem, 0)
+		seenLineIDs := make(map[string]struct{}, len(cmd.Lines))
 		for lineNumber, line := range cmd.Lines {
+			var identity *lineIdentity
+			if line.RequisitionItemID != "" {
+				if !strings.HasPrefix(line.RequisitionItemID, domain.RequisitionItemPrefixID) {
+					return domain.ErrInvalidRequisitionItemID
+				}
+				if _, duplicate := seenLineIDs[line.RequisitionItemID]; duplicate {
+					return domain.ErrDuplicateRequisitionItemID
+				}
+				existingLine, exists := existingLines[line.RequisitionItemID]
+				if !exists {
+					return domain.ErrRequisitionItemNotOwned
+				}
+				seenLineIDs[line.RequisitionItemID] = struct{}{}
+				identity = &lineIdentity{line: existingLine}
+				if existingLine.RequestedItemID() != "" {
+					existingRequestedItem, exists := existingRequestedItems[existingLine.RequestedItemID()]
+					if !exists {
+						return domain.ErrInvalidRequestedItemID
+					}
+					identity.requestedItem = existingRequestedItem
+				}
+			}
+
 			item, requestedItem, err := buildRequisitionLine(
-				ctx, uc.categoryRepo, uc.itemRepo, uc.idGenerator,
-				requisition.ID(), cmd.UserID, lineNumber+1, line,
+				txCtx, uc.categoryRepo, uc.itemRepo, uc.idGenerator,
+				requisition.ID(), cmd.UserID, lineNumber+1,
+				requisitionin.CreateRequisitionLine{
+					ItemID:              line.ItemID,
+					RequestedItem:       line.RequestedItem,
+					Quantity:            line.Quantity,
+					EstimatedUnitAmount: line.EstimatedUnitAmount,
+					Notes:               line.Notes,
+				},
+				identity,
 			)
 			if err != nil {
 				return err
@@ -122,6 +163,8 @@ func (uc *UpdateRequisitionUsecase) Execute(
 		}); err != nil {
 			return err
 		}
+		// The repository requires the transaction context and the header lock
+		// acquired by GetRequisitionByIDForUpdate above.
 		if err := uc.requisitionRepo.UpdateRequisitionAggregate(txCtx, requisition); err != nil {
 			return err
 		}

@@ -153,9 +153,7 @@ func validateRequestedItems(items []*RequisitionItem, requestedItems []*Requeste
 	if err := capRequestedItemsCount(requestedItems); err != nil {
 		return err
 	}
-	if requestedItems == nil {
-		return nil
-	}
+
 	available := make(map[string]*RequestedItem, len(requestedItems))
 	for _, requestedItem := range requestedItems {
 		if requestedItem == nil {
@@ -166,12 +164,24 @@ func validateRequestedItems(items []*RequisitionItem, requestedItems []*Requeste
 		}
 		available[requestedItem.ID()] = requestedItem
 	}
+
+	referenced := make(map[string]struct{}, len(requestedItems))
 	for _, item := range items {
 		if item.RequestedItemID() == "" {
 			continue
 		}
 		if _, exists := available[item.RequestedItemID()]; !exists {
 			return ErrInvalidRequestedItemID
+		}
+		if _, exists := referenced[item.RequestedItemID()]; exists {
+			return ErrDuplicateRequestedItem
+		}
+		referenced[item.RequestedItemID()] = struct{}{}
+	}
+
+	for requestedItemID := range available {
+		if _, exists := referenced[requestedItemID]; !exists {
+			return ErrRequestedItemNotReferenced
 		}
 	}
 	return nil

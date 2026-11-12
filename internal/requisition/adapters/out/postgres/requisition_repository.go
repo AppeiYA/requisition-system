@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 
 	"github.com/AppeiYA/requisition-system/internal/requisition/adapters/out/postgres/models"
 	requisitiondomain "github.com/AppeiYA/requisition-system/internal/requisition/domain"
@@ -126,8 +127,91 @@ func (r *RequisitionRepository) UpdateRequisition(ctx context.Context, requisiti
 	return err
 }
 
+type persistedRequisitionLine struct {
+	ID              string  `db:"id"`
+	LineNumber      int     `db:"line_number"`
+	ItemID          *string `db:"item_id"`
+	RequestedItemID *string `db:"requested_item_id"`
+}
+
+// maxSmallintLineNumber is the largest value PostgreSQL can store in the
+// requisition_items.line_number SMALLINT column.
+const maxSmallintLineNumber = 32767
+
+func requisitionItemKey(itemID, requestedItemID string) string {
+	switch {
+	case itemID != "":
+		return "catalogue:" + itemID
+	case requestedItemID != "":
+		return "requested:" + requestedItemID
+	default:
+		return ""
+	}
+}
+
+func (l persistedRequisitionLine) key() string {
+	itemID, requestedItemID := "", ""
+	if l.ItemID != nil {
+		itemID = *l.ItemID
+	}
+	if l.RequestedItemID != nil {
+		requestedItemID = *l.RequestedItemID
+	}
+	return requisitionItemKey(itemID, requestedItemID)
+}
+
+// UpdateRequisitionAggregate reconciles the persisted aggregate against the
+// supplied one instead of deleting and recreating its children. Existing line
+// and requested-item identifiers are preserved, and workflow-managed requested
+// item fields are never overwritten.
+//
+// The caller must invoke it with a context bound to a transaction and must
+// already hold the requisition header lock, normally obtained through
+// GetRequisitionByIDForUpdate in the same transaction. The reconciliation
+// reads the current line snapshot and must not race with another writer.
 func (r *RequisitionRepository) UpdateRequisitionAggregate(ctx context.Context, requisition *requisitiondomain.Requisition) error {
 	executor := r.repository.Executor(ctx)
+
+	var persistedLines []persistedRequisitionLine
+	if err := executor.SelectContext(ctx, &persistedLines, `
+		SELECT id, line_number, item_id, requested_item_id
+		FROM requisition_items
+		WHERE requisition_id = $1
+		ORDER BY line_number
+	`, requisition.ID()); err != nil {
+		return err
+	}
+
+	persistedByID := make(map[string]persistedRequisitionLine, len(persistedLines))
+	persistedRequestedItemIDs := make(map[string]struct{}, len(persistedLines))
+	for _, line := range persistedLines {
+		persistedByID[line.ID] = line
+		if line.RequestedItemID != nil {
+			persistedRequestedItemIDs[*line.RequestedItemID] = struct{}{}
+		}
+	}
+
+	desiredItems := requisition.Items()
+	desiredByID := make(map[string]*requisitiondomain.RequisitionItem, len(desiredItems))
+	for _, item := range desiredItems {
+		if item == nil {
+			return requisitiondomain.ErrNilFields("requisition_item")
+		}
+		if item.RequisitionID() != requisition.ID() {
+			return requisitiondomain.ErrRequisitionItemNotOwned
+		}
+		if item.LineNumber() < 1 || item.LineNumber() > maxSmallintLineNumber {
+			return customerrors.NewBadRequestError(fmt.Sprintf(
+				"requisition line number %d is outside the supported range 1..%d",
+				item.LineNumber(), maxSmallintLineNumber,
+			))
+		}
+		if item.RequestedItemID() != "" && !hasRequestedItem(requisition.RequestedItems(), item.RequestedItemID()) {
+			return customerrors.NewBadRequestError("requested item is missing from requisition aggregate")
+		}
+		desiredByID[item.ID()] = item
+	}
+
 	if _, err := executor.NamedExecContext(ctx, `
 		UPDATE requisitions
 		SET department_id = :department_id, justification = :justification,
@@ -136,33 +220,105 @@ func (r *RequisitionRepository) UpdateRequisitionAggregate(ctx context.Context, 
 	`, models.RequisitionFromDomain(requisition)); err != nil {
 		return err
 	}
-	if _, err := executor.ExecContext(ctx,
-		`DELETE FROM requisition_items WHERE requisition_id = $1`, requisition.ID(),
-	); err != nil {
-		return err
-	}
+
+	desiredRequestedItemIDs := make(map[string]struct{}, len(requisition.RequestedItems()))
 	for _, requestedItem := range requisition.RequestedItems() {
-		if _, err := executor.NamedExecContext(ctx, `
-			INSERT INTO requested_items (
-				id, name, category_id, description, created_by,
-				review_status, promoted_item_id, created_at
-			) VALUES (
-				:id, :name, :category_id, :description, :created_by,
-				:review_status, :promoted_item_id, :created_at
-			)
-		`, models.RequestedItemFromDomain(requestedItem)); err != nil {
+		if requestedItem == nil {
+			return requisitiondomain.ErrNilFields("requested_item")
+		}
+		model := models.RequestedItemFromDomain(requestedItem)
+		if _, exists := persistedRequestedItemIDs[requestedItem.ID()]; exists {
+			result, err := executor.NamedExecContext(ctx, `
+				UPDATE requested_items
+				SET name = :name, category_id = :category_id, description = :description
+				WHERE id = :id
+			`, model)
+			if err != nil {
+				return err
+			}
+			affected, err := result.RowsAffected()
+			if err != nil {
+				return err
+			}
+			if affected == 0 {
+				return customerrors.NewInternalServerError("requested item disappeared during requisition update")
+			}
+		} else {
+			if _, err := executor.NamedExecContext(ctx, `
+				INSERT INTO requested_items (
+					id, name, category_id, description, created_by,
+					review_status, promoted_item_id, created_at
+				) VALUES (
+					:id, :name, :category_id, :description, :created_by,
+					:review_status, :promoted_item_id, :created_at
+				)
+			`, model); err != nil {
+				return err
+			}
+		}
+		desiredRequestedItemIDs[requestedItem.ID()] = struct{}{}
+	}
+
+	// Removed lines are deleted first so their line numbers, catalogue items,
+	// and requested items are released before the remaining lines are updated.
+	removedLineIDs := make([]string, 0)
+	for _, line := range persistedLines {
+		if _, keep := desiredByID[line.ID]; !keep {
+			removedLineIDs = append(removedLineIDs, line.ID)
+		}
+	}
+	if len(removedLineIDs) > 0 {
+		if _, err := executor.ExecContext(ctx, `
+			DELETE FROM requisition_items
+			WHERE requisition_id = $1 AND id = ANY($2)
+		`, requisition.ID(), pq.Array(removedLineIDs)); err != nil {
 			return err
 		}
 	}
-	for _, item := range requisition.Items() {
-		if item.RequestedItemID() != "" && !hasRequestedItem(requisition.RequestedItems(), item.RequestedItemID()) {
-			return customerrors.NewBadRequestError("requested item is missing from requisition aggregate")
+
+	// Line numbers and item keys are unique per requisition and checked per
+	// statement. Only final line numbers in the SMALLINT range are ever
+	// written; changes are applied in dependency order and a cycle is broken
+	// by temporarily parking a line, never by computing an intermediate offset.
+	existingDesired := make(map[string]*requisitiondomain.RequisitionItem, len(persistedByID))
+	for _, item := range desiredItems {
+		if _, exists := persistedByID[item.ID()]; exists {
+			existingDesired[item.ID()] = item
 		}
+	}
+
+	updateLine := func(item *requisitiondomain.RequisitionItem) error {
 		model, err := models.RequisitionItemFromDomain(item)
 		if err != nil {
 			return err
 		}
-		if _, err := executor.NamedExecContext(ctx, `
+		result, err := executor.NamedExecContext(ctx, `
+			UPDATE requisition_items
+			SET line_number = :line_number, item_id = :item_id,
+				requested_item_id = :requested_item_id,
+				item_name_snapshot = :item_name_snapshot, quantity = :quantity,
+				estimated_unit_amount = :estimated_unit_amount, notes = :notes
+			WHERE id = :id AND requisition_id = :requisition_id
+		`, model)
+		if err != nil {
+			return err
+		}
+		affected, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if affected == 0 {
+			return customerrors.NewInternalServerError("requisition line disappeared during update")
+		}
+		return nil
+	}
+
+	insertLine := func(item *requisitiondomain.RequisitionItem) error {
+		model, err := models.RequisitionItemFromDomain(item)
+		if err != nil {
+			return err
+		}
+		_, err = executor.NamedExecContext(ctx, `
 			INSERT INTO requisition_items (
 				id, requisition_id, line_number, item_id, requested_item_id,
 				item_name_snapshot, quantity, estimated_unit_amount, notes, created_at
@@ -170,7 +326,123 @@ func (r *RequisitionRepository) UpdateRequisitionAggregate(ctx context.Context, 
 				:id, :requisition_id, :line_number, :item_id, :requested_item_id,
 				:item_name_snapshot, :quantity, :estimated_unit_amount, :notes, :created_at
 			)
-		`, model); err != nil {
+		`, model)
+		return err
+	}
+
+	// The catalogue-item/requested-item unique indexes and the line-number
+	// constraint are all checked per statement. Update a line only when both
+	// its target key and its target line number are free. A cycle (for example
+	// two lines swapping items and line numbers) is broken by temporarily
+	// parking one line; it is reinserted with its original identity afterwards.
+	keyHolders := make(map[string]string, len(persistedLines))
+	lineNumberHolders := make(map[int]string, len(persistedLines))
+	for _, line := range persistedLines {
+		if _, keep := desiredByID[line.ID]; !keep {
+			continue
+		}
+		if key := line.key(); key != "" {
+			keyHolders[key] = line.ID
+		}
+		lineNumberHolders[line.LineNumber] = line.ID
+	}
+
+	pending := make(map[string]*requisitiondomain.RequisitionItem, len(existingDesired))
+	for id, item := range existingDesired {
+		pending[id] = item
+	}
+	parked := make([]*requisitiondomain.RequisitionItem, 0)
+
+	for len(pending) > 0 {
+		progressed := false
+		for id, item := range pending {
+			newKey := requisitionItemKey(item.ItemID(), item.RequestedItemID())
+			if holder, held := keyHolders[newKey]; held && holder != id {
+				if _, blockedByPending := pending[holder]; blockedByPending {
+					continue
+				}
+			}
+			newLineNumber := item.LineNumber()
+			if holder, held := lineNumberHolders[newLineNumber]; held && holder != id {
+				if _, blockedByPending := pending[holder]; blockedByPending {
+					continue
+				}
+			}
+
+			if err := updateLine(item); err != nil {
+				return err
+			}
+			oldKey := persistedByID[id].key()
+			if oldKey != "" && oldKey != newKey && keyHolders[oldKey] == id {
+				delete(keyHolders, oldKey)
+			}
+			if newKey != "" {
+				keyHolders[newKey] = id
+			}
+			oldLineNumber := persistedByID[id].LineNumber
+			if oldLineNumber != newLineNumber && lineNumberHolders[oldLineNumber] == id {
+				delete(lineNumberHolders, oldLineNumber)
+			}
+			lineNumberHolders[newLineNumber] = id
+			delete(pending, id)
+			progressed = true
+		}
+		if progressed {
+			continue
+		}
+
+		for id, item := range pending {
+			oldKey := persistedByID[id].key()
+			if oldKey != "" && keyHolders[oldKey] == id {
+				delete(keyHolders, oldKey)
+			}
+			oldLineNumber := persistedByID[id].LineNumber
+			if lineNumberHolders[oldLineNumber] == id {
+				delete(lineNumberHolders, oldLineNumber)
+			}
+			if _, err := executor.ExecContext(ctx, `
+				DELETE FROM requisition_items
+				WHERE id = $1 AND requisition_id = $2
+			`, id, requisition.ID()); err != nil {
+				return err
+			}
+			parked = append(parked, item)
+			delete(pending, id)
+			break
+		}
+	}
+
+	for _, item := range parked {
+		if err := insertLine(item); err != nil {
+			return err
+		}
+	}
+	for _, item := range desiredItems {
+		if _, exists := persistedByID[item.ID()]; exists {
+			continue
+		}
+		if err := insertLine(item); err != nil {
+			return err
+		}
+	}
+
+	for requestedItemID := range persistedRequestedItemIDs {
+		if _, keep := desiredRequestedItemIDs[requestedItemID]; keep {
+			continue
+		}
+		// Unreviewed requested items are safe to remove once their line is
+		// gone. Reviewed/promoted rows are retained as workflow history even
+		// though they no longer have a requisition line.
+		if _, err := executor.ExecContext(ctx, `
+			DELETE FROM requested_items
+			WHERE id = $1
+				AND review_status = 'unreviewed'
+				AND promoted_item_id IS NULL
+				AND NOT EXISTS (
+					SELECT 1 FROM requisition_items
+					WHERE requested_item_id = $1
+				)
+		`, requestedItemID); err != nil {
 			return err
 		}
 	}

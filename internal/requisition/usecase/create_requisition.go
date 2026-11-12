@@ -140,6 +140,14 @@ func (uc *CreateRequisitionUsecase) Execute(ctx context.Context, cmd requisition
 	return requisition, nil
 }
 
+// lineIdentity carries the persisted identity of an existing line and its
+// current requested item, when the line is being reconciled rather than
+// created from scratch.
+type lineIdentity struct {
+	line          *domain.RequisitionItem
+	requestedItem *domain.RequestedItem
+}
+
 func (uc *CreateRequisitionUsecase) buildLine(
 	ctx context.Context,
 	requisitionID string,
@@ -149,7 +157,7 @@ func (uc *CreateRequisitionUsecase) buildLine(
 ) (*domain.RequisitionItem, *domain.RequestedItem, error) {
 	return buildRequisitionLine(
 		ctx, uc.categoryRepo, uc.itemRepo, uc.idGenerator,
-		requisitionID, createdBy, lineNumber, cmd,
+		requisitionID, createdBy, lineNumber, cmd, nil,
 	)
 }
 
@@ -162,6 +170,7 @@ func buildRequisitionLine(
 	createdBy string,
 	lineNumber int,
 	cmd requisitionin.CreateRequisitionLine,
+	identity *lineIdentity,
 ) (*domain.RequisitionItem, *domain.RequestedItem, error) {
 	hasCatalogueItem := cmd.ItemID != ""
 	hasRequestedItem := cmd.RequestedItem != nil
@@ -213,15 +222,37 @@ func buildRequisitionLine(
 		if err != nil {
 			return nil, nil, err
 		}
-		requestedItemID, err = idGenerator.GenerateID(domain.RequestedItemPrefixID)
-		if err != nil {
-			return nil, nil, err
-		}
-		requestedItem, err = domain.NewRequestedItem(
-			requestedItemID, name, requested.CategoryID, description, createdBy,
-		)
-		if err != nil {
-			return nil, nil, err
+
+		switch {
+		case identity != nil && identity.requestedItem != nil:
+			// Keep the persisted requested-item identity and its workflow
+			// metadata; only the editable item details change.
+			requestedItem, err = domain.ReconstituteRequestedItem(
+				identity.requestedItem.ID(), name.Value(), requested.CategoryID,
+				description.Value(), identity.requestedItem.CreatedBy(),
+				identity.requestedItem.ReviewStatus().String(),
+				identity.requestedItem.PromotedItemID(),
+				identity.requestedItem.CreatedAt(),
+			)
+			if err != nil {
+				return nil, nil, err
+			}
+			requestedItemID = requestedItem.ID()
+		case identity != nil && identity.line != nil && identity.line.RequestedItemID() != "":
+			// A line that previously referenced a requested item must resolve
+			// that item before it can be reused.
+			return nil, nil, domain.ErrInvalidRequestedItemID
+		default:
+			requestedItemID, err = idGenerator.GenerateID(domain.RequestedItemPrefixID)
+			if err != nil {
+				return nil, nil, err
+			}
+			requestedItem, err = domain.NewRequestedItem(
+				requestedItemID, name, requested.CategoryID, description, createdBy,
+			)
+			if err != nil {
+				return nil, nil, err
+			}
 		}
 	}
 
@@ -233,6 +264,15 @@ func buildRequisitionLine(
 	if err != nil {
 		return nil, nil, err
 	}
+
+	if identity != nil && identity.line != nil {
+		line, err := domain.ReconstituteRequisitionItem(
+			identity.line.ID(), requisitionID, lineNumber, itemID, requestedItemID,
+			name, quantity, amount, cmd.Notes, identity.line.CreatedAt(),
+		)
+		return line, requestedItem, err
+	}
+
 	lineID, err := idGenerator.GenerateID(domain.RequisitionItemPrefixID)
 	if err != nil {
 		return nil, nil, err

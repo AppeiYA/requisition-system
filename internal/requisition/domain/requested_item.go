@@ -21,7 +21,8 @@ var (
 	ErrInvalidRequestedItemID     = customerrors.NewBadRequestError("invalid requested item ID")
 	ErrInvalidRequestedItemStatus = customerrors.NewBadRequestError("invalid requested item review status")
 	ErrPromotedItemIDMustBeEmpty  = customerrors.NewBadRequestError("promoted item ID must be empty unless the requested item is promoted")
-	ErrPromotedItemIDRequired	 = customerrors.NewBadRequestError("promoted item ID is required when the requested item is promoted")
+	ErrPromotedItemIDRequired     = customerrors.NewBadRequestError("promoted item ID is required when the requested item is promoted")
+	ErrRequestedItemNotReferenced = customerrors.NewBadRequestError("requested item must be referenced by exactly one requisition line")
 )
 
 type RequestedItem struct {

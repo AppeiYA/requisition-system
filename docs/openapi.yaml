@@ -421,6 +421,62 @@ components:
             required:
                 - to_status
             type: object
+        requisitionhttp.UpdateRequisitionLineRequest:
+            properties:
+                estimated_unit_amount:
+                    example: 50000
+                    type: number
+                item_id:
+                    example: itm_123
+                    type: string
+                notes:
+                    example: Optional note
+                    type: string
+                quantity:
+                    example: 2
+                    maximum: 1000
+                    minimum: 1
+                    type: integer
+                requested_item:
+                    $ref: '#/components/schemas/requisitionhttp.CreateRequestedItemRequest'
+                requisition_item_id:
+                    example: reqitem_123
+                    type: string
+            type: object
+        requisitionhttp.UpdateRequisitionRequest:
+            properties:
+                department_id:
+                    example: dpt_123
+                    minLength: 1
+                    type: string
+                justification:
+                    example: Replacement laptops for the new hires
+                    maxLength: 500
+                    minLength: 1
+                    type: string
+                lines:
+                    items:
+                        $ref: '#/components/schemas/requisitionhttp.UpdateRequisitionLineRequest'
+                    minItems: 1
+                    type: array
+                needed_by:
+                    example: "2026-11-15"
+                    type: string
+                priority:
+                    enum:
+                        - low
+                        - normal
+                        - medium
+                        - high
+                        - urgent
+                    example: medium
+                    type: string
+            required:
+                - department_id
+                - justification
+                - lines
+                - needed_by
+            type: object
         response.ErrorResponse:
             properties:
                 data: {}
@@ -1629,8 +1685,8 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/requisitionhttp.CreateRequisitionRequest'
-                description: Updated requisition details
+                            $ref: '#/components/schemas/requisitionhttp.UpdateRequisitionRequest'
+                description: Updated requisition details. Include requisition_item_id on existing lines to preserve their identity.
                 required: true
                 x-originalParamName: request
             responses:

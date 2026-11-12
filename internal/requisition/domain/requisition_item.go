@@ -15,6 +15,8 @@ var (
 	ErrDuplicateRequestedItem     = customerrors.NewBadRequestError("requested item cannot belong to more than one line")
 	ErrInvalidEstimatedUnitAmount = customerrors.NewBadRequestError("estimated unit amount cannot be negative")
 	ErrInvalidLineNumber          = customerrors.NewBadRequestError("line number must be greater than zero")
+	ErrRequisitionItemNotOwned    = customerrors.NewBadRequestError("requisition item does not belong to this requisition")
+	ErrDuplicateRequisitionItemID = customerrors.NewBadRequestError("requisition item ID cannot appear more than once")
 )
 
 const RequisitionItemPrefixID = "reqitem"
