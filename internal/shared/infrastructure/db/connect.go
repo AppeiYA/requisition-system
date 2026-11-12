@@ -26,7 +26,7 @@ func Connect(cfg config.DBConfig) (*DB, error) {
 	// apart from the ones of another database.
 	conn, err := otelsql.Open(
 		"postgres",
-		cfg.DSN(),
+		cfg.ConnectionDSN(),
 		otelsql.WithAttributes(semconv.DBSystemNamePostgreSQL),
 	)
 	if err != nil {

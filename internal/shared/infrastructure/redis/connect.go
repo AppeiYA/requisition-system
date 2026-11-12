@@ -3,7 +3,9 @@ package redis
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"fmt"
+	"os"
 
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/config"
 	"github.com/redis/go-redis/extra/redisotel/v9"
@@ -21,6 +23,21 @@ func Connect(cfg config.RedisConfig) (*Redis, error) {
 	if cfg.TLS {
 		tlsConfig := &tls.Config{
 			MinVersion: tls.VersionTLS12,
+			ServerName: cfg.TLSServerName,
+		}
+		if cfg.TLSCACert != "" {
+			caCert, err := os.ReadFile(cfg.TLSCACert)
+			if err != nil {
+				return nil, fmt.Errorf("read Redis CA certificate %q: %w", cfg.TLSCACert, err)
+			}
+			rootCAs, err := x509.SystemCertPool()
+			if err != nil {
+				return nil, fmt.Errorf("load system CA pool for Redis: %w", err)
+			}
+			if ok := rootCAs.AppendCertsFromPEM(caCert); !ok {
+				return nil, fmt.Errorf("Redis CA certificate %q contains no valid certificates", cfg.TLSCACert)
+			}
+			tlsConfig.RootCAs = rootCAs
 		}
 		opts.TLSConfig = tlsConfig
 	}

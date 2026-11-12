@@ -161,7 +161,8 @@ automatically). Required variables have no default and stop the app at boot.
 | `DB_USER` | ✅ | – | PostgreSQL user |
 | `DB_PASSWORD` | ✅ | – | PostgreSQL password |
 | `DB_NAME` | ✅ | – | Database name |
-| `DB_SSL_MODE` | – | `disable` | `disable`, `require`, … |
+| `DB_SSL_MODE` | – | `disable` | PostgreSQL TLS mode; use `verify-full` in production |
+| `DB_CA_CERT` | – | – | Absolute path to the PostgreSQL CA certificate/bundle |
 | `DB_MAX_OPEN_CONNECTIONS` | – | `25` | Pool: max open connections |
 | `DB_MAX_IDLE_CONNECTIONS` | – | `10` | Pool: max idle connections |
 | `DB_MAX_LIFETIME_MINUTES` | – | `30` | Pool: connection max lifetime |
@@ -170,6 +171,9 @@ automatically). Required variables have no default and stop the app at boot.
 | `REDIS_USERNAME` | – | – | Redis username (ACL) |
 | `REDIS_PASSWORD` | – | – | Redis password |
 | `REDIS_DB` | – | `0` | Redis database index |
+| `REDIS_TLS` | – | `false` | Enable Redis TLS |
+| `REDIS_CA_CERT` | – | – | Absolute path to the Redis CA certificate/bundle |
+| `REDIS_TLS_SERVER_NAME` | – | `REDIS_HOST` | TLS server name used for certificate verification |
 | `JWT_SECRET` | ✅ | – | Signing secret, **min 32 characters** (`openssl rand -hex 32`) |
 | `JWT_ISSUER` | – | `requisition-system` | Token issuer |
 | `JWT_AUDIENCE` | – | `requisition-system` | Token audience |

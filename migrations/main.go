@@ -33,7 +33,7 @@ func main() {
 		log.Fatalf("Failed to load database config: %v", err)
 	}
 
-	db, err := sqlx.Connect("postgres", dbConfig.DSN())
+	db, err := sqlx.Connect("postgres", dbConfig.ConnectionDSN())
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
