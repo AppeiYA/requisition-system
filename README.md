@@ -107,6 +107,16 @@ go run ./migrations -seed-file seeds/001_admin.sql   # run a single seed file
 Migrations run in `migrations/*.up.sql` / `*.down.sql` pairs; seed files run inside a
 transaction and are idempotent (they use `ON CONFLICT ... DO UPDATE`).
 
+Migration `00014` cannot be safely rolled back in general: the previous schema has
+only one requisition line and no status-history table. The migration CLI refuses this
+rollback unless a verified backup has been taken and
+`-allow-destructive-down` is supplied. A data-preservation procedure is still
+required; the flag is an explicit operator acknowledgement, not a backup.
+
+Item names are globally unique regardless of casing. Categories classify items but do
+not define item identity. Before applying migration 00014 to an existing deployment,
+audit and resolve any case-insensitive duplicate names first.
+
 ## API
 
 Base URL: `http://localhost:8080/api/v1` — interactive docs at
