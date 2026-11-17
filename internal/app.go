@@ -135,7 +135,7 @@ func (a *App) Run() error {
 
 	departmentModule := a.buildDepartment(baseRepo, idGen, redisCache)
 
-	requisitionModule := a.buildRequisition(baseRepo, idGen, redisCache, departmentModule.MembershipRepository(), txManager)
+	requisitionModule := a.buildRequisition(baseRepo, idGen, redisCache, departmentModule.MembershipRepository(), txManager, identityModule.UserLookup())
 
 	invitationModule := a.buildInvitation(
 		baseRepo,

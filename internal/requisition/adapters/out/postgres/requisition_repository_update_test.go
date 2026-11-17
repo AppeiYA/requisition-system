@@ -13,6 +13,14 @@ import (
 	shareddb "github.com/AppeiYA/requisition-system/internal/shared/infrastructure/db"
 )
 
+func stringPointer(value string) *string {
+	return &value
+}
+
+func timePointer(value time.Time) *time.Time {
+	return &value
+}
+
 func updateRepositoryRequisition(t *testing.T) *requisitiondomain.Requisition {
 	t.Helper()
 
@@ -32,7 +40,8 @@ func updateRepositoryRequisition(t *testing.T) *requisitiondomain.Requisition {
 
 	requested1, err := requisitiondomain.ReconstituteRequestedItem(
 		"ritem-1", "Laptop stand", "cat-1", "Adjustable stand", "usr-1",
-		"promoted", "itm-999", createdAt,
+		"promoted", stringPointer("usr-2"), timePointer(createdAt),
+		"itm-999", createdAt,
 	)
 	if err != nil {
 		t.Fatal(err)

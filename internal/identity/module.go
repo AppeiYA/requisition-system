@@ -3,23 +3,32 @@ package identity
 import (
 	identityhttp "github.com/AppeiYA/requisition-system/internal/identity/adapters/in/http"
 	identityin "github.com/AppeiYA/requisition-system/internal/identity/ports/in"
+	requisitionout "github.com/AppeiYA/requisition-system/internal/requisition/ports/out"
 )
 
 type IdentityModule struct {
-	identityPortIn *identityin.IdentityPortIn
+	identityPortIn  *identityin.IdentityPortIn
 	identityHandler *identityhttp.Handler
-	authMiddleware *identityhttp.AuthMiddleware
+	authMiddleware  *identityhttp.AuthMiddleware
+	userLookup      requisitionout.UserLookup
 }
 
 func NewIdentityModule(
-	identityPortIn *identityin.IdentityPortIn, 
+	identityPortIn *identityin.IdentityPortIn,
 	identityHandler *identityhttp.Handler,
-	authMiddleware *identityhttp.AuthMiddleware) *IdentityModule {
+	authMiddleware *identityhttp.AuthMiddleware,
+	userLookup requisitionout.UserLookup,
+) *IdentityModule {
 	return &IdentityModule{
-		identityPortIn: identityPortIn,
+		identityPortIn:  identityPortIn,
 		identityHandler: identityHandler,
-		authMiddleware: authMiddleware,
+		authMiddleware:  authMiddleware,
+		userLookup:      userLookup,
 	}
+}
+
+func (m *IdentityModule) UserLookup() requisitionout.UserLookup {
+	return m.userLookup
 }
 
 func (m *IdentityModule) PortIn() *identityin.IdentityPortIn {

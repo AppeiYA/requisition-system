@@ -16,7 +16,7 @@ import (
 
 var (
 	ErrItemNotFoundRepo   = customerrors.NewNotFoundError("item not found")
-	ErrItemNameExistsRepo = customerrors.NewConflictError("an item with this name already exists")
+	ErrItemNameExistsRepo = customerrors.NewConflictError("an item with this name and description already exists")
 )
 
 const pqForeignKeyViolationCode = "23503"

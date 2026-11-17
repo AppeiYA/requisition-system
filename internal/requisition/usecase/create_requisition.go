@@ -231,6 +231,8 @@ func buildRequisitionLine(
 				identity.requestedItem.ID(), name.Value(), requested.CategoryID,
 				description.Value(), identity.requestedItem.CreatedBy(),
 				identity.requestedItem.ReviewStatus().String(),
+				identity.requestedItem.ReviewedBy(),
+				identity.requestedItem.ReviewedAt(),
 				identity.requestedItem.PromotedItemID(),
 				identity.requestedItem.CreatedAt(),
 			)

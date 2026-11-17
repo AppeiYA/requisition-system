@@ -67,8 +67,16 @@ func updateTestItem(t *testing.T, id, requisitionID string, lineNumber int, item
 func updateTestRequestedItem(t *testing.T, id, name, description, reviewStatus, promotedItemID string, createdAt time.Time) *requisitiondomain.RequestedItem {
 	t.Helper()
 
+	var reviewedBy *string
+	var reviewedAt *time.Time
+	if reviewStatus != "unreviewed" {
+		reviewer := "usr-reviewer"
+		reviewedBy = &reviewer
+		reviewedAt = &createdAt
+	}
 	item, err := requisitiondomain.ReconstituteRequestedItem(
 		id, name, "cat-123", description, "usr-123", reviewStatus,
+		reviewedBy, reviewedAt,
 		promotedItemID, createdAt,
 	)
 	if err != nil {

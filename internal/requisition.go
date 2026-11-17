@@ -23,9 +23,11 @@ func (a *App) buildRequisition(
 	cache cache.Cache,
 	membershipRepo requisitionout.MembershipLookup,
 	txManager requisitionout.TransactionManager,
+	userLookup requisitionout.UserLookup,
 ) *requisition.RequisitionModule {
 	itemCategoryRepo := requisitionpostgres.NewItemCategoryRepository(baseRepo, cache)
 	itemRepo := requisitionpostgres.NewItemRepository(baseRepo, cache)
+	requestedItemRepo := requisitionpostgres.NewRequestedItemRepository(baseRepo)
 
 	createItemCategoryUC := categoryusecase.NewCreateItemCategoryUsecase(itemCategoryRepo, idGen)
 	getItemCategoryUC := categoryusecase.NewGetItemCategoryUsecase(itemCategoryRepo)
@@ -50,6 +52,13 @@ func (a *App) buildRequisition(
 	createItemUC := itemusecase.NewCreateItemUsecase(itemRepo, idGen)
 	getItemUC := itemusecase.NewGetItemUsecase(itemRepo)
 	listItemsUC := itemusecase.NewListItemsUsecase(itemRepo)
+	listUnreviewedItemsUC := itemusecase.NewListUnreviewedItemsUsecase(requestedItemRepo)
+	promoteRequestedItemUC := itemusecase.NewPromoteRequestedItemUsecase(
+		requestedItemRepo, itemRepo, userLookup, txManager, idGen,
+	)
+	dismissRequestedItemUC := itemusecase.NewDismissRequestedItemUsecase(
+		requestedItemRepo, userLookup, txManager,
+	)
 	updateItemUC := itemusecase.NewUpdateItemUsecase(itemRepo)
 	activateItemUC := itemusecase.NewActivateItemUsecase(itemRepo)
 	deactivateItemUC := itemusecase.NewDeactivateItemUsecase(itemRepo)
@@ -58,6 +67,9 @@ func (a *App) buildRequisition(
 		createItemUC,
 		getItemUC,
 		listItemsUC,
+		listUnreviewedItemsUC,
+		promoteRequestedItemUC,
+		dismissRequestedItemUC,
 		updateItemUC,
 		activateItemUC,
 		deactivateItemUC,

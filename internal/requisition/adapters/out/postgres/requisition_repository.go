@@ -681,7 +681,7 @@ func (r *RequisitionRepository) loadAggregate(ctx context.Context, model models.
 	if err := executor.SelectContext(ctx, &requestedItemModels, `
 		SELECT DISTINCT ri.requested_item_id AS id, req.name, req.category_id,
 			req.description, req.created_by, req.review_status,
-			req.promoted_item_id, req.created_at
+			req.promoted_item_id, req.reviewed_by, req.reviewed_at, req.created_at
 		FROM requisition_items ri
 		JOIN requested_items req ON req.id = ri.requested_item_id
 		WHERE ri.requisition_id = $1 AND ri.requested_item_id IS NOT NULL

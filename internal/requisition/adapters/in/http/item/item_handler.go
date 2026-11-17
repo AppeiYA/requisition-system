@@ -25,6 +25,9 @@ func (h *ItemHandler) Register(
 ) {
 	items := router.Group("/items")
 	items.GET("", authMiddleware, h.list)
+	items.GET("/requested/unreviewed", authMiddleware, adminOnlyMiddleware, h.listUnreviewed)
+	items.POST("/requested/:id/promote", authMiddleware, adminOnlyMiddleware, h.promoteRequested)
+	items.POST("/requested/:id/dismiss", authMiddleware, adminOnlyMiddleware, h.dismissRequested)
 	items.GET("/:id", authMiddleware, h.getByID)
 	items.POST("", authMiddleware, adminOnlyMiddleware, h.create)
 	items.PATCH("/:id", authMiddleware, adminOnlyMiddleware, h.update)

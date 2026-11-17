@@ -8,6 +8,7 @@ import (
 	identityredis "github.com/AppeiYA/requisition-system/internal/identity/adapters/out/redis"
 	identityin "github.com/AppeiYA/requisition-system/internal/identity/ports/in"
 	identityusecase "github.com/AppeiYA/requisition-system/internal/identity/usecase"
+	requisitionexternal "github.com/AppeiYA/requisition-system/internal/requisition/adapters/out/external"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/cache"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/config"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/db"
@@ -24,9 +25,7 @@ func (a *App) buildIdentity(
 	txManager *db.TransactionManager,
 	accessTokenService *jwtadapter.JWTService,
 	idGen *generator.IDGenerator,
-) (
-	*identity.IdentityModule,
-) {
+) *identity.IdentityModule {
 	userRepository := identitypostgres.NewUserRepository(baseRepo, cache)
 
 	refreshSessionRepository := identityredis.NewRefreshSessionRepository(
@@ -71,10 +70,12 @@ func (a *App) buildIdentity(
 		identityPortIn,
 		authMiddleware,
 	)
+	userLookup := requisitionexternal.NewIdentityAdapter(userRepository)
 
 	return identity.NewIdentityModule(
 		identityPortIn,
 		handler,
 		authMiddleware,
+		userLookup,
 	)
 }
