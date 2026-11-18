@@ -44,10 +44,26 @@ func Load() (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	dbConfig, err := LoadDBConfig()
-	if err != nil {
-		return nil, err
+	var dbConfig *DBConfig
+	var redisConfig *RedisConfig
+	if appConfig.Env == TestEnv {
+		dbConfig, err = LoadTestDBConfig()
+		if err != nil {
+			return nil, err
+		}
+		redisConfig, err = LoadTestRedisConfig()
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		dbConfig, err = LoadDBConfig()
+		if err != nil {
+			return nil, err
+		}
+		redisConfig, err = LoadRedisConfig()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	apiConfig, err := LoadAPIConfig()
@@ -65,11 +81,6 @@ func Load() (*Config, error) {
 	} else {
 		jwtConfig, err = LoadJWTConfig()
 	}
-	if err != nil {
-		return nil, err
-	}
-
-	redisConfig, err := LoadRedisConfig()
 	if err != nil {
 		return nil, err
 	}

@@ -14,11 +14,12 @@ func (b AppBinaries) IsValid() bool {
 type Environment string
 var (
 	DevEnv Environment = "development"
+	TestEnv Environment = "test"
 	StagingEnv Environment = "staging"
 	ProdEnv Environment = "production"
 )
 func (e Environment) IsValid() bool {
-	return e == DevEnv || e == StagingEnv || e == ProdEnv
+	return e == DevEnv || e == StagingEnv || e == ProdEnv || e == TestEnv
 }
 type AppConfig struct {
 	Env Environment // "development", "staging", "production"

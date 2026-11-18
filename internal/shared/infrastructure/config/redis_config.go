@@ -50,3 +50,41 @@ func LoadRedisConfig() (*RedisConfig, error) {
 		TLSServerName: getEnv("REDIS_TLS_SERVER_NAME", host),
 	}, nil
 }
+
+func LoadTestRedisConfig() (*RedisConfig, error) {
+	host, err := requireEnv("TEST_REDIS_HOST")
+	if err != nil {
+		return nil, err
+	}
+
+	db, err := getIntEnv("TEST_REDIS_DB", 1)
+	if err != nil {
+		return nil, err
+	}
+	port, err := requireEnv("TEST_REDIS_PORT")
+	if err != nil {
+		return nil, err
+	}
+	tls, err := getBoolEnv("TEST_REDIS_TLS", false)
+	if err != nil {
+		return nil, err
+	}
+
+	caCert := getEnv("TEST_REDIS_CA_CERT", "")
+	if caCert != "" {
+		if err := validateCACert(caCert); err != nil {
+			return nil, fmt.Errorf("TEST_REDIS_CA_CERT: %w", err)
+		}
+	}
+
+	return &RedisConfig{
+		Host:          host,
+		Port:          port,
+		Username:      getEnv("TEST_REDIS_USERNAME", ""),
+		Password:      getEnv("TEST_REDIS_PASSWORD", ""),
+		DB:            db,
+		TLS:           tls,
+		TLSCACert:     caCert,
+		TLSServerName: getEnv("TEST_REDIS_TLS_SERVER_NAME", host),
+	}, nil
+}

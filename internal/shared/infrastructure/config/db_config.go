@@ -98,3 +98,61 @@ func LoadDBConfig() (*DBConfig, error) {
 		MaxLifetimeMinutes: maxLifetimeMinutes,
 	}, nil
 }
+
+func LoadTestDBConfig() (*DBConfig, error) {
+	dbHost, err := requireEnv("TEST_DB_HOST")
+	if err != nil {
+		return nil, err
+	}
+
+	dbUser, err := requireEnv("TEST_DB_USER")
+	if err != nil {
+		return nil, err
+	}
+
+	dbPassword, err := requireEnv("TEST_DB_PASSWORD")
+	if err != nil {
+		return nil, err
+	}
+
+	dbName, err := requireEnv("TEST_DB_NAME")
+	if err != nil {
+		return nil, err
+	}
+	if !strings.Contains(dbName, "test") {
+		return nil, fmt.Errorf("TEST_DB_NAME must contain 'test' to prevent accidental use of production database")
+	}
+
+	maxOpenConnections, err := getIntEnv("TEST_DB_MAX_OPEN_CONNECTIONS", 25)
+	if err != nil {
+		return nil, err
+	}
+	maxIdleConnections, err := getIntEnv("TEST_DB_MAX_IDLE_CONNECTIONS", 10)
+	if err != nil {
+		return nil, err
+	}
+	maxLifetimeMinutes, err := getIntEnv("TEST_DB_MAX_LIFETIME_MINUTES", 30)
+	if err != nil {
+		return nil, err
+	}
+
+	sslRootCert := getEnv("TEST_DB_CA_CERT", "")
+	if sslRootCert != "" {
+		if err := validateCACert(sslRootCert); err != nil {
+			return nil, fmt.Errorf("TEST_DB_CA_CERT: %w", err)
+		}
+	}
+
+	return &DBConfig{
+		Host:               dbHost,
+		Port:               getEnv("TEST_DB_PORT", "5432"),
+		User:               dbUser,
+		Password:           dbPassword,
+		Name:               dbName,
+		SSLMode:            getEnv("TEST_DB_SSL_MODE", "disable"),
+		SSLRootCert:        sslRootCert,
+		MaxOpenConnections: maxOpenConnections,
+		MaxIdleConnections: maxIdleConnections,
+		MaxLifetimeMinutes: maxLifetimeMinutes,
+	}, nil
+}
