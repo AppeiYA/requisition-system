@@ -10,7 +10,7 @@ import (
 	customerrors "github.com/AppeiYA/requisition-system/internal/shared/infrastructure/errors"
 )
 
-var ErrUserDoesNotExist = customerrors.NewUnauthorizedError("user not found")
+var ErrInvalidCredentials = customerrors.NewUnauthorizedError("invalid email or password")
 
 type LoginUserUsecase struct {
 	userRepository        identityout.UsersRepository
@@ -18,6 +18,7 @@ type LoginUserUsecase struct {
 	refreshSessionRepo    identityout.RefreshSessionRepository
 	refreshTokenGenerator identityout.RefreshTokenGenerator
 	passwordHasher        identityout.PasswordHasher
+	dummyPasswordHash     string
 }
 
 func NewLoginUserUsecase(
@@ -27,12 +28,14 @@ func NewLoginUserUsecase(
 	refreshTokenGenerator identityout.RefreshTokenGenerator,
 	passwordHasher identityout.PasswordHasher,
 ) *LoginUserUsecase {
+	dummyPasswordHash, _ := passwordHasher.HashPassword("DummyPassword123$")
 	return &LoginUserUsecase{
 		userRepository:        userRepository,
 		accessTokenService:    accessTokenService,
 		refreshSessionRepo:    refreshSessionRepo,
 		refreshTokenGenerator: refreshTokenGenerator,
 		passwordHasher:        passwordHasher,
+		dummyPasswordHash:     dummyPasswordHash,
 	}
 }
 
@@ -43,28 +46,29 @@ func (u *LoginUserUsecase) Execute(ctx context.Context, req identityin.LoginUser
 		return nil, err
 	}
 
+	password, err := domain.NewPassword(req.Password)
+	if err != nil {
+		return nil, ErrInvalidCredentials
+	}
+
 	// get user by email
 	user, err := u.userRepository.GetUserByEmail(ctx, email)
 	if err != nil {
 		if err, ok := err.(*customerrors.CustomError); ok && err.Code == 404 {
-			return nil, ErrUserDoesNotExist
+			_ = u.passwordHasher.ComparePassword(u.dummyPasswordHash, password.Value())
+			return nil, ErrInvalidCredentials
 		}
 		return nil, err
 	}
 
 	if !user.IsActive() {
-		return nil, domain.ErrInactiveUser
-	}
-
-	// create new password vo
-	password, err := domain.NewPassword(req.Password)
-	if err != nil {
-		return nil, err
+		_ = u.passwordHasher.ComparePassword(user.PasswordHash().Value(), password.Value())
+		return nil, ErrInvalidCredentials
 	}
 
 	// compare password
 	if err := u.passwordHasher.ComparePassword(user.PasswordHash().Value(), password.Value()); err != nil {
-		return nil, err
+		return nil, ErrInvalidCredentials
 	}
 
 	// issue a short-lived access token

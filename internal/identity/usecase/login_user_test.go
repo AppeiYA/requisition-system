@@ -116,7 +116,7 @@ func Test_LoginUserUsecase_Errors(t *testing.T) {
 				Email:    "unknown@example.com",
 				Password: identitymocks.DefaultPassword,
 			},
-			expectedErr: customerrors.NewNotFoundError("user not found"),
+			expectedErr: ErrInvalidCredentials,
 		},
 		{
 			name: "invalid password format",
@@ -124,7 +124,7 @@ func Test_LoginUserUsecase_Errors(t *testing.T) {
 				Email:    identitymocks.DefaultEmail,
 				Password: "short",
 			},
-			expectedErr: domain.ErrInvalidPassword,
+			expectedErr: ErrInvalidCredentials,
 		},
 		{
 			name: "wrong password",
@@ -132,7 +132,7 @@ func Test_LoginUserUsecase_Errors(t *testing.T) {
 				Email:    identitymocks.DefaultEmail,
 				Password: "WrongPass123$",
 			},
-			expectedErr: errors.New("invalid password"),
+			expectedErr: ErrInvalidCredentials,
 		},
 	}
 

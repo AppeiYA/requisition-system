@@ -112,6 +112,9 @@ func (a *App) Run() error {
 	}
 
 	router := gin.New()
+	if err := router.SetTrustedProxies(cfg.RateLimit.TrustedProxies); err != nil {
+		return err
+	}
 	// The tracing middleware goes first, so the span of an operation covers
 	// the whole request, including the work of the other middlewares. It
 	// rewrites the request with the span context, so every handler picks it

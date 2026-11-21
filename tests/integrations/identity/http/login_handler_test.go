@@ -32,11 +32,12 @@ func TestLoginHandlerSuccess(t *testing.T) {
 	)
 
 	tests := []struct {
-		name           string
-		email          string
-		password       string
-		expectedStatus int
-		wantErr        bool
+		name            string
+		email           string
+		password        string
+		expectedStatus  int
+		wantErr         bool
+		expectedMessage string
 	}{
 		{
 			name:           "Successful login",
@@ -46,25 +47,28 @@ func TestLoginHandlerSuccess(t *testing.T) {
 			wantErr:        false,
 		},
 		{
-			name:           "Invalid password",
-			email:          fixture.Email,
-			password:       "WrongPassword123$",
-			expectedStatus: http.StatusUnauthorized,
-			wantErr:        true,
+			name:            "Invalid password",
+			email:           fixture.Email,
+			password:        "WrongPassword123$",
+			expectedStatus:  http.StatusUnauthorized,
+			wantErr:         true,
+			expectedMessage: "invalid email or password",
 		},
 		{
-			name:           "Non-existent user",
-			email:          "non.existent@example.com",
-			password:       "Password123$",
-			expectedStatus: http.StatusUnauthorized,
-			wantErr:        true,
+			name:            "Non-existent user",
+			email:           "non.existent@example.com",
+			password:        "Password123$",
+			expectedStatus:  http.StatusUnauthorized,
+			wantErr:         true,
+			expectedMessage: "invalid email or password",
 		},
 		{
-			name:           "Suspended user",
-			email:          suspendedUser.Email,
-			password:       suspendedUser.Password,
-			expectedStatus: http.StatusUnauthorized,
-			wantErr:        true,
+			name:            "Suspended user",
+			email:           suspendedUser.Email,
+			password:        suspendedUser.Password,
+			expectedStatus:  http.StatusUnauthorized,
+			wantErr:         true,
+			expectedMessage: "invalid email or password",
 		},
 	}
 
@@ -114,7 +118,49 @@ func TestLoginHandlerSuccess(t *testing.T) {
 				require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &errorResponse))
 				require.False(t, errorResponse.Success)
 				require.NotEmpty(t, errorResponse.Message)
+				if tt.expectedMessage != "" {
+					require.Equal(t, tt.expectedMessage, errorResponse.Message)
+				}
 			}
 		})
+	}
+}
+
+func TestLoginHandlerRateLimit(t *testing.T) {
+	suite := testutil.NewSuite(t, "../../../../migrations")
+	identity := suite.SetupIdentityHTTP(t)
+	fixture := identity.AddUser(
+		t,
+		"usr-login-rate-limit",
+		"login.rate.limit@example.com",
+		"Password123$",
+		"Login",
+		"RateLimit",
+	)
+
+	body, err := json.Marshal(map[string]string{
+		"email":    fixture.Email,
+		"password": "WrongPassword123$",
+	})
+	require.NoError(t, err)
+
+	for attempt := 1; attempt <= 6; attempt++ {
+		request := httptest.NewRequest(
+			http.MethodPost,
+			"/api/v1/auth/login",
+			bytes.NewReader(body),
+		)
+		request.Header.Set("Content-Type", "application/json")
+		request.RemoteAddr = "203.0.113.10:12345"
+		recorder := httptest.NewRecorder()
+
+		identity.Router.ServeHTTP(recorder, request)
+
+		if attempt <= 5 {
+			require.Equal(t, http.StatusUnauthorized, recorder.Code, recorder.Body.String())
+		} else {
+			require.Equal(t, http.StatusTooManyRequests, recorder.Code, recorder.Body.String())
+			require.NotEmpty(t, recorder.Header().Get("Retry-After"))
+		}
 	}
 }

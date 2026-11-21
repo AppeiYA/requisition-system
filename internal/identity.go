@@ -14,6 +14,7 @@ import (
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/db"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/generator"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/hasher"
+	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/ratelimit"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/redis"
 )
 
@@ -70,6 +71,7 @@ func (a *App) buildIdentity(
 		identityPortIn,
 		authMiddleware,
 	)
+	handler.SetRateLimiter(ratelimit.New(redisClient.Client()), cfg.RateLimit)
 	userLookup := requisitionexternal.NewIdentityAdapter(userRepository)
 
 	return identity.NewIdentityModule(

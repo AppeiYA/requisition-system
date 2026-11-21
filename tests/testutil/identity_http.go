@@ -17,6 +17,7 @@ import (
 	appdb "github.com/AppeiYA/requisition-system/internal/shared/infrastructure/db"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/generator"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/hasher"
+	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/ratelimit"
 	redisinfra "github.com/AppeiYA/requisition-system/internal/shared/infrastructure/redis"
 	"github.com/gin-gonic/gin"
 )
@@ -243,6 +244,14 @@ func (s *Suite) SetupIdentityHTTP(t *testing.T) *IdentityHTTP {
 		refreshUsecase,
 	)
 	handler := identityhttp.NewHandler(identityPortIn, authMiddleware)
+	handler.SetRateLimiter(ratelimit.New(redisResource.Client), config.RateLimitConfig{
+		LoginLimit:    5,
+		LoginWindow:   15 * time.Minute,
+		RefreshLimit:  10,
+		RefreshWindow: time.Minute,
+		LogoutLimit:   20,
+		LogoutWindow:  time.Minute,
+	})
 
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
