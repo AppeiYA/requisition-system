@@ -13,7 +13,7 @@ var _ = response.Response{}
 //	@Produce		json
 //	@Security		BearerAuth
 //	@Param			id		path		string	true	"Requisition ID"
-//	@Param			request	body		CreateRequisitionRequest	true	"Updated requisition details"
+//	@Param			request	body		UpdateRequisitionRequest	true	"Updated requisition details. Include requisition_item_id on existing lines to preserve their identity."
 //	@Success		200		{object}	response.Response{data=RequisitionResponse}
 //	@Failure		400		{object}	response.ErrorResponse	"Validation error"
 //	@Failure		401		{object}	response.Response		"Missing or invalid access token"

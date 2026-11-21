@@ -8,6 +8,8 @@ import (
 	identityredis "github.com/AppeiYA/requisition-system/internal/identity/adapters/out/redis"
 	identityin "github.com/AppeiYA/requisition-system/internal/identity/ports/in"
 	identityusecase "github.com/AppeiYA/requisition-system/internal/identity/usecase"
+	requisitionexternal "github.com/AppeiYA/requisition-system/internal/requisition/adapters/out/external"
+	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/cache"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/config"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/db"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/generator"
@@ -18,14 +20,13 @@ import (
 func (a *App) buildIdentity(
 	cfg *config.Config,
 	baseRepo db.Repository,
+	cache cache.Cache,
 	redisClient *redis.Redis,
 	txManager *db.TransactionManager,
 	accessTokenService *jwtadapter.JWTService,
 	idGen *generator.IDGenerator,
-) (
-	*identity.IdentityModule,
-) {
-	userRepository := identitypostgres.NewUserRepository(baseRepo)
+) *identity.IdentityModule {
+	userRepository := identitypostgres.NewUserRepository(baseRepo, cache)
 
 	refreshSessionRepository := identityredis.NewRefreshSessionRepository(
 		redisClient.Client(),
@@ -33,7 +34,7 @@ func (a *App) buildIdentity(
 	)
 	refreshTokenGenerator := &generator.TokenGenerator{}
 	passwordHasher := hasher.NewPasswordHasher()
-	authMiddleware := identityhttp.NewAuthMiddleware(accessTokenService)
+	authMiddleware := identityhttp.NewAuthMiddleware(accessTokenService, userRepository)
 
 	loginUsecase := identityusecase.NewLoginUserUsecase(
 		userRepository,
@@ -46,6 +47,7 @@ func (a *App) buildIdentity(
 		accessTokenService,
 		refreshSessionRepository,
 		refreshTokenGenerator,
+		userRepository,
 	)
 	logoutUsecase := identityusecase.NewLogoutUsecase(
 		refreshSessionRepository,
@@ -68,10 +70,12 @@ func (a *App) buildIdentity(
 		identityPortIn,
 		authMiddleware,
 	)
+	userLookup := requisitionexternal.NewIdentityAdapter(userRepository)
 
 	return identity.NewIdentityModule(
 		identityPortIn,
 		handler,
 		authMiddleware,
+		userLookup,
 	)
 }

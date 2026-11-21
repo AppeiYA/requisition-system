@@ -11,11 +11,13 @@ type Status string
 const (
 	ACTIVE    Status = "active"
 	SUSPENDED Status = "suspended"
+	INACTIVE  Status = "inactive"
 )
 
 var validTransitions = map[Status][]Status{
-	ACTIVE:    {SUSPENDED},
+	ACTIVE:    {SUSPENDED, INACTIVE},
 	SUSPENDED: {ACTIVE},
+	INACTIVE:  {ACTIVE},
 }
 
 func (s Status) CanTransitionTo(newStatus Status) bool {
@@ -33,7 +35,7 @@ func (s Status) CanTransitionTo(newStatus Status) bool {
 
 func (s Status) IsValid() bool {
 	switch s {
-	case ACTIVE, SUSPENDED:
+	case ACTIVE, SUSPENDED, INACTIVE:
 		return true
 	default:
 		return false

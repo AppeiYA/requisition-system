@@ -11,6 +11,7 @@ type UsersRepository interface {
 	SaveUser(ctx context.Context, user *domain.User) error
 	GetUserByEmail(ctx context.Context, email *shareddomain.Email) (*domain.User, error)
 	GetUserByID(ctx context.Context, id string) (*domain.User, error)
+	CheckUserStatus(ctx context.Context, id string) (domain.Status, error)
 	UpdateUserStatus(ctx context.Context, user *domain.User) error
 	UpdateUserPassword(ctx context.Context, user *domain.User) error
 	UpdateUser(ctx context.Context, user *domain.User) error

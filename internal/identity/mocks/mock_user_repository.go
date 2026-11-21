@@ -32,6 +32,7 @@ type MockUsersRepository struct {
 	SaveUserFunc           func(ctx context.Context, user *domain.User) error
 	GetUserByEmailFunc     func(ctx context.Context, email *shareddomain.Email) (*domain.User, error)
 	GetUserByIDFunc        func(ctx context.Context, id string) (*domain.User, error)
+	CheckUserStatusFunc    func(ctx context.Context, id string) (domain.Status, error)
 	UpdateUserStatusFunc   func(ctx context.Context, user *domain.User) error
 	UpdateUserPasswordFunc func(ctx context.Context, user *domain.User) error
 	UpdateUserFunc         func(ctx context.Context, user *domain.User) error
@@ -47,6 +48,9 @@ func NewMockUsersRepository() *MockUsersRepository {
 		},
 		GetUserByIDFunc: func(ctx context.Context, id string) (*domain.User, error) {
 			return nil, nil
+		},
+		CheckUserStatusFunc: func(ctx context.Context, id string) (domain.Status, error) {
+			return domain.ACTIVE, nil
 		},
 		UpdateUserStatusFunc: func(ctx context.Context, user *domain.User) error {
 			return nil
@@ -70,6 +74,10 @@ func (m *MockUsersRepository) GetUserByEmail(ctx context.Context, email *sharedd
 
 func (m *MockUsersRepository) GetUserByID(ctx context.Context, id string) (*domain.User, error) {
 	return m.GetUserByIDFunc(ctx, id)
+}
+
+func (m *MockUsersRepository) CheckUserStatus(ctx context.Context, id string) (domain.Status, error) {
+	return m.CheckUserStatusFunc(ctx, id)
 }
 
 func (m *MockUsersRepository) UpdateUserStatus(ctx context.Context, user *domain.User) error {

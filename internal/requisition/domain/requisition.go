@@ -11,7 +11,10 @@ var (
 	DepartmentPrefixID  = "dpt"
 )
 
-const MaxRequestedItems = 5
+const (
+	MaxRequisitionItems = 5
+	MaxRequestedItems   = MaxRequisitionItems
+)
 
 var (
 	ErrInvalidDepartmentID = customerrors.NewBadRequestError("invalid department ID")
@@ -23,6 +26,7 @@ var (
 	}
 	ErrInvalidReferenceCode      = customerrors.NewBadRequestError("invalid requisition reference code")
 	ErrRequisitionNeedsItem      = customerrors.NewBadRequestError("requisition must contain at least one item")
+	ErrTooManyRequisitionItems   = customerrors.NewBadRequestError("requisition cannot contain more than 5 items")
 	ErrTooManyRequestedItems     = customerrors.NewBadRequestError("requisition cannot contain more than 5 requested items")
 	ErrInvalidRequisitionID      = customerrors.NewBadRequestError("invalid requisition ID")
 	ErrInvalidNeededByDate       = customerrors.NewBadRequestError("needed by date cannot be in the past")

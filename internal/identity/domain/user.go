@@ -11,6 +11,7 @@ var UserIDPrefix = "usr"
 
 var (
 	ErrInvalidID = customerrors.NewInternalServerError("empty id in create user")
+	ErrInactiveUser = customerrors.NewUnauthorizedError("user is inactive")
 )
 
 type User struct {
@@ -158,6 +159,10 @@ func (u *User) UpdatedAt() *time.Time {
 
 func (u *User) Role() shareddomain.Role {
 	return u.role
+}
+
+func (u *User) IsActive() bool {
+	return u.status == ACTIVE
 }
 
 func (u *User) UpdateStatus(newStatus Status) error {

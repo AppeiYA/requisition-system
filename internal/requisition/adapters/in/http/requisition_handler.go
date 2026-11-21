@@ -38,13 +38,13 @@ func (h *RequisitionHandler) Register(router *gin.RouterGroup, authMiddleware gi
 }
 
 func (h *RequisitionHandler) update(c *gin.Context) {
-	var request CreateRequisitionRequest
+	var request UpdateRequisitionRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
 		response.ErrorWithDetails(c, "validation_error", "invalid request body", http.StatusBadRequest, response.ValidationErrors(err))
 		c.Abort()
 		return
 	}
-	if details := validateCreateRequisitionRequest(request); len(details) > 0 {
+	if details := validateUpdateRequisitionRequest(request); len(details) > 0 {
 		response.ErrorWithDetails(c, "validation_error", "invalid request body", http.StatusBadRequest, details)
 		c.Abort()
 		return
@@ -62,10 +62,11 @@ func (h *RequisitionHandler) update(c *gin.Context) {
 		return
 	}
 
-	lines := make([]requisitionin.CreateRequisitionLine, 0, len(request.Lines))
+	lines := make([]requisitionin.UpdateRequisitionLine, 0, len(request.Lines))
 	for _, line := range request.Lines {
-		commandLine := requisitionin.CreateRequisitionLine{
-			ItemID: line.ItemID, Quantity: line.Quantity,
+		commandLine := requisitionin.UpdateRequisitionLine{
+			RequisitionItemID: line.RequisitionItemID,
+			ItemID:            line.ItemID, Quantity: line.Quantity,
 			EstimatedUnitAmount: line.EstimatedUnitAmount, Notes: line.Notes,
 		}
 		if line.RequestedItem != nil {
@@ -263,6 +264,45 @@ func validateTransitionRequisitionRequest(requisitionID string, request Transiti
 			Field:   "reason",
 			Message: "reason is required when transitioning to rejected or cancelled",
 		})
+	}
+	return details
+}
+
+func validateUpdateRequisitionRequest(request UpdateRequisitionRequest) []response.FieldError {
+	createLines := make([]CreateRequisitionLineRequest, 0, len(request.Lines))
+	for _, line := range request.Lines {
+		createLines = append(createLines, CreateRequisitionLineRequest{
+			ItemID: line.ItemID, RequestedItem: line.RequestedItem,
+			Quantity: line.Quantity, EstimatedUnitAmount: line.EstimatedUnitAmount,
+			Notes: line.Notes,
+		})
+	}
+	details := validateCreateRequisitionRequest(CreateRequisitionRequest{
+		DepartmentID: request.DepartmentID, Priority: request.Priority,
+		NeededBy: request.NeededBy, Justification: request.Justification,
+		Lines: createLines,
+	})
+
+	seenLineIDs := make(map[string]int, len(request.Lines))
+	for index, line := range request.Lines {
+		if line.RequisitionItemID == "" {
+			continue
+		}
+		field := fmt.Sprintf("lines[%d].requisition_item_id", index)
+		if !strings.HasPrefix(line.RequisitionItemID, domain.RequisitionItemPrefixID) {
+			details = append(details, response.FieldError{
+				Field: field, Message: "must be a valid requisition item ID",
+			})
+			continue
+		}
+		if previousLine, exists := seenLineIDs[line.RequisitionItemID]; exists {
+			details = append(details, response.FieldError{
+				Field:   field,
+				Message: fmt.Sprintf("requisition item already appears on line %d", previousLine),
+			})
+			continue
+		}
+		seenLineIDs[line.RequisitionItemID] = index + 1
 	}
 	return details
 }

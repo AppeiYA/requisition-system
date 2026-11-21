@@ -5,6 +5,7 @@ import (
 	"math"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -100,4 +101,16 @@ func getBoolEnv(variable string, defaultValue bool) (bool, error) {
 		return false, returnEnvInvalidError(variable, "bool")
 	}
 	return boolVal, nil
+}
+
+func validateCACert(certPath string) error {
+	if certPath == "" {
+		return fmt.Errorf("CA certificate path is empty")
+	}
+
+	if !strings.HasPrefix(certPath, "/") {
+		return fmt.Errorf("CA certificate path must be an absolute path")
+	}
+
+	return nil
 }

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/base64"
 	"errors"
 	"os"
 	"strings"
@@ -18,9 +19,28 @@ func TestDBConfig_DSN(t *testing.T) {
 		SSLMode:  "require",
 	}
 
-	want := "host=db.example.com port=5433 user=app password=s3cret dbname=mydb sslmode=require"
+	// DSN is used for diagnostics, so it must not expose the password;
+	// ConnectionDSN is the one that carries credentials.
+	want := "host=db.example.com port=5433 user=app ****** dbname=mydb sslmode=require"
 	if got := cfg.DSN(); got != want {
 		t.Errorf("DSN() = %q, want %q", got, want)
+	}
+}
+
+func TestDBConfig_ConnectionDSNIncludesPasswordAndCA(t *testing.T) {
+	cfg := DBConfig{
+		Host:        "db.example.com",
+		Port:        "5433",
+		User:        "app",
+		Password:    "p'ass",
+		Name:        "mydb",
+		SSLMode:     "verify-full",
+		SSLRootCert: "/run/secrets/postgres-ca.crt",
+	}
+
+	want := "host='db.example.com' port='5433' user='app' password='p\\'ass' dbname='mydb' sslmode='verify-full' sslrootcert='/run/secrets/postgres-ca.crt'"
+	if got := cfg.ConnectionDSN(); got != want {
+		t.Errorf("ConnectionDSN() = %q, want %q", got, want)
 	}
 }
 
@@ -333,6 +353,9 @@ func TestLoadRedisConfig_ReadsValues(t *testing.T) {
 	t.Setenv("REDIS_USERNAME", "app")
 	t.Setenv("REDIS_PASSWORD", "s3cret")
 	t.Setenv("REDIS_DB", "2")
+	t.Setenv("REDIS_TLS", "true")
+	t.Setenv("REDIS_CA_CERT", "/run/secrets/redis-ca.crt")
+	t.Setenv("REDIS_TLS_SERVER_NAME", "redis.example.com")
 
 	cfg, err := LoadRedisConfig()
 	if err != nil {
@@ -345,6 +368,10 @@ func TestLoadRedisConfig_ReadsValues(t *testing.T) {
 	}
 	if cfg.DB != 2 {
 		t.Errorf("DB = %d, want 2", cfg.DB)
+	}
+	if !cfg.TLS || cfg.TLSCACert != "/run/secrets/redis-ca.crt" ||
+		cfg.TLSServerName != "redis.example.com" {
+		t.Errorf("unexpected TLS config: %+v", cfg)
 	}
 }
 
@@ -375,6 +402,266 @@ func TestLoadJWTConfig_RefreshTTLNotLongerThanAccess(t *testing.T) {
 	_, err := LoadJWTConfig()
 	if !errors.Is(err, ErrJWTRefreshTTLNotLongerThanAccess) {
 		t.Fatalf("expected ErrJWTRefreshTTLNotLongerThanAccess, got: %v", err)
+	}
+}
+
+// validProdJWTSecret is the Base64 encoding of 32 random-looking bytes. It is
+// long enough, valid Base64 and free of any predictable pattern, so the
+// production validator accepts it.
+const validProdJWTSecret = "azhzRjN6UTF4VzlwTDJtTjd2QjRjUjZ0WTBhSDVqRDg="
+
+func requireProdJWTEnv(t *testing.T) string {
+	t.Helper()
+	t.Setenv("JWT_SECRET", validProdJWTSecret)
+	return validProdJWTSecret
+}
+
+func TestProdLoadJWTConfig_Defaults(t *testing.T) {
+	secret := requireProdJWTEnv(t)
+	unsetEnv(t, "JWT_ISSUER")
+	unsetEnv(t, "JWT_AUDIENCE")
+	unsetEnv(t, "JWT_ACCESS_TOKEN_TTL")
+	unsetEnv(t, "JWT_REFRESH_TOKEN_TTL")
+	unsetEnv(t, "JWT_LEEWAY")
+
+	cfg, err := ProdLoadJWTConfig()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if cfg.Secret != secret {
+		t.Errorf("Secret = %q, want %q", cfg.Secret, secret)
+	}
+	if cfg.Issuer != "requisition-system" {
+		t.Errorf("Issuer = %q, want default requisition-system", cfg.Issuer)
+	}
+	if cfg.Audience != "requisition-system" {
+		t.Errorf("Audience = %q, want default requisition-system", cfg.Audience)
+	}
+	if cfg.AccessTokenTTL != 15*time.Minute {
+		t.Errorf("AccessTokenTTL = %v, want 15m", cfg.AccessTokenTTL)
+	}
+	if cfg.RefreshTokenTTL != 7*24*time.Hour {
+		t.Errorf("RefreshTokenTTL = %v, want 168h", cfg.RefreshTokenTTL)
+	}
+	if cfg.Leeway != 30*time.Second {
+		t.Errorf("Leeway = %v, want 30s", cfg.Leeway)
+	}
+}
+
+func TestProdLoadJWTConfig_ReadsValues(t *testing.T) {
+	requireProdJWTEnv(t)
+	t.Setenv("JWT_ISSUER", "my-issuer")
+	t.Setenv("JWT_AUDIENCE", "my-audience")
+	t.Setenv("JWT_ACCESS_TOKEN_TTL", "5m")
+	t.Setenv("JWT_REFRESH_TOKEN_TTL", "24h")
+	t.Setenv("JWT_LEEWAY", "10s")
+
+	cfg, err := ProdLoadJWTConfig()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if cfg.Issuer != "my-issuer" || cfg.Audience != "my-audience" {
+		t.Errorf("expected issuer/audience from env, got: %+v", cfg)
+	}
+	if cfg.AccessTokenTTL != 5*time.Minute || cfg.RefreshTokenTTL != 24*time.Hour {
+		t.Errorf("expected TTLs from env, got: %+v", cfg)
+	}
+	if cfg.Leeway != 10*time.Second {
+		t.Errorf("Leeway = %v, want 10s", cfg.Leeway)
+	}
+}
+
+func TestProdLoadJWTConfig_MissingSecret(t *testing.T) {
+	unsetEnv(t, "JWT_SECRET")
+
+	_, err := ProdLoadJWTConfig()
+	if err == nil {
+		t.Fatal("expected error when JWT_SECRET is missing")
+	}
+	if !strings.Contains(err.Error(), "JWT_SECRET") {
+		t.Errorf("error should mention JWT_SECRET, got: %v", err)
+	}
+}
+
+func TestProdLoadJWTConfig_RefreshTTLNotLongerThanAccess(t *testing.T) {
+	requireProdJWTEnv(t)
+	t.Setenv("JWT_ACCESS_TOKEN_TTL", "1h")
+	t.Setenv("JWT_REFRESH_TOKEN_TTL", "5m")
+
+	_, err := ProdLoadJWTConfig()
+	if !errors.Is(err, ErrJWTRefreshTTLNotLongerThanAccess) {
+		t.Fatalf("expected ErrJWTRefreshTTLNotLongerThanAccess, got: %v", err)
+	}
+}
+
+func TestProdLoadJWTConfig_InvalidSecret(t *testing.T) {
+	repeated := make([]byte, 32)
+	for i := range repeated {
+		repeated[i] = 'a'
+	}
+	increasing := make([]byte, 32)
+	for i := range increasing {
+		increasing[i] = byte(i)
+	}
+
+	tests := []struct {
+		name   string
+		secret string
+	}{
+		{
+			name:   "not base64",
+			secret: "this is not base64!",
+		},
+		{
+			name:   "decoded secret too short",
+			secret: base64.StdEncoding.EncodeToString([]byte("short")),
+		},
+		{
+			name:   "weak named secret",
+			secret: "password",
+		},
+		{
+			name:   "repeated byte pattern",
+			secret: base64.StdEncoding.EncodeToString(repeated),
+		},
+		{
+			name:   "sequential byte pattern",
+			secret: base64.StdEncoding.EncodeToString(increasing),
+		},
+		{
+			name:   "weak text inside the key",
+			secret: base64.StdEncoding.EncodeToString([]byte(strings.Repeat("secret", 6))),
+		},
+		{
+			name:   "leading whitespace",
+			secret: " " + validProdJWTSecret,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("JWT_SECRET", tt.secret)
+
+			_, err := ProdLoadJWTConfig()
+			if err == nil {
+				t.Fatalf("expected an error for %s, got none", tt.name)
+			}
+			if !strings.Contains(err.Error(), "invalid JWT Configuration") {
+				t.Errorf("expected a JWT configuration error, got: %v", err)
+			}
+		})
+	}
+}
+
+func TestValidateJWTSecret_Valid(t *testing.T) {
+	if err := validateJWTSecret(validProdJWTSecret, minJWTSecretLength); err != nil {
+		t.Fatalf("unexpected error for a valid secret: %v", err)
+	}
+}
+
+func TestValidateJWTSecret_MinBytesTooSmall(t *testing.T) {
+	err := validateJWTSecret(validProdJWTSecret, minJWTSecretLength-1)
+	if err == nil {
+		t.Fatal("expected an error when minBytes is below 32, got none")
+	}
+}
+
+func TestValidateJWTSecret_Empty(t *testing.T) {
+	err := validateJWTSecret("", minJWTSecretLength)
+	if !errors.Is(err, ErrJWTSecretTooShort) {
+		t.Fatalf("expected ErrJWTSecretTooShort, got: %v", err)
+	}
+}
+
+func TestValidateJWTSecret_Whitespace(t *testing.T) {
+	for _, secret := range []string{
+		" " + validProdJWTSecret,
+		validProdJWTSecret + " ",
+		validProdJWTSecret + "\n",
+	} {
+		if err := validateJWTSecret(secret, minJWTSecretLength); err == nil {
+			t.Errorf("expected an error for secret with whitespace, got none")
+		}
+	}
+}
+
+func TestValidateJWTSecret_WeakNamedSecret(t *testing.T) {
+	for _, secret := range []string{
+		"secret",
+		"PASSWORD",
+		"change-me",
+		"your-secret-key",
+	} {
+		err := validateJWTSecret(secret, minJWTSecretLength)
+		if err == nil {
+			t.Errorf("expected an error for weak secret %q, got none", secret)
+		}
+	}
+}
+
+func TestValidateJWTSecret_InvalidBase64(t *testing.T) {
+	err := validateJWTSecret("this is not base64!", minJWTSecretLength)
+	if err == nil {
+		t.Fatal("expected an error for invalid Base64, got none")
+	}
+	if !strings.Contains(err.Error(), "Base64") {
+		t.Errorf("error should mention Base64, got: %v", err)
+	}
+}
+
+func TestValidateJWTSecret_DecodedTooShort(t *testing.T) {
+	secret := base64.StdEncoding.EncodeToString([]byte("only-16-bytes!!!"))
+	if len([]byte("only-16-bytes!!!")) != 16 {
+		t.Fatalf("test fixture should decode to 16 bytes")
+	}
+
+	err := validateJWTSecret(secret, minJWTSecretLength)
+	if err == nil {
+		t.Fatal("expected an error for a short decoded secret, got none")
+	}
+	if !strings.Contains(err.Error(), "decoded bytes") {
+		t.Errorf("error should mention decoded bytes, got: %v", err)
+	}
+}
+
+func TestValidateJWTSecret_PredictableKeys(t *testing.T) {
+	repeated := make([]byte, 32)
+	for i := range repeated {
+		repeated[i] = 0x2a
+	}
+
+	increasing := make([]byte, 32)
+	for i := range increasing {
+		increasing[i] = byte(i)
+	}
+
+	decreasing := make([]byte, 32)
+	for i := range decreasing {
+		decreasing[i] = byte(31 - i)
+	}
+
+	tests := []struct {
+		name string
+		key  []byte
+	}{
+		{name: "all bytes identical", key: repeated},
+		{name: "increasing bytes", key: increasing},
+		{name: "decreasing bytes", key: decreasing},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			secret := base64.StdEncoding.EncodeToString(tt.key)
+			err := validateJWTSecret(secret, minJWTSecretLength)
+			if err == nil {
+				t.Fatalf("expected an error for %s, got none", tt.name)
+			}
+			if !strings.Contains(err.Error(), "predictable or weak pattern") {
+				t.Errorf("expected a weak pattern error, got: %v", err)
+			}
+		})
 	}
 }
 

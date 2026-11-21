@@ -1,12 +1,6 @@
-# Both binaries are compiled once in the build stage and shipped by the
-# runtime targets below:
-#   docker build -f dockerfile -t requisition-system .                  # API (default)
-#   docker build -f dockerfile --target worker -t requisition-system-worker .
+# BUILD
 FROM golang:alpine AS build
 
-# Version stamped into the binary and reported as the service.version
-# resource attribute of the telemetry. Override it with:
-#   docker build --build-arg VERSION=v1.2.3 ...
 ARG VERSION=dev
 
 WORKDIR /src
@@ -15,27 +9,50 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-RUN go build -ldflags "-X github.com/AppeiYA/requisition-system/internal/version.Version=${VERSION}" -o app ./cmd/api
-RUN go build -ldflags "-X github.com/AppeiYA/requisition-system/internal/version.Version=${VERSION}" -o worker ./cmd/worker
 
-# API image — the default target, so a plain `docker build` keeps behaving
-# exactly as before.
-FROM golang:alpine AS api
-LABEL maintainer="appeimisic@gmail.com"
+RUN go build \
+    -ldflags "-X github.com/AppeiYA/requisition-system/internal/version.Version=${VERSION}" \
+    -o app ./cmd/api
 
-RUN apk add --no-cache curl
+RUN go build \
+    -ldflags "-X github.com/AppeiYA/requisition-system/internal/version.Version=${VERSION}" \
+    -o worker ./cmd/worker
 
-WORKDIR /src
-COPY --from=build /src/app ./app
+
+# WORKER
+FROM alpine:3.24.4 AS worker
+
+RUN apk add --no-cache ca-certificates \
+    && addgroup -S app \
+    && adduser -S -G app app
+
+WORKDIR /app
+
+COPY --from=build --chown=app:app /src/worker ./worker
+
+USER app
+
+ENTRYPOINT ["./worker"]
+
+
+# API
+FROM alpine:3.24.4 AS api
+
+RUN apk add --no-cache ca-certificates \
+    && addgroup -S app \
+    && adduser -S -G app app
+
+WORKDIR /app
+
+COPY --from=build --chown=app:app /src/app ./app
+
+USER app
+
 EXPOSE 8080
-ENTRYPOINT [ "./app" ]
 
-# Worker image — drains the asynq task queues (invitation emails, ...).
-FROM alpine AS worker
-LABEL maintainer="appeimisic@gmail.com"
+HEALTHCHECK --interval=30s \
+    --timeout=5s \
+    --retries=3 \
+    CMD wget -q -O /dev/null http://localhost:8080/healthz || exit 1
 
-WORKDIR /src
-COPY --from=build /src/worker ./worker
-ENTRYPOINT [ "./worker" ]
-
-FROM api
+ENTRYPOINT ["./app"]

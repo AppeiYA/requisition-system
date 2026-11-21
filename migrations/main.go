@@ -20,6 +20,7 @@ import (
 func main() {
 	up := flag.Bool("up", false, "Migrate up")
 	down := flag.Bool("down", false, "Migrate down (1 step)")
+	allowDestructiveDown := flag.Bool("allow-destructive-down", false, "Allow rollback of migration 00014 after verifying a backup")
 	reset := flag.Bool("reset", false, "Reset migration state (force to -1)")
 	forceVersion := flag.Int("force", -999, "Force a specific migration version (clears dirty state)")
 	seed := flag.Bool("seed", false, "Run seed files from ./seeds directory")
@@ -33,7 +34,7 @@ func main() {
 		log.Fatalf("Failed to load database config: %v", err)
 	}
 
-	db, err := sqlx.Connect("postgres", dbConfig.DSN())
+	db, err := sqlx.Connect("postgres", dbConfig.ConnectionDSN())
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
@@ -84,6 +85,13 @@ func main() {
 		log.Println("Database is up to date!")
 
 	case *down:
+		version, _, err := m.Version()
+		if err != nil && err != migrate.ErrNilVersion {
+			log.Fatalf("Failed to determine current migration version: %v", err)
+		}
+		if version == 14 && !*allowDestructiveDown {
+			log.Fatal("Refusing to roll back migration 00014: it can discard additional requisition lines and status history; verify a backup and rerun with -allow-destructive-down")
+		}
 		log.Println("Running DOWN migration (reverting 1 step)...")
 		if err := m.Steps(-1); err != nil && err != migrate.ErrNoChange {
 			log.Fatalf("DOWN failed: %v", err)

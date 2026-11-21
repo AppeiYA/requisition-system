@@ -6,6 +6,20 @@ import (
 	"github.com/AppeiYA/requisition-system/internal/identity/domain"
 )
 
+type UserStatusModel struct {
+	ID        string    `db:"id"`
+	Status    string    `db:"status"`
+	UpdatedAt time.Time `db:"updated_at"`
+}
+
+func (m UserStatusModel) ToDomain() (domain.Status, error) {
+	status := domain.Status(m.Status)
+	if !status.IsValid() {
+		return "", domain.ErrInvalidStatus
+	}
+	return status, nil
+}
+
 type UserModel struct {
 	ID           string     `db:"id"`
 	FirstName    string     `db:"first_name"`

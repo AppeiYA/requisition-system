@@ -70,14 +70,16 @@ type RequisitionItemModel struct {
 }
 
 type RequestedItemModel struct {
-	ID             string    `db:"id"`
-	Name           string    `db:"name"`
-	CategoryID     string    `db:"category_id"`
-	Description    string    `db:"description"`
-	CreatedBy      string    `db:"created_by"`
-	ReviewStatus   string    `db:"review_status"`
-	PromotedItemID *string   `db:"promoted_item_id"`
-	CreatedAt      time.Time `db:"created_at"`
+	ID             string     `db:"id"`
+	Name           string     `db:"name"`
+	CategoryID     string     `db:"category_id"`
+	Description    string     `db:"description"`
+	CreatedBy      string     `db:"created_by"`
+	ReviewStatus   string     `db:"review_status"`
+	PromotedItemID *string    `db:"promoted_item_id"`
+	ReviewedBy     *string    `db:"reviewed_by"`
+	ReviewedAt     *time.Time `db:"reviewed_at"`
+	CreatedAt      time.Time  `db:"created_at"`
 }
 
 type RequisitionStatusHistoryModel struct {
@@ -139,7 +141,8 @@ func (m RequisitionItemModel) ToDomain() (*requisitiondomain.RequisitionItem, er
 func (m RequestedItemModel) ToDomain() (*requisitiondomain.RequestedItem, error) {
 	return requisitiondomain.ReconstituteRequestedItem(
 		m.ID, m.Name, m.CategoryID, m.Description, m.CreatedBy,
-		m.ReviewStatus, stringValue(m.PromotedItemID), m.CreatedAt,
+		m.ReviewStatus, m.ReviewedBy, m.ReviewedAt,
+		stringValue(m.PromotedItemID), m.CreatedAt,
 	)
 }
 
@@ -148,7 +151,10 @@ func RequestedItemFromDomain(item *requisitiondomain.RequestedItem) *RequestedIt
 		ID: item.ID(), Name: item.Name().Value(), CategoryID: item.CategoryID(),
 		Description: item.Description().Value(), CreatedBy: item.CreatedBy(),
 		ReviewStatus:   item.ReviewStatus().String(),
-		PromotedItemID: nullableString(item.PromotedItemID()), CreatedAt: item.CreatedAt(),
+		PromotedItemID: nullableString(item.PromotedItemID()),
+		ReviewedBy:     item.ReviewedBy(),
+		ReviewedAt:     item.ReviewedAt(),
+		CreatedAt:      item.CreatedAt(),
 	}
 }
 

@@ -131,11 +131,11 @@ func (a *App) Run() error {
 	idGen := &generator.IDGenerator{}
 	redisCache := redis.NewCache(redisClient.Client())
 
-	identityModule := a.buildIdentity(cfg, baseRepo, redisClient, txManager, accessTokenService, idGen)
+	identityModule := a.buildIdentity(cfg, baseRepo, redisCache, redisClient, txManager, accessTokenService, idGen)
 
 	departmentModule := a.buildDepartment(baseRepo, idGen, redisCache)
 
-	requisitionModule := a.buildRequisition(baseRepo, idGen, redisCache, departmentModule.MembershipRepository(), txManager)
+	requisitionModule := a.buildRequisition(baseRepo, idGen, redisCache, departmentModule.MembershipRepository(), txManager, identityModule.UserLookup())
 
 	invitationModule := a.buildInvitation(
 		baseRepo,

@@ -14,3 +14,7 @@ type ListItemsQuery struct {
 type ListItemsUsecaseInt interface {
 	Execute(ctx context.Context, query ListItemsQuery) ([]*domain.Item, error)
 }
+
+type ListUnreviewedItemsUsecaseInt interface {
+	Execute(ctx context.Context, query ListItemsQuery) ([]*domain.RequestedItem, error)
+}

@@ -74,14 +74,21 @@ func TestNewSubmittedRequisitionValidatesLinesAndTotals(t *testing.T) {
 
 	first := aggregateItem(t, "itm_123", "", 1)
 	second := aggregateItem(t, "", "ritem_123", 2)
-	requisition, err := NewSubmittedRequisition(
+	requestedItem, err := NewRequestedItem(
+		"ritem_123", mustItemName(t, "Laptop"), "cat_123",
+		mustItemDescription(t, "Business laptop"), "usr_123",
+	)
+	if err != nil {
+		t.Fatalf("NewRequestedItem() unexpected error = %v", err)
+	}
+	requisition, err := NewSubmittedRequisitionWithRequestedItems(
 		"req_123", "REQ-2026-10001", "usr_123", "dpt_123",
 		PriorityMedium, time.Now().UTC().AddDate(0, 0, 1),
 		mustRequisitionJustification(t, "Office supplies"),
-		[]*RequisitionItem{first, second},
+		[]*RequisitionItem{first, second}, []*RequestedItem{requestedItem},
 	)
 	if err != nil {
-		t.Fatalf("NewSubmittedRequisition() unexpected error = %v", err)
+		t.Fatalf("NewSubmittedRequisitionWithRequestedItems() unexpected error = %v", err)
 	}
 	if len(requisition.Items()) != 2 {
 		t.Fatalf("Items() length = %d, want 2", len(requisition.Items()))
@@ -133,6 +140,61 @@ func TestNewSubmittedRequisitionRejectsMoreThanFiveRequestedItems(t *testing.T) 
 	)
 	if err != ErrTooManyRequestedItems {
 		t.Fatalf("too many requested items error = %v, want %v", err, ErrTooManyRequestedItems)
+	}
+}
+
+func TestNewSubmittedRequisitionRejectsMoreThanFiveItems(t *testing.T) {
+	t.Parallel()
+
+	items := make([]*RequisitionItem, 0, MaxRequisitionItems+1)
+	for line := 1; line <= MaxRequisitionItems+1; line++ {
+		items = append(items, aggregateItem(t, "itm_"+string(rune('a'+line)), "", line))
+	}
+
+	_, err := NewSubmittedRequisition(
+		"req_123", "REQ-2026-10001", "usr_123", "dpt_123",
+		PriorityMedium, time.Now().UTC().AddDate(0, 0, 1),
+		mustRequisitionJustification(t, "Office supplies"), items,
+	)
+	if err != ErrTooManyRequisitionItems {
+		t.Fatalf("too many items error = %v, want %v", err, ErrTooManyRequisitionItems)
+	}
+}
+
+func TestRequisitionAggregateRejectsMissingRequestedItem(t *testing.T) {
+	t.Parallel()
+
+	_, err := NewSubmittedRequisitionWithRequestedItems(
+		"req_123", "REQ-2026-10001", "usr_123", "dpt_123",
+		PriorityMedium, time.Now().UTC().AddDate(0, 0, 1),
+		mustRequisitionJustification(t, "Office supplies"),
+		[]*RequisitionItem{aggregateItem(t, "", "ritem_123", 1)}, nil,
+	)
+	if err != ErrInvalidRequestedItemID {
+		t.Fatalf("error = %v, want %v", err, ErrInvalidRequestedItemID)
+	}
+}
+
+func TestRequisitionAggregateRejectsUnreferencedRequestedItem(t *testing.T) {
+	t.Parallel()
+
+	requestedItem, err := NewRequestedItem(
+		"ritem_123", mustItemName(t, "Laptop"), "cat_123",
+		mustItemDescription(t, "Business laptop"), "usr_123",
+	)
+	if err != nil {
+		t.Fatalf("NewRequestedItem() unexpected error = %v", err)
+	}
+
+	_, err = NewSubmittedRequisitionWithRequestedItems(
+		"req_123", "REQ-2026-10001", "usr_123", "dpt_123",
+		PriorityMedium, time.Now().UTC().AddDate(0, 0, 1),
+		mustRequisitionJustification(t, "Office supplies"),
+		[]*RequisitionItem{aggregateItem(t, "itm_123", "", 1)},
+		[]*RequestedItem{requestedItem},
+	)
+	if err != ErrRequestedItemNotReferenced {
+		t.Fatalf("error = %v, want %v", err, ErrRequestedItemNotReferenced)
 	}
 }
 

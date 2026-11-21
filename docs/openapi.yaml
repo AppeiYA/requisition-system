@@ -230,6 +230,33 @@ components:
                 unit_cost:
                     type: number
             type: object
+        item.PromoteRequestedItemRequest:
+            properties:
+                unit_cost:
+                    minimum: 0
+                    type: number
+            type: object
+        item.RequestedItemResponse:
+            properties:
+                category_id:
+                    type: string
+                created_at:
+                    type: string
+                created_by:
+                    type: string
+                description:
+                    type: string
+                id:
+                    type: string
+                name:
+                    type: string
+                review_status:
+                    type: string
+                reviewed_at:
+                    type: string
+                reviewed_by:
+                    type: string
+            type: object
         item.UpdateItemRequest:
             properties:
                 category_id:
@@ -420,6 +447,62 @@ components:
                     type: string
             required:
                 - to_status
+            type: object
+        requisitionhttp.UpdateRequisitionLineRequest:
+            properties:
+                estimated_unit_amount:
+                    example: 50000
+                    type: number
+                item_id:
+                    example: itm_123
+                    type: string
+                notes:
+                    example: Optional note
+                    type: string
+                quantity:
+                    example: 2
+                    maximum: 1000
+                    minimum: 1
+                    type: integer
+                requested_item:
+                    $ref: '#/components/schemas/requisitionhttp.CreateRequestedItemRequest'
+                requisition_item_id:
+                    example: reqitem_123
+                    type: string
+            type: object
+        requisitionhttp.UpdateRequisitionRequest:
+            properties:
+                department_id:
+                    example: dpt_123
+                    minLength: 1
+                    type: string
+                justification:
+                    example: Replacement laptops for the new hires
+                    maxLength: 500
+                    minLength: 1
+                    type: string
+                lines:
+                    items:
+                        $ref: '#/components/schemas/requisitionhttp.UpdateRequisitionLineRequest'
+                    minItems: 1
+                    type: array
+                needed_by:
+                    example: "2026-11-15"
+                    type: string
+                priority:
+                    enum:
+                        - low
+                        - normal
+                        - medium
+                        - high
+                        - urgent
+                    example: medium
+                    type: string
+            required:
+                - department_id
+                - justification
+                - lines
+                - needed_by
             type: object
         response.ErrorResponse:
             properties:
@@ -1469,6 +1552,169 @@ paths:
             summary: Deactivate an item
             tags:
                 - item
+    /items/requested/{id}/dismiss:
+        post:
+            description: Marks a requested item as dismissed and records the administrator review.
+            parameters:
+                - description: Requested item ID
+                  in: path
+                  name: id
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: OK
+                "400":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Invalid review state
+                "401":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Missing or invalid access token
+                "403":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Administrator access required
+                "404":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Requested item not found
+                "409":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Requested item already reviewed
+            security:
+                - BearerAuth: []
+            summary: Dismiss a requested item
+            tags:
+                - item
+    /items/requested/{id}/promote:
+        post:
+            description: Creates a catalogue item from a requested item and records the administrator review.
+            parameters:
+                - description: Requested item ID
+                  in: path
+                  name: id
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/item.PromoteRequestedItemRequest'
+                description: Promotion details
+                required: true
+                x-originalParamName: request
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: OK
+                "400":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Validation or invalid review state
+                "401":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Missing or invalid access token
+                "403":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Administrator access required
+                "404":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Requested item not found
+                "409":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Requested item already reviewed or catalogue duplicate
+            security:
+                - BearerAuth: []
+            summary: Promote a requested item
+            tags:
+                - item
+    /items/requested/unreviewed:
+        get:
+            description: Returns free-filled requested items awaiting administrator review.
+            parameters:
+                - description: Maximum number of items to return (default 100, max 100)
+                  in: query
+                  name: limit
+                  schema:
+                    type: integer
+                - description: Number of items to skip (default 0)
+                  in: query
+                  name: offset
+                  schema:
+                    type: integer
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                allOf:
+                                    - $ref: '#/components/schemas/response.Response'
+                                    - properties:
+                                        data:
+                                            items:
+                                                $ref: '#/components/schemas/item.RequestedItemResponse'
+                                            type: array
+                                      type: object
+                    description: OK
+                "400":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Invalid pagination parameters
+                "401":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Missing or invalid access token
+                "403":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Administrator access required
+            security:
+                - BearerAuth: []
+            summary: List unreviewed requested items
+            tags:
+                - item
     /requisitions:
         get:
             description: Returns header summaries for requisitions created by the authenticated user, ordered by creation time (newest first), including the derived total but excluding lines and status history. Use GET /requisitions/{id} for the full detail. Amounts are expressed in major currency units (naira for NGN) while stored internally as minor units. Requires an access token.
@@ -1629,8 +1875,8 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/requisitionhttp.CreateRequisitionRequest'
-                description: Updated requisition details
+                            $ref: '#/components/schemas/requisitionhttp.UpdateRequisitionRequest'
+                description: Updated requisition details. Include requisition_item_id on existing lines to preserve their identity.
                 required: true
                 x-originalParamName: request
             responses:

@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	identitydomain "github.com/AppeiYA/requisition-system/internal/identity/domain"
 	identitymocks "github.com/AppeiYA/requisition-system/internal/identity/mocks"
 	identityout "github.com/AppeiYA/requisition-system/internal/identity/ports/out"
 	customerrors "github.com/AppeiYA/requisition-system/internal/shared/infrastructure/errors"
@@ -24,7 +25,7 @@ func TestAuthMiddleware_Handle_Success(t *testing.T) {
 		return &identityout.TokenModel{ID: "usr-1", Role: "admin", Email: "test@example.com"}, nil
 	}
 
-	mw := NewAuthMiddleware(mockTokens)
+	mw := newTestAuthMiddleware(mockTokens)
 
 	router := gin.New()
 	var capturedID, capturedRole string
@@ -58,7 +59,7 @@ func TestAuthMiddleware_Handle_MissingOrInvalidHeader(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	mockTokens := identitymocks.NewMockAccessTokenService()
-	mw := NewAuthMiddleware(mockTokens)
+	mw := newTestAuthMiddleware(mockTokens)
 
 	cases := []struct {
 		name   string
@@ -101,7 +102,7 @@ func TestAuthMiddleware_Handle_ValidationError(t *testing.T) {
 		return nil, customerrors.NewUnauthorizedError("token expired")
 	}
 
-	mw := NewAuthMiddleware(mockTokens)
+	mw := newTestAuthMiddleware(mockTokens)
 
 	router := gin.New()
 	router.GET("/test", mw.Handle(), func(c *gin.Context) {
@@ -128,7 +129,7 @@ func TestAuthMiddleware_RequireRole_Success(t *testing.T) {
 		return &identityout.TokenModel{ID: "usr-1", Role: "admin"}, nil
 	}
 
-	mw := NewAuthMiddleware(mockTokens)
+	mw := newTestAuthMiddleware(mockTokens)
 
 	router := gin.New()
 	router.GET("/admin-only", mw.Handle(), mw.RequireRole("admin"), func(c *gin.Context) {
@@ -155,7 +156,7 @@ func TestAuthMiddleware_RequireRole_Forbidden(t *testing.T) {
 		return &identityout.TokenModel{ID: "usr-1", Role: "user"}, nil
 	}
 
-	mw := NewAuthMiddleware(mockTokens)
+	mw := newTestAuthMiddleware(mockTokens)
 
 	router := gin.New()
 	router.GET("/admin-only", mw.Handle(), mw.RequireRole("admin"), func(c *gin.Context) {
@@ -183,7 +184,7 @@ func TestAuthMiddleware_IsAdmin(t *testing.T) {
 			return &identityout.TokenModel{ID: "usr-1", Role: "admin"}, nil
 		}
 
-		mw := NewAuthMiddleware(mockTokens)
+		mw := newTestAuthMiddleware(mockTokens)
 
 		router := gin.New()
 		router.GET("/admin", mw.IsAdmin(), func(c *gin.Context) {
@@ -207,7 +208,7 @@ func TestAuthMiddleware_IsAdmin(t *testing.T) {
 			return &identityout.TokenModel{ID: "usr-1", Role: "user"}, nil
 		}
 
-		mw := NewAuthMiddleware(mockTokens)
+		mw := newTestAuthMiddleware(mockTokens)
 
 		router := gin.New()
 		router.GET("/admin", mw.IsAdmin(), func(c *gin.Context) {
@@ -224,5 +225,13 @@ func TestAuthMiddleware_IsAdmin(t *testing.T) {
 			t.Fatalf("status = %d, want %d", rec.Code, http.StatusForbidden)
 		}
 	})
+}
+
+func newTestAuthMiddleware(accessTokens identityout.AccessTokenService) *AuthMiddleware {
+	userRepo := identitymocks.NewMockUsersRepository()
+	userRepo.GetUserByIDFunc = func(ctx context.Context, id string) (*identitydomain.User, error) {
+		return identitymocks.ValidUser(), nil
+	}
+	return NewAuthMiddleware(accessTokens, userRepo)
 }
 

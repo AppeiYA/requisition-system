@@ -107,6 +107,16 @@ go run ./migrations -seed-file seeds/001_admin.sql   # run a single seed file
 Migrations run in `migrations/*.up.sql` / `*.down.sql` pairs; seed files run inside a
 transaction and are idempotent (they use `ON CONFLICT ... DO UPDATE`).
 
+Migration `00014` cannot be safely rolled back in general: the previous schema has
+only one requisition line and no status-history table. The migration CLI refuses this
+rollback unless a verified backup has been taken and
+`-allow-destructive-down` is supplied. A data-preservation procedure is still
+required; the flag is an explicit operator acknowledgement, not a backup.
+
+Item names are globally unique regardless of casing. Categories classify items but do
+not define item identity. Before applying migration 00014 to an existing deployment,
+audit and resolve any case-insensitive duplicate names first.
+
 ## API
 
 Base URL: `http://localhost:8080/api/v1` — interactive docs at
@@ -161,7 +171,8 @@ automatically). Required variables have no default and stop the app at boot.
 | `DB_USER` | ✅ | – | PostgreSQL user |
 | `DB_PASSWORD` | ✅ | – | PostgreSQL password |
 | `DB_NAME` | ✅ | – | Database name |
-| `DB_SSL_MODE` | – | `disable` | `disable`, `require`, … |
+| `DB_SSL_MODE` | – | `disable` | PostgreSQL TLS mode; use `verify-full` in production |
+| `DB_CA_CERT` | – | – | Absolute path to the PostgreSQL CA certificate/bundle |
 | `DB_MAX_OPEN_CONNECTIONS` | – | `25` | Pool: max open connections |
 | `DB_MAX_IDLE_CONNECTIONS` | – | `10` | Pool: max idle connections |
 | `DB_MAX_LIFETIME_MINUTES` | – | `30` | Pool: connection max lifetime |
@@ -170,6 +181,9 @@ automatically). Required variables have no default and stop the app at boot.
 | `REDIS_USERNAME` | – | – | Redis username (ACL) |
 | `REDIS_PASSWORD` | – | – | Redis password |
 | `REDIS_DB` | – | `0` | Redis database index |
+| `REDIS_TLS` | – | `false` | Enable Redis TLS |
+| `REDIS_CA_CERT` | – | – | Absolute path to the Redis CA certificate/bundle |
+| `REDIS_TLS_SERVER_NAME` | – | `REDIS_HOST` | TLS server name used for certificate verification |
 | `JWT_SECRET` | ✅ | – | Signing secret, **min 32 characters** (`openssl rand -hex 32`) |
 | `JWT_ISSUER` | – | `requisition-system` | Token issuer |
 | `JWT_AUDIENCE` | – | `requisition-system` | Token audience |
