@@ -3,18 +3,30 @@ package testutil
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	appdb "github.com/AppeiYA/requisition-system/internal/shared/infrastructure/db"
+	"github.com/jmoiron/sqlx"
 )
 
 type Suite struct {
 	DB    *TestDatabase
+	SQLX  *sqlx.DB
+	AppDB *appdb.DB
 	Redis *TestRedis
 }
 
 func NewSuite(t *testing.T, migrationsPath string) *Suite {
 	t.Helper()
+
+	resolvedMigrationsPath, err := ResolveMigrationsPath(migrationsPath)
+	if err != nil {
+		t.Fatalf("resolve migrations path: %v", err)
+	}
 
 	// Give infrastructure setup enough time to complete.
 	ctx, cancel := context.WithTimeout(
@@ -29,21 +41,41 @@ func NewSuite(t *testing.T, migrationsPath string) *Suite {
 		t.Fatalf("setup test database: %v", err)
 	}
 
+	sqlDB, err := sqlx.Open("postgres", db.DSN)
+	if err != nil {
+		_ = db.Close()
+		t.Fatalf("open test database: %v", err)
+	}
+
+	if err := sqlDB.PingContext(ctx); err != nil {
+		_ = sqlDB.Close()
+		_ = db.Close()
+		t.Fatalf("ping test database connection: %v", err)
+	}
+
+	appDB := appdb.New(sqlDB)
+
 	// Register cleanup immediately so migration failures
 	// don't leave containers running.
 	t.Cleanup(func() {
+		if err := sqlDB.Close(); err != nil {
+			t.Errorf("cleanup test sqlx database: %v", err)
+		}
 		if err := db.Close(); err != nil {
 			t.Errorf("cleanup test database: %v", err)
 		}
 	})
 
 	// Apply application migrations.
-	if err := RunMigrations(db.DSN, migrationsPath); err != nil {
+	if err := RunMigrations(db.DSN, resolvedMigrationsPath); err != nil {
+		_ = sqlDB.Close()
 		t.Fatalf("run database migrations: %v", err)
 	}
 
 	return &Suite{
-		DB: db,
+		DB:    db,
+		SQLX:  sqlDB,
+		AppDB: appDB,
 	}
 }
 
@@ -70,6 +102,44 @@ func (s *Suite) SetupRedis(t *testing.T) *TestRedis {
 	s.Redis = r
 
 	return r
+}
+
+func ResolveMigrationsPath(migrationsPath string) (string, error) {
+	if migrationsPath == "" {
+		return "", fmt.Errorf("migrations path is empty")
+	}
+
+	candidates := []string{migrationsPath}
+	if !filepath.IsAbs(migrationsPath) {
+		workingDirectory, err := os.Getwd()
+		if err != nil {
+			return "", fmt.Errorf("get working directory: %w", err)
+		}
+
+		for directory := workingDirectory; ; directory = filepath.Dir(directory) {
+			candidates = append(
+				candidates,
+				filepath.Join(directory, migrationsPath),
+			)
+
+			parent := filepath.Dir(directory)
+			if parent == directory {
+				break
+			}
+		}
+	}
+
+	for _, candidate := range candidates {
+		absolutePath, err := filepath.Abs(candidate)
+		if err != nil {
+			continue
+		}
+		if info, err := os.Stat(absolutePath); err == nil && info.IsDir() {
+			return absolutePath, nil
+		}
+	}
+
+	return "", fmt.Errorf("migrations directory not found: %s", migrationsPath)
 }
 
 // ResetDatabase removes application and migration data while preserving the

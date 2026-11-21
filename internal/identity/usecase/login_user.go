@@ -7,7 +7,10 @@ import (
 	identityin "github.com/AppeiYA/requisition-system/internal/identity/ports/in"
 	identityout "github.com/AppeiYA/requisition-system/internal/identity/ports/out"
 	shareddomain "github.com/AppeiYA/requisition-system/internal/shared/domain"
+	customerrors "github.com/AppeiYA/requisition-system/internal/shared/infrastructure/errors"
 )
+
+var ErrUserDoesNotExist = customerrors.NewUnauthorizedError("user not found")
 
 type LoginUserUsecase struct {
 	userRepository        identityout.UsersRepository
@@ -43,6 +46,9 @@ func (u *LoginUserUsecase) Execute(ctx context.Context, req identityin.LoginUser
 	// get user by email
 	user, err := u.userRepository.GetUserByEmail(ctx, email)
 	if err != nil {
+		if err, ok := err.(*customerrors.CustomError); ok && err.Code == 404 {
+			return nil, ErrUserDoesNotExist
+		}
 		return nil, err
 	}
 
