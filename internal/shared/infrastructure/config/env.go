@@ -12,4 +12,5 @@ type Config struct {
 	Worker    WorkerConfig
 	Telemetry TelemetryConfig
 	RateLimit RateLimitConfig
+	Log       LogConfig
 }

@@ -2,7 +2,7 @@ package invitationworker
 
 import (
 	"context"
-	"log"
+	"log/slog"
 
 	invitationin "github.com/AppeiYA/requisition-system/internal/invitation/ports/in"
 	"github.com/hibiken/asynq"
@@ -20,7 +20,7 @@ func NewExpireInvitationsHandler(expireInvitations invitationin.ExpireInvitation
 
 func (h *ExpireInvitationsHandler) Handle(ctx context.Context, task *asynq.Task) error {
 	if err := h.expireInvitations.Execute(ctx); err != nil {
-		log.Printf("expire invitations task failed: %v", err)
+		slog.ErrorContext(ctx, "expire invitations task failed", slog.String("error.message", err.Error()))
 		return err
 	}
 

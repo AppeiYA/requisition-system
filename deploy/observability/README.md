@@ -9,8 +9,8 @@ logs to stdout as it always did.
 | --- | --- |
 | Traces | Tempo, queried by Grafana and by the dashboard |
 | Metrics | the collector's prometheus exporter, scraped by Prometheus |
+| Logs | Loki, queried by Grafana with bidirectional trace correlation |
 | Dashboards | Grafana, provisioned from `grafana/` |
-| Logs | none — the application logs to stdout and that is deliberate |
 
 ## Start it
 
@@ -42,6 +42,7 @@ local stack; any other deployment wants TLS.
 | http://localhost:3000 | the dashboard — login `admin` / `admin` |
 | http://localhost:9090 | Prometheus, for raw metric queries |
 | http://localhost:3200 | Tempo, for raw trace queries |
+| http://localhost:3100 | Loki, for raw log queries and OTLP ingestion |
 | http://localhost:13133 | the collector's health endpoint |
 
 Stop it with `down`. Add `-v` to also throw away the stored traces and
@@ -63,6 +64,7 @@ worker.
   them.
 - **Dependencies** — Postgres and Redis query durations, and the Redis pool.
 - **Traces** — a TraceQL search over the selected services.
+- **Application Logs** — structured JSON logs from the application and worker via Loki, with trace ID and span ID correlation. Clicking a trace ID opens its waterfall in Tempo; inspecting a span in Tempo queries the matching logs in Loki.
 
 Two things are worth knowing about the panels before reading them:
 

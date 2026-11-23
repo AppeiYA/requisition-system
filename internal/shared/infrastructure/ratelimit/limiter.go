@@ -3,7 +3,7 @@ package ratelimit
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"log"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"time"
@@ -42,7 +42,7 @@ func (l *Limiter) Middleware(name string, limit int, window time.Duration) gin.H
 			window.Milliseconds(),
 		).Slice()
 		if err != nil {
-			log.Printf("rate limiter unavailable: %v", err)
+			slog.ErrorContext(c.Request.Context(), "rate limiter unavailable", slog.String("error.message", err.Error()), slog.String("rate_limit.name", name))
 			response.Error(c, "service unavailable", http.StatusServiceUnavailable, nil)
 			return
 		}

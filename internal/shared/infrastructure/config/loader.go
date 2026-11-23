@@ -115,6 +115,10 @@ func Load() (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
+	logConfig, err := LoadLogConfig(appConfig.Env)
+	if err != nil {
+		return nil, err
+	}
 
 	return &Config{
 		App:       *appConfig,
@@ -128,6 +132,7 @@ func Load() (*Config, error) {
 		Worker:    *workerConfig,
 		Telemetry: *telemetryConfig,
 		RateLimit: *rateLimitConfig,
+		Log:       *logConfig,
 	}, nil
 }
 

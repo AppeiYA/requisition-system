@@ -932,3 +932,75 @@ func TestLoadTelemetryConfig_NonPositiveInterval(t *testing.T) {
 		t.Errorf("expected ErrTelemetryMetricsIntervalInvalid, got: %v", err)
 	}
 }
+
+func TestLoadLogConfig_Defaults(t *testing.T) {
+	unsetEnv(t, "LOG_LEVEL")
+	unsetEnv(t, "LOG_FORMAT")
+	unsetEnv(t, "LOG_ADD_SOURCE")
+
+	devCfg, err := LoadLogConfig(DevEnv)
+	if err != nil {
+		t.Fatalf("unexpected error for dev: %v", err)
+	}
+	if devCfg.Level != LogLevelInfo {
+		t.Errorf("dev Level = %q, want %q", devCfg.Level, LogLevelInfo)
+	}
+	if devCfg.Format != LogFormatText {
+		t.Errorf("dev Format = %q, want %q", devCfg.Format, LogFormatText)
+	}
+	if devCfg.AddSource {
+		t.Errorf("dev AddSource = true, want false")
+	}
+
+	prodCfg, err := LoadLogConfig(ProdEnv)
+	if err != nil {
+		t.Fatalf("unexpected error for prod: %v", err)
+	}
+	if prodCfg.Format != LogFormatJSON {
+		t.Errorf("prod Format = %q, want %q", prodCfg.Format, LogFormatJSON)
+	}
+}
+
+func TestLoadLogConfig_Custom(t *testing.T) {
+	t.Setenv("LOG_LEVEL", "DEBUG")
+	t.Setenv("LOG_FORMAT", "JSON")
+	t.Setenv("LOG_ADD_SOURCE", "true")
+
+	cfg, err := LoadLogConfig(DevEnv)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Level != LogLevelDebug {
+		t.Errorf("Level = %q, want %q", cfg.Level, LogLevelDebug)
+	}
+	if cfg.Format != LogFormatJSON {
+		t.Errorf("Format = %q, want %q", cfg.Format, LogFormatJSON)
+	}
+	if !cfg.AddSource {
+		t.Errorf("AddSource = false, want true")
+	}
+}
+
+func TestLoadLogConfig_InvalidLevel(t *testing.T) {
+	t.Setenv("LOG_LEVEL", "super-verbose")
+
+	_, err := LoadLogConfig(DevEnv)
+	if err == nil {
+		t.Fatal("expected error for invalid log level, got nil")
+	}
+	if !errors.Is(err, ErrLogLevelUnsupported) {
+		t.Errorf("expected ErrLogLevelUnsupported, got: %v", err)
+	}
+}
+
+func TestLoadLogConfig_InvalidFormat(t *testing.T) {
+	t.Setenv("LOG_FORMAT", "xml")
+
+	_, err := LoadLogConfig(DevEnv)
+	if err == nil {
+		t.Fatal("expected error for invalid log format, got nil")
+	}
+	if !errors.Is(err, ErrLogFormatUnsupported) {
+		t.Errorf("expected ErrLogFormatUnsupported, got: %v", err)
+	}
+}

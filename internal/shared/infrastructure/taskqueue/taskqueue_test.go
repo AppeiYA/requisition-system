@@ -1,11 +1,13 @@
 package taskqueue
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"testing"
 
+	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/logger"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/telemetry"
 	"github.com/hibiken/asynq"
 	"go.opentelemetry.io/otel"
@@ -163,4 +165,76 @@ func traceParentedPayload(t *testing.T, traceParent string) []byte {
 		t.Fatalf("failed to marshal payload: %v", err)
 	}
 	return b
+}
+
+func Test_LoggingMiddleware_LogsTaskLifecycle(t *testing.T) {
+	buf := &bytes.Buffer{}
+	l := logger.New(logger.Options{
+		Level:  "info",
+		Format: "json",
+		Output: buf,
+	})
+	logger.SetDefault(l)
+
+	handler := LoggingMiddleware()(asynq.HandlerFunc(func(ctx context.Context, task *asynq.Task) error {
+		return nil
+	}))
+
+	task := asynq.NewTask("invitation:expire", nil)
+	if err := handler.ProcessTask(context.Background(), task); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var parsed map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &parsed); err != nil {
+		t.Fatalf("failed to parse JSON log: %v, raw: %s", err, buf.String())
+	}
+
+	if parsed["level"] != "INFO" {
+		t.Errorf("level = %v, want INFO", parsed["level"])
+	}
+	if parsed["msg"] != "asynq task completed" {
+		t.Errorf("msg = %v, want 'asynq task completed'", parsed["msg"])
+	}
+	if parsed["task.type"] != "invitation:expire" {
+		t.Errorf("task.type = %v, want 'invitation:expire'", parsed["task.type"])
+	}
+}
+
+func Test_LoggingMiddleware_TraceCorrelation(t *testing.T) {
+	recordingTracer(t)
+
+	buf := &bytes.Buffer{}
+	l := logger.New(logger.Options{
+		Level:  "info",
+		Format: "json",
+		Output: buf,
+	})
+	logger.SetDefault(l)
+
+	provider := sdktrace.NewTracerProvider()
+	tracer := provider.Tracer("test")
+	ctx, span := tracer.Start(context.Background(), "POST /api/admin/invitations")
+	defer span.End()
+
+	wantTraceID := span.SpanContext().TraceID().String()
+
+	// Pipeline: TraceMiddleware -> LoggingMiddleware -> Handler
+	chain := TraceMiddleware()(LoggingMiddleware()(asynq.HandlerFunc(func(ctx context.Context, task *asynq.Task) error {
+		return nil
+	})))
+
+	task := asynq.NewTask("admin:send-invitation-email", traceParentedPayload(t, telemetry.TraceParentFrom(ctx)))
+	if err := chain.ProcessTask(context.Background(), task); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var parsed map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &parsed); err != nil {
+		t.Fatalf("failed to parse JSON log: %v, raw: %s", err, buf.String())
+	}
+
+	if parsed["trace_id"] != wantTraceID {
+		t.Errorf("log trace_id = %v, want %v", parsed["trace_id"], wantTraceID)
+	}
 }

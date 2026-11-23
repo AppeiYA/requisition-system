@@ -2,6 +2,7 @@ package response
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -77,6 +78,24 @@ func ErrorFrom(c *gin.Context, err error) {
 		Error(c, customErr.Message, customErr.Code, nil)
 		return
 	}
+
+	route := c.FullPath()
+	if route == "" && c.Request != nil {
+		route = c.Request.URL.Path
+	}
+
+	method := ""
+	if c.Request != nil {
+		method = c.Request.Method
+	}
+
+	slog.ErrorContext(
+		c.Request.Context(),
+		"unhandled error in http handler",
+		slog.String("error.message", err.Error()),
+		slog.String("http.route", route),
+		slog.String("http.method", method),
+	)
 
 	Error(c, "internal server error", http.StatusInternalServerError, nil)
 }

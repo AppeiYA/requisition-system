@@ -2,7 +2,7 @@ package app
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -18,9 +18,11 @@ import (
 	invitationusecase "github.com/AppeiYA/requisition-system/internal/invitation/usecase"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/config"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/db"
+	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/logger"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/redis"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/taskqueue"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/telemetry"
+	"github.com/AppeiYA/requisition-system/internal/version"
 	"github.com/hibiken/asynq"
 )
 
@@ -46,6 +48,16 @@ func (w *Worker) Run() error {
 	w.config = cfg
 
 	otel := telemetry.NewTelemetry("requisition-system-worker", cfg.Telemetry)
+	workerLogger := logger.New(logger.Options{
+		Level:          cfg.Log.Level,
+		Format:         cfg.Log.Format,
+		AddSource:      cfg.Log.AddSource,
+		ServiceName:    otel.ServiceName(),
+		ServiceVersion: version.Version,
+		Environment:    string(cfg.App.Env),
+	})
+	logger.SetDefault(workerLogger)
+
 	shutdownOtel, err := otel.Setup(ctx)
 	if err != nil {
 		return err
@@ -58,7 +70,7 @@ func (w *Worker) Run() error {
 	// error.
 	defer func() {
 		if err := shutdownOtel(context.Background()); err != nil {
-			log.Printf("failed to flush telemetry: %v", err)
+			workerLogger.Error("failed to flush telemetry", slog.String("error.message", err.Error()))
 		}
 	}()
 
@@ -70,7 +82,7 @@ func (w *Worker) Run() error {
 	}
 	defer func() {
 		if err := database.Close(); err != nil {
-			log.Printf("failed to close database: %v", err)
+			workerLogger.Error("failed to close database", slog.String("error.message", err.Error()))
 		}
 	}()
 
@@ -80,7 +92,7 @@ func (w *Worker) Run() error {
 	}
 	defer func() {
 		if err := redisClient.Close(); err != nil {
-			log.Printf("failed to close redis client: %v", err)
+			workerLogger.Error("failed to close redis client", slog.String("error.message", err.Error()))
 		}
 	}()
 
@@ -103,9 +115,9 @@ func (w *Worker) Run() error {
 	}
 
 	mux := asynq.NewServeMux()
-	// The tracing middleware wraps every handler, so the whole of a task is
-	// traced, including the database and email calls of the use cases below.
-	mux.Use(taskqueue.TraceMiddleware())
+	// The tracing and logging middlewares wrap every handler, so the whole of a task is
+	// traced and logged with duration, task metadata, and trace context.
+	mux.Use(taskqueue.TraceMiddleware(), taskqueue.LoggingMiddleware())
 
 	invitationRepo := invitationpostgres.NewInvitationRepository(db.NewRepository(database))
 	adminModule := w.buildAdminWorker(cfg, invitationRepo, operationTelemetry)
@@ -141,10 +153,10 @@ func (w *Worker) Run() error {
 	if err := w.server.Start(mux); err != nil {
 		return err
 	}
-	log.Printf("Worker started: queue=%s concurrency=%d", cfg.Worker.Queue, cfg.Worker.Concurrency)
+	workerLogger.Info("worker started", slog.String("queue", cfg.Worker.Queue), slog.Int("concurrency", cfg.Worker.Concurrency))
 
 	<-ctx.Done()
-	log.Println("Shutting down worker...")
+	workerLogger.Info("shutting down worker")
 	w.server.Shutdown() // lets in-flight tasks finish within ShutdownTimeout
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

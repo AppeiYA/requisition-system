@@ -557,7 +557,7 @@
           "refId": "C"
         }
       ],
-      "title": "Invitations — outcome",
+      "title": "Invitations \u2014 outcome",
       "type": "timeseries"
     },
     {
@@ -675,7 +675,7 @@
           "refId": "C"
         }
       ],
-      "title": "Invitations — duration",
+      "title": "Invitations \u2014 duration",
       "type": "timeseries"
     },
     {
@@ -793,7 +793,7 @@
           "refId": "C"
         }
       ],
-      "title": "Acceptances — outcome",
+      "title": "Acceptances \u2014 outcome",
       "type": "timeseries"
     },
     {
@@ -911,7 +911,7 @@
           "refId": "C"
         }
       ],
-      "title": "Acceptances — duration",
+      "title": "Acceptances \u2014 duration",
       "type": "timeseries"
     },
     {
@@ -1042,7 +1042,7 @@
           "refId": "C"
         }
       ],
-      "title": "Email delivery — outcome",
+      "title": "Email delivery \u2014 outcome",
       "type": "timeseries"
     },
     {
@@ -1160,7 +1160,7 @@
           "refId": "C"
         }
       ],
-      "title": "Email delivery — duration",
+      "title": "Email delivery \u2014 duration",
       "type": "timeseries"
     },
     {
@@ -1278,7 +1278,7 @@
           "refId": "C"
         }
       ],
-      "title": "Invitation expirations — outcome",
+      "title": "Invitation expirations \u2014 outcome",
       "type": "timeseries"
     },
     {
@@ -1396,7 +1396,7 @@
           "refId": "C"
         }
       ],
-      "title": "Invitation expirations — duration",
+      "title": "Invitation expirations \u2014 duration",
       "type": "timeseries"
     },
     {
@@ -1527,7 +1527,7 @@
           "refId": "C"
         }
       ],
-      "title": "Postgres — query duration",
+      "title": "Postgres \u2014 query duration",
       "type": "timeseries"
     },
     {
@@ -1632,7 +1632,7 @@
           "refId": "B"
         }
       ],
-      "title": "Redis — command duration",
+      "title": "Redis \u2014 command duration",
       "type": "timeseries"
     },
     {
@@ -1727,7 +1727,7 @@
           "refId": "A"
         }
       ],
-      "title": "Redis — connections",
+      "title": "Redis \u2014 connections",
       "type": "timeseries"
     },
     {
@@ -1771,6 +1771,56 @@
       ],
       "title": "Traces",
       "type": "traces"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 71
+      },
+      "id": 22,
+      "panels": [],
+      "title": "Application Logs",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "description": "Structured application logs with trace correlation. Click trace_id to view trace waterfall in Tempo.",
+      "gridPos": {
+        "h": 12,
+        "w": 24,
+        "x": 0,
+        "y": 72
+      },
+      "id": 23,
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": false,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "editorMode": "code",
+          "expr": "{service_name=~\"\"}",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Logs",
+      "type": "logs"
     }
   ],
   "refresh": "30s",
