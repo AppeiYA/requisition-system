@@ -719,6 +719,157 @@ info:
     version: "1.0"
 openapi: 3.0.3
 paths:
+    /admin/analytics/catalogue:
+        get:
+            parameters:
+                - description: Start time
+                  in: query
+                  name: from
+                  schema:
+                    type: string
+                - description: End time
+                  in: query
+                  name: to
+                  schema:
+                    type: string
+                - description: Department ID
+                  in: query
+                  name: department_id
+                  schema:
+                    type: string
+                - description: Top-list limit
+                  in: query
+                  name: limit
+                  schema:
+                    type: integer
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: OK
+            security:
+                - BearerAuth: []
+            summary: Get catalogue analytics
+            tags:
+                - admin
+    /admin/analytics/overview:
+        get:
+            parameters:
+                - description: Start time (RFC3339 or YYYY-MM-DD)
+                  in: query
+                  name: from
+                  schema:
+                    type: string
+                - description: End time (RFC3339 or YYYY-MM-DD)
+                  in: query
+                  name: to
+                  schema:
+                    type: string
+                - description: Department ID
+                  in: query
+                  name: department_id
+                  schema:
+                    type: string
+                - description: day, week or month
+                  in: query
+                  name: interval
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: OK
+                "400":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.ErrorResponse'
+                    description: Bad Request
+            security:
+                - BearerAuth: []
+            summary: Get analytics overview
+            tags:
+                - admin
+    /admin/analytics/requisitions:
+        get:
+            parameters:
+                - description: Start time
+                  in: query
+                  name: from
+                  schema:
+                    type: string
+                - description: End time
+                  in: query
+                  name: to
+                  schema:
+                    type: string
+                - description: Department ID
+                  in: query
+                  name: department_id
+                  schema:
+                    type: string
+                - description: day, week or month
+                  in: query
+                  name: interval
+                  schema:
+                    type: string
+                - description: Top-list limit
+                  in: query
+                  name: limit
+                  schema:
+                    type: integer
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: OK
+            security:
+                - BearerAuth: []
+            summary: Get requisition analytics
+            tags:
+                - admin
+    /admin/analytics/users:
+        get:
+            parameters:
+                - description: Start time
+                  in: query
+                  name: from
+                  schema:
+                    type: string
+                - description: End time
+                  in: query
+                  name: to
+                  schema:
+                    type: string
+                - description: day, week or month
+                  in: query
+                  name: interval
+                  schema:
+                    type: string
+                - description: Top-list limit
+                  in: query
+                  name: limit
+                  schema:
+                    type: integer
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: OK
+            security:
+                - BearerAuth: []
+            summary: Get user analytics
+            tags:
+                - admin
     /admin/invitations:
         get:
             description: Search, filter and paginate invitations. Requires the admin role. Token hashes are never returned.

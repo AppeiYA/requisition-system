@@ -10,6 +10,8 @@ import (
 
 	adminout "github.com/AppeiYA/requisition-system/internal/admin/ports/out"
 	adminTasks "github.com/AppeiYA/requisition-system/internal/admin/tasks"
+	analyticsworker "github.com/AppeiYA/requisition-system/internal/analytics/adapters/in/worker"
+	analyticspostgres "github.com/AppeiYA/requisition-system/internal/analytics/adapters/out/postgres"
 	invitationworker "github.com/AppeiYA/requisition-system/internal/invitation/adapters/in/worker"
 	invitationpostgres "github.com/AppeiYA/requisition-system/internal/invitation/adapters/out/postgres"
 	invitationout "github.com/AppeiYA/requisition-system/internal/invitation/ports/out"
@@ -113,10 +115,21 @@ func (w *Worker) Run() error {
 	expireInvitationsHandler := invitationworker.NewExpireInvitationsHandler(expireInvitations)
 	mux.HandleFunc(invitationworker.ExpireInvitations, expireInvitationsHandler.Handle)
 
+	if cfg.App.AnalyticsSource == "materialized" {
+		analyticsRefresher := analyticspostgres.NewRefresher(db.NewRepository(database))
+		analyticsRefreshHandler := analyticsworker.NewRefreshHandler(analyticsRefresher, redisClient.Client())
+		mux.HandleFunc(analyticsworker.RefreshMaterializedViews, analyticsRefreshHandler.Handle)
+	}
+
 	w.server = taskqueue.NewServer(redisClient, cfg.Worker)
 	scheduler := taskqueue.NewScheduler(redisClient)
 	if _, err := scheduler.Register("*/15 * * * *", asynq.NewTask(invitationworker.ExpireInvitations, nil), asynq.Queue(cfg.Worker.Queue)); err != nil {
 		return err
+	}
+	if cfg.App.AnalyticsSource == "materialized" {
+		if _, err := scheduler.Register("*/5 * * * *", asynq.NewTask(analyticsworker.RefreshMaterializedViews, nil), asynq.Queue(cfg.Worker.Queue)); err != nil {
+			return err
+		}
 	}
 	if err := scheduler.Start(); err != nil {
 		return err

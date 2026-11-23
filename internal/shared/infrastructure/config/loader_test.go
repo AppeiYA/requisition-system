@@ -69,6 +69,31 @@ func requireDBEnv(t *testing.T) {
 	t.Setenv("DB_NAME", "mydb")
 }
 
+func TestLoadAppConfig_AnalyticsSource(t *testing.T) {
+	unsetEnv(t, "ANALYTICS_SOURCE")
+	config, err := LoadAppConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if config.AnalyticsSource != "direct" {
+		t.Fatalf("default analytics source = %q, want direct", config.AnalyticsSource)
+	}
+
+	t.Setenv("ANALYTICS_SOURCE", "materialized")
+	config, err = LoadAppConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if config.AnalyticsSource != "materialized" {
+		t.Fatalf("analytics source = %q, want materialized", config.AnalyticsSource)
+	}
+
+	t.Setenv("ANALYTICS_SOURCE", "warehouse")
+	if _, err := LoadAppConfig(); err == nil {
+		t.Fatal("expected invalid analytics source error")
+	}
+}
+
 func TestGetIntEnv_Valid(t *testing.T) {
 	t.Setenv("TEST_INT_VALID", "42")
 
