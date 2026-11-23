@@ -12,7 +12,7 @@ import (
 
 type AccessTokenClaims struct {
 	Email string `json:"email"`
-	Role string `json:"role"`
+	Role  string `json:"role"`
 	jwt.RegisteredClaims
 }
 
@@ -41,8 +41,8 @@ func (s *JWTService) GenerateAccessToken(
 
 	claims := AccessTokenClaims{
 		Email: user.Email,
-		Role: user.Role,
-		RegisteredClaims: jwt.RegisteredClaims{	
+		Role:  user.Role,
+		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:   user.ID,
 			Issuer:    s.issuer,
 			Audience:  jwt.ClaimStrings{s.audience},

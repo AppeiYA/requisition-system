@@ -11,6 +11,7 @@ import (
 	invitationin "github.com/AppeiYA/requisition-system/internal/invitation/ports/in"
 	invitationout "github.com/AppeiYA/requisition-system/internal/invitation/ports/out"
 	invitationusecase "github.com/AppeiYA/requisition-system/internal/invitation/usecase"
+	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/audit"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/db"
 )
 
@@ -21,9 +22,7 @@ func (a *App) buildInvitation(
 	createMembershipUC departmentin.CreateMembershipUsecaseInt,
 	idGen identityout.IDGenerator,
 	telemetry invitationout.Telemetry,
-) (
-	*invitation.InvitationModule,
-) {
+) *invitation.InvitationModule {
 	invitationRepo := invitationpostgres.NewInvitationRepository(baseRepo)
 
 	// The identity port lets the invitation module register the invited user
@@ -47,10 +46,21 @@ func (a *App) buildInvitation(
 
 	invitationPortIn := invitationin.NewInvitationPortIn(saveInvitationUsecase, validateInvitationUsecase, acceptInvitationUsecase, getInvitationUsecase)
 
+	// The audit recorder joins the transaction opened by the resend and revoke
+	// use cases, so an audit failure rolls the mutation back with it.
+	auditRecorder := audit.NewPostgresRecorder(baseRepo, idGen)
+	adminInvitationsPortIn := &invitationin.AdminInvitationsPortIn{
+		ListInvitations:  invitationusecase.NewAdminListInvitationsUsecase(invitationRepo),
+		GetInvitation:    invitationusecase.NewAdminGetInvitationUsecase(invitationRepo),
+		ResendInvitation: invitationusecase.NewAdminResendInvitationUsecase(invitationRepo, txManager, auditRecorder),
+		RevokeInvitation: invitationusecase.NewAdminRevokeInvitationUsecase(invitationRepo, txManager, auditRecorder),
+	}
+
 	handler := invitationhttp.NewInvitationHandler(invitationPortIn)
 
 	return invitation.NewInvitationModule(
 		invitationPortIn,
+		adminInvitationsPortIn,
 		handler,
 	)
 }

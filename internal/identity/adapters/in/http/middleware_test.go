@@ -9,6 +9,7 @@ import (
 	identitydomain "github.com/AppeiYA/requisition-system/internal/identity/domain"
 	identitymocks "github.com/AppeiYA/requisition-system/internal/identity/mocks"
 	identityout "github.com/AppeiYA/requisition-system/internal/identity/ports/out"
+	shareddomain "github.com/AppeiYA/requisition-system/internal/shared/domain"
 	customerrors "github.com/AppeiYA/requisition-system/internal/shared/infrastructure/errors"
 	"github.com/gin-gonic/gin"
 )
@@ -25,7 +26,7 @@ func TestAuthMiddleware_Handle_Success(t *testing.T) {
 		return &identityout.TokenModel{ID: "usr-1", Role: "admin", Email: "test@example.com"}, nil
 	}
 
-	mw := newTestAuthMiddleware(mockTokens)
+	mw := newTestAuthMiddleware(t, mockTokens, shareddomain.RoleAdmin)
 
 	router := gin.New()
 	var capturedID, capturedRole string
@@ -59,7 +60,7 @@ func TestAuthMiddleware_Handle_MissingOrInvalidHeader(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	mockTokens := identitymocks.NewMockAccessTokenService()
-	mw := newTestAuthMiddleware(mockTokens)
+	mw := newTestAuthMiddleware(t, mockTokens, shareddomain.RoleUser)
 
 	cases := []struct {
 		name   string
@@ -102,7 +103,7 @@ func TestAuthMiddleware_Handle_ValidationError(t *testing.T) {
 		return nil, customerrors.NewUnauthorizedError("token expired")
 	}
 
-	mw := newTestAuthMiddleware(mockTokens)
+	mw := newTestAuthMiddleware(t, mockTokens, shareddomain.RoleUser)
 
 	router := gin.New()
 	router.GET("/test", mw.Handle(), func(c *gin.Context) {
@@ -129,7 +130,7 @@ func TestAuthMiddleware_RequireRole_Success(t *testing.T) {
 		return &identityout.TokenModel{ID: "usr-1", Role: "admin"}, nil
 	}
 
-	mw := newTestAuthMiddleware(mockTokens)
+	mw := newTestAuthMiddleware(t, mockTokens, shareddomain.RoleAdmin)
 
 	router := gin.New()
 	router.GET("/admin-only", mw.Handle(), mw.RequireRole("admin"), func(c *gin.Context) {
@@ -156,7 +157,7 @@ func TestAuthMiddleware_RequireRole_Forbidden(t *testing.T) {
 		return &identityout.TokenModel{ID: "usr-1", Role: "user"}, nil
 	}
 
-	mw := newTestAuthMiddleware(mockTokens)
+	mw := newTestAuthMiddleware(t, mockTokens, shareddomain.RoleUser)
 
 	router := gin.New()
 	router.GET("/admin-only", mw.Handle(), mw.RequireRole("admin"), func(c *gin.Context) {
@@ -184,7 +185,7 @@ func TestAuthMiddleware_IsAdmin(t *testing.T) {
 			return &identityout.TokenModel{ID: "usr-1", Role: "admin"}, nil
 		}
 
-		mw := newTestAuthMiddleware(mockTokens)
+		mw := newTestAuthMiddleware(t, mockTokens, shareddomain.RoleAdmin)
 
 		router := gin.New()
 		router.GET("/admin", mw.IsAdmin(), func(c *gin.Context) {
@@ -208,7 +209,7 @@ func TestAuthMiddleware_IsAdmin(t *testing.T) {
 			return &identityout.TokenModel{ID: "usr-1", Role: "user"}, nil
 		}
 
-		mw := newTestAuthMiddleware(mockTokens)
+		mw := newTestAuthMiddleware(t, mockTokens, shareddomain.RoleUser)
 
 		router := gin.New()
 		router.GET("/admin", mw.IsAdmin(), func(c *gin.Context) {
@@ -227,11 +228,44 @@ func TestAuthMiddleware_IsAdmin(t *testing.T) {
 	})
 }
 
-func newTestAuthMiddleware(accessTokens identityout.AccessTokenService) *AuthMiddleware {
+func newTestAuthMiddleware(t *testing.T, accessTokens identityout.AccessTokenService, role shareddomain.Role) *AuthMiddleware {
+	t.Helper()
+	return newTestAuthMiddlewareWithUser(t, accessTokens, newTestDBUser(t, role, identitydomain.ACTIVE.Value()))
+}
+
+func newTestAuthMiddlewareWithUser(t *testing.T, accessTokens identityout.AccessTokenService, user *identitydomain.User) *AuthMiddleware {
+	t.Helper()
+
 	userRepo := identitymocks.NewMockUsersRepository()
 	userRepo.GetUserByIDFunc = func(ctx context.Context, id string) (*identitydomain.User, error) {
-		return identitymocks.ValidUser(), nil
+		return user, nil
 	}
 	return NewAuthMiddleware(accessTokens, userRepo)
 }
 
+// newTestDBUser builds a persisted user with an explicit role and status. The
+// role and status deliberately come from here rather than from the token, as
+// they would in production.
+func newTestDBUser(t *testing.T, role shareddomain.Role, status string) *identitydomain.User {
+	t.Helper()
+
+	base := identitymocks.ValidUser()
+	user, err := identitydomain.ReconstituteUser(
+		base.ID(),
+		base.FirstName().Value(),
+		base.LastName().Value(),
+		base.Phone().Value(),
+		base.StaffID(),
+		base.Email().Value(),
+		base.PasswordHash().Value(),
+		status,
+		role.String(),
+		base.CreatedAt(),
+		base.UpdatedAt(),
+	)
+	if err != nil {
+		t.Fatalf("build test user: %v", err)
+	}
+
+	return user
+}

@@ -106,6 +106,31 @@ func (a *App) Run() error {
 			MetricBase: "requisition.invitee.acceptances",
 			Unit:       "{acceptance}",
 		},
+		telemetry.Operation{
+			Name:       adminout.OperationUpdateUserStatus,
+			MetricBase: "requisition.admin.user_status_updates",
+			Unit:       "{update}",
+		},
+		telemetry.Operation{
+			Name:       adminout.OperationUpdateUserRole,
+			MetricBase: "requisition.admin.user_role_updates",
+			Unit:       "{update}",
+		},
+		telemetry.Operation{
+			Name:       adminout.OperationRevokeUserSessions,
+			MetricBase: "requisition.admin.session_revocations",
+			Unit:       "{revocation}",
+		},
+		telemetry.Operation{
+			Name:       adminout.OperationResendInvitation,
+			MetricBase: "requisition.admin.invitation_resends",
+			Unit:       "{resend}",
+		},
+		telemetry.Operation{
+			Name:       adminout.OperationRevokeInvitation,
+			MetricBase: "requisition.admin.invitation_revocations",
+			Unit:       "{revocation}",
+		},
 	)
 	if err != nil {
 		return err
@@ -155,7 +180,9 @@ func (a *App) Run() error {
 		cfg,
 		txManager,
 		identityModule.PortIn().GetUserByEmailUsecase,
+		identityModule.AdminUsers(),
 		invitationModule.PortIn().SaveInvitationUsecase,
+		invitationModule.AdminInvitations(),
 		departmentModule.PortIn().GetDepartmentByIDUsecase,
 		asynqClient,
 		operationTelemetry)

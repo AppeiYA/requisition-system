@@ -135,6 +135,47 @@ func TestRefreshSessionRepository_Revoke(t *testing.T) {
 	}
 }
 
+func TestRefreshSessionRepository_RevokeAll(t *testing.T) {
+	repo := newTestRepository(t, time.Minute)
+	ctx := context.Background()
+
+	first, second := randomHash(t), randomHash(t)
+
+	if err := repo.Create(ctx, "user-1", first); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if _, err := repo.Rotate(ctx, first, second); err != nil {
+		t.Fatalf("rotate: %v", err)
+	}
+
+	if err := repo.RevokeAll(ctx, "user-1"); err != nil {
+		t.Fatalf("revoke all: %v", err)
+	}
+
+	// The live replacement is rejected even though its family still exists.
+	if _, err := repo.Rotate(ctx, second, randomHash(t)); !errors.Is(err, identityout.ErrRefreshSessionRevoked) {
+		t.Fatalf("expected ErrRefreshSessionRevoked after RevokeAll, got: %v", err)
+	}
+
+	// A session created after the revocation is unaffected.
+	third, fourth := randomHash(t), randomHash(t)
+	if err := repo.Create(ctx, "user-1", third); err != nil {
+		t.Fatalf("create after revoke all: %v", err)
+	}
+	if _, err := repo.Rotate(ctx, third, fourth); err != nil {
+		t.Fatalf("rotate session created after RevokeAll: %v", err)
+	}
+
+	// Other users are unaffected.
+	other := randomHash(t)
+	if err := repo.Create(ctx, "user-2", other); err != nil {
+		t.Fatalf("create other user: %v", err)
+	}
+	if _, err := repo.Rotate(ctx, other, randomHash(t)); err != nil {
+		t.Fatalf("rotate other user: %v", err)
+	}
+}
+
 func TestRefreshSessionRepository_Expiry(t *testing.T) {
 	repo := newTestRepository(t, 50*time.Millisecond)
 	ctx := context.Background()
@@ -203,5 +244,8 @@ func TestRefreshSessionRepository_StoreFailure(t *testing.T) {
 	}
 	if err := repo.Revoke(ctx, randomHash(t)); !errors.Is(err, identityout.ErrRefreshSessionStore) {
 		t.Fatalf("expected ErrRefreshSessionStore from Revoke, got: %v", err)
+	}
+	if err := repo.RevokeAll(ctx, "user-1"); !errors.Is(err, identityout.ErrRefreshSessionStore) {
+		t.Fatalf("expected ErrRefreshSessionStore from RevokeAll, got: %v", err)
 	}
 }

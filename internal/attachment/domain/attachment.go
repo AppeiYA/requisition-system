@@ -15,36 +15,36 @@ var (
 )
 
 type Attachment struct {
-	id string
-	ref *AttachmentRef
-	fileName *AttachmentFileName
-	fileUrl *AttachmentFileUrl
+	id          string
+	ref         *AttachmentRef
+	fileName    *AttachmentFileName
+	fileUrl     *AttachmentFileUrl
 	contentType ContentType
-	fileSize int64
-	uploadedBy string
-	createdAt time.Time
+	fileSize    int64
+	uploadedBy  string
+	createdAt   time.Time
 }
 
 func NewAttachment(id string, ref *AttachmentRef, fileName *AttachmentFileName, fileUrl *AttachmentFileUrl, contentType ContentType, fileSize int64, uploadedBy string) (*Attachment, error) {
 	if id == "" || !strings.HasPrefix(id, AttachmentIDPrefix) {
-        return nil, ErrInvalidAttachmentID
+		return nil, ErrInvalidAttachmentID
 	}
 
-	if uploadedBy == "" || !strings.HasPrefix(uploadedBy, "usr"){
+	if uploadedBy == "" || !strings.HasPrefix(uploadedBy, "usr") {
 		return nil, ErrInvalidUploadActor
 	}
 
 	createdAt := time.Now()
 
 	return &Attachment{
-		id: id,
-		ref: ref,
-		fileName: fileName,
-		fileUrl: fileUrl,
+		id:          id,
+		ref:         ref,
+		fileName:    fileName,
+		fileUrl:     fileUrl,
 		contentType: contentType,
-		fileSize: fileSize,
-		uploadedBy: uploadedBy,
-		createdAt: createdAt,
+		fileSize:    fileSize,
+		uploadedBy:  uploadedBy,
+		createdAt:   createdAt,
 	}, nil
 }
 
@@ -79,14 +79,14 @@ func ReconstituteAttachment(
 	}
 
 	return &Attachment{
-		id: id,
-		ref: ref,
-		fileName: fileName,
-		fileUrl: fileUrl,
+		id:          id,
+		ref:         ref,
+		fileName:    fileName,
+		fileUrl:     fileUrl,
 		contentType: contentTypeValue,
-		fileSize: fileSize,
-		uploadedBy: uploadedBy,
-		createdAt: createdAt,
+		fileSize:    fileSize,
+		uploadedBy:  uploadedBy,
+		createdAt:   createdAt,
 	}, nil
 }
 

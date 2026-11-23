@@ -28,6 +28,7 @@ var (
 func listItemsInCategoryDoc() {}
 
 // listItemsInCategoryDocWithPagination notes pagination.
+//
 //	@Param			limit	query	int	false	"Maximum number of items to return (default 100, max 100)"
 //	@Param			offset	query	int	false	"Number of items to skip (default 0)"
 func listItemsInCategoryDocWithPagination() {}

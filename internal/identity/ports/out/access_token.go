@@ -5,8 +5,8 @@ import "context"
 // TokenModel is the authenticated identity recovered from a validated access
 // token.
 type TokenModel struct {
-	ID string
-	Role string
+	ID    string
+	Role  string
 	Email string
 }
 

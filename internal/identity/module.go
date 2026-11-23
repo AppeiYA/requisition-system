@@ -7,24 +7,32 @@ import (
 )
 
 type IdentityModule struct {
-	identityPortIn  *identityin.IdentityPortIn
-	identityHandler *identityhttp.Handler
-	authMiddleware  *identityhttp.AuthMiddleware
-	userLookup      requisitionout.UserLookup
+	identityPortIn   *identityin.IdentityPortIn
+	adminUsersPortIn *identityin.AdminUsersPortIn
+	identityHandler  *identityhttp.Handler
+	authMiddleware   *identityhttp.AuthMiddleware
+	userLookup       requisitionout.UserLookup
 }
 
 func NewIdentityModule(
 	identityPortIn *identityin.IdentityPortIn,
+	adminUsersPortIn *identityin.AdminUsersPortIn,
 	identityHandler *identityhttp.Handler,
 	authMiddleware *identityhttp.AuthMiddleware,
 	userLookup requisitionout.UserLookup,
 ) *IdentityModule {
 	return &IdentityModule{
-		identityPortIn:  identityPortIn,
-		identityHandler: identityHandler,
-		authMiddleware:  authMiddleware,
-		userLookup:      userLookup,
+		identityPortIn:   identityPortIn,
+		adminUsersPortIn: adminUsersPortIn,
+		identityHandler:  identityHandler,
+		authMiddleware:   authMiddleware,
+		userLookup:       userLookup,
 	}
+}
+
+// AdminUsers exposes the identity use cases behind the admin API.
+func (m *IdentityModule) AdminUsers() *identityin.AdminUsersPortIn {
+	return m.adminUsersPortIn
 }
 
 func (m *IdentityModule) UserLookup() requisitionout.UserLookup {

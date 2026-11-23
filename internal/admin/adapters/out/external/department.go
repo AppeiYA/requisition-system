@@ -47,7 +47,7 @@ func (a *AdminDepartmentAdapter) GetDepartmentByID(ctx context.Context, departme
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return &adminout.DepartmentResponse{
 		ID:          res.ID,
 		Name:        res.Name,

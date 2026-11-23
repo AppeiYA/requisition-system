@@ -52,4 +52,9 @@ type RefreshSessionRepository interface {
 	// Revoke deletes the session for tokenHash and revokes its whole family.
 	// It is idempotent.
 	Revoke(ctx context.Context, tokenHash string) error
+
+	// RevokeAll invalidates every refresh session belonging to userID, without
+	// scanning keys. It is used by force logout and by status/role changes.
+	// Sessions created after the call are unaffected.
+	RevokeAll(ctx context.Context, userID string) error
 }

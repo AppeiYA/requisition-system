@@ -3,11 +3,11 @@ package adminout
 import "context"
 
 type DepartmentResponse struct {
-	ID string
-	Name string
+	ID          string
+	Name        string
 	Description string
-	Code string
-	Status string
+	Code        string
+	Status      string
 }
 type AdminDepartmentPort interface {
 	CheckDepartmentExists(ctx context.Context, departmentID string) (bool, error)

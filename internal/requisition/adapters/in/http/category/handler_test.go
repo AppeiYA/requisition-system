@@ -247,8 +247,8 @@ func Test_ListItemCategories_Success(t *testing.T) {
 	}
 
 	var body struct {
-		Status     string `json:"status"`
-		Data       []struct {
+		Status string `json:"status"`
+		Data   []struct {
 			ID   string `json:"id"`
 			Name string `json:"name"`
 		} `json:"data"`

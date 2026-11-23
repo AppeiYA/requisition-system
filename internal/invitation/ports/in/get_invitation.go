@@ -13,7 +13,7 @@ type GetInvitationOutput struct {
 	StaffID      string
 	DepartmentID string
 	JobTitle     string
-	Email       	string
+	Email        string
 	InvitedBy    string
 	ExpiresAt    time.Time
 	AcceptedAt   *time.Time

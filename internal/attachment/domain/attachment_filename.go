@@ -7,7 +7,7 @@ var (
 )
 
 type AttachmentFileName struct {
-	value string 
+	value string
 }
 
 func NewAttachmentFileName(value string) (*AttachmentFileName, error) {

@@ -29,7 +29,7 @@ type UserModel struct {
 	Email        string     `db:"email"`
 	PasswordHash string     `db:"password_hash"`
 	Status       string     `db:"status"`
-	Role		 string     `db:"role"`
+	Role         string     `db:"role"`
 	CreatedAt    time.Time  `db:"created_at"`
 	UpdatedAt    *time.Time `db:"updated_at"`
 }

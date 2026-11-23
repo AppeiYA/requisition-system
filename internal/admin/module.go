@@ -6,13 +6,13 @@ import (
 )
 
 type AdminModule struct {
-	adminPortIn *adminin.AdminPortIn
+	adminPortIn  *adminin.AdminPortIn
 	adminHandler *adminhttp.Handler
 }
 
 func NewAdminModule(portIn *adminin.AdminPortIn, adminHandler *adminhttp.Handler) *AdminModule {
 	return &AdminModule{
-		adminPortIn: portIn,
+		adminPortIn:  portIn,
 		adminHandler: adminHandler,
 	}
 }

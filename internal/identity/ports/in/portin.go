@@ -1,12 +1,12 @@
 package identityin
 
 type IdentityPortIn struct {
-	RegisterUserUseCase            RegisterUserUseCaseInt
-	GetUserByEmailUsecase          GetUserByEmailUsecaseInt
-	LoginUserUsecase               LoginUserUsecaseInt
-	LogoutUserUsecase              LogoutUsecaseInt
-	GetMeUsecase                   GetMeUsecaseInt
-	RefreshTokenUsecase            RefreshTokenUsecaseInt
+	RegisterUserUseCase   RegisterUserUseCaseInt
+	GetUserByEmailUsecase GetUserByEmailUsecaseInt
+	LoginUserUsecase      LoginUserUsecaseInt
+	LogoutUserUsecase     LogoutUsecaseInt
+	GetMeUsecase          GetMeUsecaseInt
+	RefreshTokenUsecase   RefreshTokenUsecaseInt
 }
 
 func NewIdentityPortIn(

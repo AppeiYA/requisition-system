@@ -40,7 +40,7 @@ internal/
 ├── identity/       # auth, users, roles
 ├── department/     # departments & memberships
 ├── invitation/     # invitations lifecycle
-├── admin/          # admin-only actions (invite members)
+├── admin/          # admin-only actions (invite members, manage users)
 ├── shared/         # config, db, redis, email, jwt, response, telemetry
 ├── app.go          # composition root: wires modules together
 └── router.go       # route table + docs endpoints
@@ -134,6 +134,15 @@ Base URL: `http://localhost:8080/api/v1` — interactive docs at
 | GET    | `/api/v1/invitations/:token/validate` | – | Check an invitation link |
 | POST   | `/api/v1/invitations/:token/accept`   | – | Accept an invitation and register |
 | POST   | `/api/v1/admin/invitations` | admin        | Invite a staff member by email |
+| GET    | `/api/v1/admin/invitations` | admin        | List/search/filter invitations (paginated, with total) |
+| GET    | `/api/v1/admin/invitations/:id` | admin  | Get invitation detail |
+| POST   | `/api/v1/admin/invitations/:id/resend` | admin | Rotate the token and queue a replacement email |
+| POST   | `/api/v1/admin/invitations/:id/revoke` | admin | Invalidate the invitation link immediately |
+| GET    | `/api/v1/admin/users`       | admin        | List/search/filter users (paginated, with total) |
+| GET    | `/api/v1/admin/users/:id`   | admin        | Get a user with department and requisition activity |
+| PATCH  | `/api/v1/admin/users/:id/status` | admin  | Activate, suspend or deactivate a user |
+| PATCH  | `/api/v1/admin/users/:id/role`    | admin  | Promote or demote a user |
+| POST   | `/api/v1/admin/users/:id/sessions/revoke` | admin | Force logout (revoke refresh sessions) |
 | POST   | `/api/v1/departments`       | access token | Create a department |
 | GET    | `/api/v1/departments`       | access token | List departments (ordered by name) |
 | GET    | `/api/v1/departments/:id`   | access token | Get a department |
@@ -152,6 +161,54 @@ Base URL: `http://localhost:8080/api/v1` — interactive docs at
 | PATCH  | `/api/v1/requisitions/:id` | access token | Update an owned pending requisition |
 
 Authenticated requests need `Authorization: Bearer <access token>`.
+
+### Admin operations
+
+User and invitation management are admin-only. The list and detail endpoints
+never return password hashes, refresh tokens, raw invitation tokens or token
+hashes.
+
+- Status transitions: `active → suspended|inactive` and
+  `suspended|inactive → active`. A reason is required when suspending or
+  deactivating a user.
+- Role changes accept only `admin` or `user`; promotion requires an active
+  account.
+- Self-protection: an admin cannot change their own status or role (`403`).
+- Last active admin: suspending, deactivating or demoting the last active admin
+  is rejected (`409`). The other active-admin rows are locked with
+  `FOR UPDATE`, so two concurrent changes cannot both remove the last admin.
+- Every mutation writes an append-only row to `admin_audit_log` with the actor,
+  before/after values, reason and request metadata, in the same transaction as
+  the change.
+- A suspension and any role change revoke all refresh sessions through a
+  per-user epoch in Redis. Force logout (`POST .../sessions/revoke`) does the
+  same on its own; an optional `?reason=` is recorded in the audit log.
+
+Invitation management follows the same rules:
+
+- The list accepts `q`, `status`, `department_id`, `invited_by`, `from`, `to`,
+  `limit` and `offset`. Dates are RFC3339 timestamps or `YYYY-MM-DD` dates in
+  UTC; `from` is inclusive and `to` is exclusive.
+- Resend rotates the raw token and replaces the email in the queue. Accepted
+  and revoked invitations cannot be resent (`409`), and resending fails if
+  another active invitation already exists for the address. The response
+  carries only the invitation ID and new expiry; the token is delivered by
+  email.
+- Revoking is immediate because the accept flow checks the current invitation
+  status. Revoking an already revoked invitation is a successful no-op; an
+  accepted invitation cannot be revoked (`409`). An optional `?reason=` is
+  recorded in the audit log.
+- Resend and revoke write `invitation.resend` and `invitation.revoke` audit
+  entries in the same transaction as the mutation.
+
+### Security
+
+Authorization reads the user's current role and status from PostgreSQL on
+every request, not the role claim in the access token. A stale token therefore
+cannot keep admin access after demotion or suspension: suspended or inactive
+users are refused with `403` even while their access token is still valid, and
+a demoted admin loses admin routes immediately. Revoking sessions invalidates
+refresh tokens; existing access tokens expire within their 15-minute TTL.
 
 ## Configuration
 
@@ -341,6 +398,11 @@ counters of the operation.
 | Operation | Span | Metrics |
 | --------- | ---- | ------- |
 | Admin creates an invitation | `admin.invitation.create` | `requisition.admin.invitations.{attempted,succeeded,failed,duration}` |
+| Admin updates a user's status | `admin.user.status.update` | `requisition.admin.user_status_updates.{attempted,succeeded,failed,duration}` |
+| Admin changes a user's role | `admin.user.role.update` | `requisition.admin.user_role_updates.{attempted,succeeded,failed,duration}` |
+| Admin revokes user sessions | `admin.user.sessions.revoke` | `requisition.admin.session_revocations.{attempted,succeeded,failed,duration}` |
+| Admin resends an invitation | `admin.invitation.resend` | `requisition.admin.invitation_resends.{attempted,succeeded,failed,duration}` |
+| Admin revokes an invitation | `admin.invitation.revoke` | `requisition.admin.invitation_revocations.{attempted,succeeded,failed,duration}` |
 | Invitee accepts an invitation | `invitation.accept` | `requisition.invitee.acceptances.{attempted,succeeded,failed,duration}` |
 | Worker delivers the invitation email | `admin.email.delivery` | `requisition.admin.email_delivery.{attempted,succeeded,failed,duration}` |
 | Worker expires the stale invitations | `invitation.expire` | `requisition.invitation.expirations.{attempted,succeeded,failed,duration}` |

@@ -6,14 +6,14 @@ import (
 )
 
 type InvitationHandler struct {
-	invitationPortIn   *invitationin.InvitationPortIn
+	invitationPortIn *invitationin.InvitationPortIn
 }
 
 func NewInvitationHandler(
 	invitationPortIn *invitationin.InvitationPortIn,
 ) *InvitationHandler {
 	return &InvitationHandler{
-		invitationPortIn:   invitationPortIn,
+		invitationPortIn: invitationPortIn,
 	}
 }
 

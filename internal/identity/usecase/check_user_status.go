@@ -17,7 +17,7 @@ func NewCheckUserStatusUsecase(userRepository identityout.UsersRepository) *Chec
 	}
 }
 
-func (uc *CheckUserStatusUsecase) Execute(ctx context.Context ,userID string) (domain.Status, error) {
+func (uc *CheckUserStatusUsecase) Execute(ctx context.Context, userID string) (domain.Status, error) {
 	userStatus, err := uc.userRepository.CheckUserStatus(ctx, userID)
 	if err != nil {
 		return "", err

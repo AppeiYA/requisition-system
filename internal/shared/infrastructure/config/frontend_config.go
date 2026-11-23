@@ -1,4 +1,4 @@
-package config 
+package config
 
 type FrontendConfig struct {
 	BaseURL string

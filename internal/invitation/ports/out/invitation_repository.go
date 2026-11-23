@@ -20,4 +20,12 @@ type InvitationRepository interface {
 	GetInvitationByEmail(ctx context.Context, email string) (*invitationdomain.Invitation, error)
 	UpdateInvitationStatus(ctx context.Context, invitationID string, status invitationdomain.InvitationStatus) error
 	ExpireDueInvitations(ctx context.Context, now time.Time) error
+
+	// Admin additions. LockInvitationByID is used by the resend and revoke use
+	// cases so state checks and the following write are one atomic operation.
+	LockInvitationByID(ctx context.Context, invitationID string) (*invitationdomain.Invitation, error)
+	ListInvitations(ctx context.Context, filter invitationdomain.InvitationListFilter) ([]invitationdomain.InvitationSummary, error)
+	CountInvitations(ctx context.Context, filter invitationdomain.InvitationListFilter) (int, error)
+	GetInvitationSummary(ctx context.Context, invitationID string) (*invitationdomain.InvitationSummary, error)
+	RotateInvitationToken(ctx context.Context, invitationID, tokenHash string, expiresAt time.Time) error
 }

@@ -70,4 +70,3 @@ func TestAuthContext_Empty(t *testing.T) {
 		t.Fatal("expected GetUserRole to return false on empty context")
 	}
 }
-
