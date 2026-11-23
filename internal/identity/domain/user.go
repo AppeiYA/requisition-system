@@ -10,7 +10,7 @@ import (
 var UserIDPrefix = "usr"
 
 var (
-	ErrInvalidID = customerrors.NewInternalServerError("empty id in create user")
+	ErrInvalidID    = customerrors.NewInternalServerError("empty id in create user")
 	ErrInactiveUser = customerrors.NewUnauthorizedError("user is inactive")
 )
 
@@ -23,7 +23,7 @@ type User struct {
 	email        *shareddomain.Email
 	passwordHash *PasswordHash
 	status       Status
-	role 	   shareddomain.Role
+	role         shareddomain.Role
 	createdAt    time.Time
 	updatedAt    *time.Time
 }
@@ -170,6 +170,19 @@ func (u *User) UpdateStatus(newStatus Status) error {
 		return ErrInvalidStatus
 	}
 	u.status = newStatus
+	now := time.Now()
+	u.updatedAt = &now
+	return nil
+}
+
+// UpdateRole changes the user's role. Callers are responsible for the admin
+// guards (self-change and last-active-admin); this method only enforces that
+// the role is one of the supported values.
+func (u *User) UpdateRole(newRole shareddomain.Role) error {
+	if !shareddomain.IsValidRole(newRole.String()) {
+		return shareddomain.ErrInvalidRole
+	}
+	u.role = newRole
 	now := time.Now()
 	u.updatedAt = &now
 	return nil

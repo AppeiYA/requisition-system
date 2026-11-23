@@ -1,10 +1,10 @@
 package invitationin
 
 type InvitationPortIn struct {
-	SaveInvitationUsecase SaveInvitationUsecaseInt
+	SaveInvitationUsecase     SaveInvitationUsecaseInt
 	ValidateInvitationUsecase ValidateInvitationUseCaseInt
-	AcceptInvitationUsecase AcceptInvitationUseCaseInt
-	GetInvitationUsecase GetInvitationUsecaseInt
+	AcceptInvitationUsecase   AcceptInvitationUseCaseInt
+	GetInvitationUsecase      GetInvitationUsecaseInt
 }
 
 func NewInvitationPortIn(
@@ -14,9 +14,9 @@ func NewInvitationPortIn(
 	getInvitationUsecase GetInvitationUsecaseInt,
 ) *InvitationPortIn {
 	return &InvitationPortIn{
-		SaveInvitationUsecase: saveInvitationUsecase,
+		SaveInvitationUsecase:     saveInvitationUsecase,
 		ValidateInvitationUsecase: validateInvitationUsecase,
-		AcceptInvitationUsecase: acceptInvitationUsecase,
-		GetInvitationUsecase: getInvitationUsecase,
+		AcceptInvitationUsecase:   acceptInvitationUsecase,
+		GetInvitationUsecase:      getInvitationUsecase,
 	}
 }

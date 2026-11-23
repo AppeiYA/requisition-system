@@ -13,7 +13,7 @@ const (
 
 var (
 	ErrInvalidRequisitionPriority = customerrors.NewBadRequestError("invalid requisition priority")
-	ErrPriorityCannotBeEmpty         = customerrors.NewBadRequestError("requisition priority cannot be empty")
+	ErrPriorityCannotBeEmpty      = customerrors.NewBadRequestError("requisition priority cannot be empty")
 )
 
 func (rp RequisitionPriority) IsValid() bool {

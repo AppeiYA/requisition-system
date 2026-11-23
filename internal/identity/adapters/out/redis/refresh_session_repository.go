@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"strconv"
 	"time"
 
 	identityout "github.com/AppeiYA/requisition-system/internal/identity/ports/out"
@@ -36,19 +35,19 @@ func (r *RefreshSessionRepository) Create(ctx context.Context, userID, tokenHash
 		return identityout.ErrRefreshSessionStore
 	}
 
-	sessionKey := sessionKey(tokenHash)
-	familyKey := familyKey(familyID)
+	keys := []string{
+		sessionKey(tokenHash),
+		familyKey(familyID),
+		epochKey(userID),
+	}
+	args := []any{
+		userID,
+		familyID,
+		r.ttl.Milliseconds(),
+		time.Now().Add(r.ttl).Unix(),
+	}
 
-	pipe := r.client.TxPipeline()
-	pipe.HSet(ctx, sessionKey, map[string]any{
-		"user_id":    userID,
-		"family_id":  familyID,
-		"expires_at": strconv.FormatInt(time.Now().Add(r.ttl).Unix(), 10),
-	})
-	pipe.PExpire(ctx, sessionKey, r.ttl)
-	pipe.Set(ctx, familyKey, userID, r.ttl)
-
-	if _, err := pipe.Exec(ctx); err != nil {
+	if _, err := createScript.Run(ctx, r.client, keys, args...).Result(); err != nil {
 		return identityout.ErrRefreshSessionStore
 	}
 
@@ -76,6 +75,26 @@ func (r *RefreshSessionRepository) Rotate(ctx context.Context, oldTokenHash, new
 
 func (r *RefreshSessionRepository) Revoke(ctx context.Context, tokenHash string) error {
 	if _, err := revokeScript.Run(ctx, r.client, []string{sessionKey(tokenHash)}).Result(); err != nil {
+		return identityout.ErrRefreshSessionStore
+	}
+
+	return nil
+}
+
+// RevokeAll bumps the user's refresh epoch. Every session created before the
+// bump carries an older epoch and is rejected on its next rotation, so the
+// cost is one INCR regardless of how many sessions the user has.
+func (r *RefreshSessionRepository) RevokeAll(ctx context.Context, userID string) error {
+	key := epochKey(userID)
+
+	pipe := r.client.TxPipeline()
+	pipe.Incr(ctx, key)
+	// Keep the epoch alive at least as long as any session that predates the
+	// bump; otherwise an expired epoch would look like epoch 0 and could
+	// resurrect a session that had not expired yet.
+	pipe.PExpire(ctx, key, r.ttl)
+
+	if _, err := pipe.Exec(ctx); err != nil {
 		return identityout.ErrRefreshSessionStore
 	}
 
@@ -117,6 +136,10 @@ func familyKey(familyID string) string {
 
 func usedKey(tokenHash string) string {
 	return refreshKeyPrefix + "used:" + tokenHash
+}
+
+func epochKey(userID string) string {
+	return refreshKeyPrefix + "epoch:" + userID
 }
 
 func newFamilyID() (string, error) {

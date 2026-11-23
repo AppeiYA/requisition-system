@@ -60,6 +60,11 @@ type MockInvitationRepository struct {
 	GetInvitationByEmailFunc         func(ctx context.Context, email string) (*invitationdomain.Invitation, error)
 	UpdateInvitationStatusFunc       func(ctx context.Context, invitationID string, status invitationdomain.InvitationStatus) error
 	ExpireDueInvitationsFunc         func(ctx context.Context, now time.Time) error
+	LockInvitationByIDFunc           func(ctx context.Context, invitationID string) (*invitationdomain.Invitation, error)
+	ListInvitationsFunc              func(ctx context.Context, filter invitationdomain.InvitationListFilter) ([]invitationdomain.InvitationSummary, error)
+	CountInvitationsFunc             func(ctx context.Context, filter invitationdomain.InvitationListFilter) (int, error)
+	GetInvitationSummaryFunc         func(ctx context.Context, invitationID string) (*invitationdomain.InvitationSummary, error)
+	RotateInvitationTokenFunc        func(ctx context.Context, invitationID, tokenHash string, expiresAt time.Time) error
 }
 
 func NewMockInvitationRepository() *MockInvitationRepository {
@@ -95,6 +100,21 @@ func NewMockInvitationRepository() *MockInvitationRepository {
 			return nil
 		},
 		ExpireDueInvitationsFunc: func(ctx context.Context, now time.Time) error {
+			return nil
+		},
+		LockInvitationByIDFunc: func(ctx context.Context, invitationID string) (*invitationdomain.Invitation, error) {
+			return nil, invitationdomain.ErrInvitationNotFound
+		},
+		ListInvitationsFunc: func(ctx context.Context, filter invitationdomain.InvitationListFilter) ([]invitationdomain.InvitationSummary, error) {
+			return nil, nil
+		},
+		CountInvitationsFunc: func(ctx context.Context, filter invitationdomain.InvitationListFilter) (int, error) {
+			return 0, nil
+		},
+		GetInvitationSummaryFunc: func(ctx context.Context, invitationID string) (*invitationdomain.InvitationSummary, error) {
+			return nil, invitationdomain.ErrInvitationNotFound
+		},
+		RotateInvitationTokenFunc: func(ctx context.Context, invitationID, tokenHash string, expiresAt time.Time) error {
 			return nil
 		},
 	}
@@ -149,6 +169,26 @@ func (m *MockInvitationRepository) UpdateInvitationStatus(ctx context.Context, i
 
 func (m *MockInvitationRepository) ExpireDueInvitations(ctx context.Context, now time.Time) error {
 	return m.ExpireDueInvitationsFunc(ctx, now)
+}
+
+func (m *MockInvitationRepository) LockInvitationByID(ctx context.Context, invitationID string) (*invitationdomain.Invitation, error) {
+	return m.LockInvitationByIDFunc(ctx, invitationID)
+}
+
+func (m *MockInvitationRepository) ListInvitations(ctx context.Context, filter invitationdomain.InvitationListFilter) ([]invitationdomain.InvitationSummary, error) {
+	return m.ListInvitationsFunc(ctx, filter)
+}
+
+func (m *MockInvitationRepository) CountInvitations(ctx context.Context, filter invitationdomain.InvitationListFilter) (int, error) {
+	return m.CountInvitationsFunc(ctx, filter)
+}
+
+func (m *MockInvitationRepository) GetInvitationSummary(ctx context.Context, invitationID string) (*invitationdomain.InvitationSummary, error) {
+	return m.GetInvitationSummaryFunc(ctx, invitationID)
+}
+
+func (m *MockInvitationRepository) RotateInvitationToken(ctx context.Context, invitationID, tokenHash string, expiresAt time.Time) error {
+	return m.RotateInvitationTokenFunc(ctx, invitationID, tokenHash, expiresAt)
 }
 
 var _ invitationout.InvitationRepository = (*MockInvitationRepository)(nil)

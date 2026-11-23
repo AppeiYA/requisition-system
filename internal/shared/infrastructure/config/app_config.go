@@ -3,26 +3,31 @@ package config
 import "fmt"
 
 type AppBinaries int
+
 const (
-	OneBinary AppBinaries = 1
+	OneBinary   AppBinaries = 1
 	TwoBinaries AppBinaries = 2
 )
+
 func (b AppBinaries) IsValid() bool {
 	return b == OneBinary || b == TwoBinaries
 }
 
 type Environment string
+
 var (
-	DevEnv Environment = "development"
-	TestEnv Environment = "test"
+	DevEnv     Environment = "development"
+	TestEnv    Environment = "test"
 	StagingEnv Environment = "staging"
-	ProdEnv Environment = "production"
+	ProdEnv    Environment = "production"
 )
+
 func (e Environment) IsValid() bool {
 	return e == DevEnv || e == StagingEnv || e == ProdEnv || e == TestEnv
 }
+
 type AppConfig struct {
-	Env Environment // "development", "staging", "production"
+	Env      Environment // "development", "staging", "production"
 	Binaries AppBinaries
 }
 
@@ -44,7 +49,7 @@ func LoadAppConfig() (*AppConfig, error) {
 	}
 
 	return &AppConfig{
-		Env: appEnv,
+		Env:      appEnv,
 		Binaries: validBinary,
 	}, nil
 }

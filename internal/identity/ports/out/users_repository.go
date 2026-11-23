@@ -15,4 +15,13 @@ type UsersRepository interface {
 	UpdateUserStatus(ctx context.Context, user *domain.User) error
 	UpdateUserPassword(ctx context.Context, user *domain.User) error
 	UpdateUser(ctx context.Context, user *domain.User) error
+
+	// Admin user management. All methods use the executor in ctx, so they
+	// participate in an ambient transaction when one is present.
+	ListUsers(ctx context.Context, filter domain.UserListFilter) ([]domain.UserSummary, error)
+	CountUsers(ctx context.Context, filter domain.UserListFilter) (int, error)
+	GetUserDetail(ctx context.Context, id string) (*domain.UserDetail, error)
+	GetUserByIDForUpdate(ctx context.Context, id string) (*domain.User, error)
+	CountOtherActiveAdminsForUpdate(ctx context.Context, id string) (int, error)
+	UpdateUserRole(ctx context.Context, user *domain.User) error
 }

@@ -13,7 +13,7 @@ type RefreshTokenUsecase struct {
 	accessTokenService    identityout.AccessTokenService
 	refreshSessionRepo    identityout.RefreshSessionRepository
 	refreshTokenGenerator identityout.RefreshTokenGenerator
-	userRepo 			  identityout.UsersRepository
+	userRepo              identityout.UsersRepository
 }
 
 func NewRefreshTokenUsecase(
@@ -26,7 +26,7 @@ func NewRefreshTokenUsecase(
 		accessTokenService:    accessTokenService,
 		refreshSessionRepo:    refreshSessionRepo,
 		refreshTokenGenerator: refreshTokenGenerator,
-		userRepo: userRepo,
+		userRepo:              userRepo,
 	}
 }
 
@@ -65,10 +65,10 @@ func (u *RefreshTokenUsecase) Execute(
 	}
 
 	access, err := u.accessTokenService.GenerateAccessToken(
-		ctx, 
+		ctx,
 		&identityout.TokenModel{
-			ID: session.UserID,
-			Role: user.Role().String(),
+			ID:    session.UserID,
+			Role:  user.Role().String(),
 			Email: user.Email().Value(),
 		},
 	)

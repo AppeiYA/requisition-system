@@ -69,4 +69,3 @@ func FromContext(ctx context.Context) (UserInfo, bool) {
 func WithUser(ctx context.Context, id, role string) context.Context {
 	return context.WithValue(ctx, userContextKey{}, UserInfo{ID: id, Role: role})
 }
-

@@ -1,4 +1,4 @@
-package config 
+package config
 
 type EmailConfig struct {
 	APIKey   string // Resend API key

@@ -6,17 +6,20 @@ import (
 )
 
 type InvitationModule struct {
-	invitationPortIn *invitationin.InvitationPortIn
-	invitationHandler *invitationhttp.InvitationHandler
+	invitationPortIn       *invitationin.InvitationPortIn
+	adminInvitationsPortIn *invitationin.AdminInvitationsPortIn
+	invitationHandler      *invitationhttp.InvitationHandler
 }
 
 func NewInvitationModule(
 	invitationPortIn *invitationin.InvitationPortIn,
+	adminInvitationsPortIn *invitationin.AdminInvitationsPortIn,
 	invitationHandler *invitationhttp.InvitationHandler,
 ) *InvitationModule {
 	return &InvitationModule{
-		invitationPortIn: invitationPortIn,
-		invitationHandler: invitationHandler,
+		invitationPortIn:       invitationPortIn,
+		adminInvitationsPortIn: adminInvitationsPortIn,
+		invitationHandler:      invitationHandler,
 	}
 }
 
@@ -26,4 +29,10 @@ func (m *InvitationModule) PortIn() *invitationin.InvitationPortIn {
 
 func (m *InvitationModule) Handler() *invitationhttp.InvitationHandler {
 	return m.invitationHandler
+}
+
+// AdminInvitations exposes the admin-facing use cases to the admin module's
+// external adapter.
+func (m *InvitationModule) AdminInvitations() *invitationin.AdminInvitationsPortIn {
+	return m.adminInvitationsPortIn
 }

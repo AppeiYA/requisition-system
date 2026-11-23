@@ -111,6 +111,10 @@ func Load() (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
+	rateLimitConfig, err := LoadRateLimitConfig()
+	if err != nil {
+		return nil, err
+	}
 
 	return &Config{
 		App:       *appConfig,
@@ -123,6 +127,7 @@ func Load() (*Config, error) {
 		Frontend:  *frontendConfig,
 		Worker:    *workerConfig,
 		Telemetry: *telemetryConfig,
+		RateLimit: *rateLimitConfig,
 	}, nil
 }
 

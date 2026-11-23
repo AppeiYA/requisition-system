@@ -9,11 +9,13 @@ import (
 	identityin "github.com/AppeiYA/requisition-system/internal/identity/ports/in"
 	identityusecase "github.com/AppeiYA/requisition-system/internal/identity/usecase"
 	requisitionexternal "github.com/AppeiYA/requisition-system/internal/requisition/adapters/out/external"
+	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/audit"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/cache"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/config"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/db"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/generator"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/hasher"
+	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/ratelimit"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/redis"
 )
 
@@ -57,6 +59,15 @@ func (a *App) buildIdentity(
 	registerUsecase := identityusecase.NewRegisterUserUsecase(userRepository, passwordHasher, idGen)
 	getUserByEmailUsecase := identityusecase.NewGetUserByEmailUsecase(userRepository)
 
+	auditRecorder := audit.NewPostgresRecorder(baseRepo, idGen)
+	adminUsersPortIn := &identityin.AdminUsersPortIn{
+		ListUsers:         identityusecase.NewListUsersUsecase(userRepository),
+		GetUser:           identityusecase.NewGetUserUsecase(userRepository),
+		UpdateUserStatus:  identityusecase.NewUpdateUserStatusUsecase(userRepository, refreshSessionRepository, txManager, auditRecorder),
+		UpdateUserRole:    identityusecase.NewUpdateUserRoleUsecase(userRepository, refreshSessionRepository, txManager, auditRecorder),
+		RevokeUserSession: identityusecase.NewRevokeUserSessionsUsecase(userRepository, refreshSessionRepository, auditRecorder),
+	}
+
 	identityPortIn := identityin.NewIdentityPortIn(
 		registerUsecase,
 		getUserByEmailUsecase,
@@ -70,10 +81,12 @@ func (a *App) buildIdentity(
 		identityPortIn,
 		authMiddleware,
 	)
+	handler.SetRateLimiter(ratelimit.New(redisClient.Client()), cfg.RateLimit)
 	userLookup := requisitionexternal.NewIdentityAdapter(userRepository)
 
 	return identity.NewIdentityModule(
 		identityPortIn,
+		adminUsersPortIn,
 		handler,
 		authMiddleware,
 		userLookup,

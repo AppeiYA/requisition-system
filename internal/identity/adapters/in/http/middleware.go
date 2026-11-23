@@ -29,18 +29,20 @@ func GetUserRole(c *gin.Context) (string, bool) {
 
 type AuthMiddleware struct {
 	accessTokens identityout.AccessTokenService
-	userRepo identityout.UsersRepository
+	userRepo     identityout.UsersRepository
 }
 
 func NewAuthMiddleware(accessTokens identityout.AccessTokenService, userRepo identityout.UsersRepository) *AuthMiddleware {
 	return &AuthMiddleware{
 		accessTokens: accessTokens,
-		userRepo: userRepo,
+		userRepo:     userRepo,
 	}
 }
 
 // Handle validates the bearer access token and stores the authenticated
-// user id and role in the request context.
+// user id and role in the request context. The role is taken from the database
+// record, not from the token claim, so a promotion or demotion takes effect on
+// the next request instead of when the access token expires.
 func (m *AuthMiddleware) Handle() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		token, ok := bearerToken(c.GetHeader("Authorization"))
@@ -79,7 +81,7 @@ func (m *AuthMiddleware) Handle() gin.HandlerFunc {
 			return
 		}
 
-		authcontext.SetUser(c, model.ID, model.Role)
+		authcontext.SetUser(c, model.ID, user.Role().String())
 		c.Next()
 	}
 }
@@ -130,12 +132,6 @@ func (m *AuthMiddleware) IsAdmin() gin.HandlerFunc {
 			return
 		}
 
-		if model.Role != "admin" {
-			response.Error(c, "forbidden: admin access required", http.StatusForbidden, nil)
-			c.Abort()
-			return
-		}
-
 		user, err := m.userRepo.GetUserByID(c.Request.Context(), model.ID)
 		if err != nil {
 			response.ErrorFrom(c, err)
@@ -152,8 +148,15 @@ func (m *AuthMiddleware) IsAdmin() gin.HandlerFunc {
 			c.Abort()
 			return
 		}
+		// Authorise from the database role: the token claim may predate a
+		// role change.
+		if user.Role().String() != "admin" {
+			response.Error(c, "forbidden: admin access required", http.StatusForbidden, nil)
+			c.Abort()
+			return
+		}
 
-		authcontext.SetUser(c, model.ID, model.Role)
+		authcontext.SetUser(c, model.ID, user.Role().String())
 		c.Next()
 	}
 }

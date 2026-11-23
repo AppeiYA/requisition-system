@@ -1,5 +1,75 @@
 components:
     schemas:
+        adminhttp.InvitationDetailResponse:
+            properties:
+                accepted_at:
+                    type: string
+                created_at:
+                    type: string
+                delivered_at:
+                    type: string
+                delivery_failed_at:
+                    type: string
+                department_id:
+                    type: string
+                department_name:
+                    type: string
+                email:
+                    type: string
+                expires_at:
+                    type: string
+                first_name:
+                    type: string
+                id:
+                    type: string
+                invited_by:
+                    type: string
+                inviter_name:
+                    type: string
+                job_title:
+                    type: string
+                last_name:
+                    type: string
+                revoked_at:
+                    type: string
+                status:
+                    type: string
+            type: object
+        adminhttp.InvitationSummaryResponse:
+            properties:
+                accepted_at:
+                    type: string
+                created_at:
+                    type: string
+                delivered_at:
+                    type: string
+                delivery_failed_at:
+                    type: string
+                department_id:
+                    type: string
+                department_name:
+                    type: string
+                email:
+                    type: string
+                expires_at:
+                    type: string
+                first_name:
+                    type: string
+                id:
+                    type: string
+                invited_by:
+                    type: string
+                inviter_name:
+                    type: string
+                job_title:
+                    type: string
+                last_name:
+                    type: string
+                revoked_at:
+                    type: string
+                status:
+                    type: string
+            type: object
         adminhttp.InviteRequest:
             properties:
                 department_id:
@@ -23,6 +93,110 @@ components:
                 - first_name
                 - job_title
                 - last_name
+            type: object
+        adminhttp.ResendInvitationResponse:
+            properties:
+                expires_at:
+                    type: string
+                id:
+                    type: string
+            type: object
+        adminhttp.UpdateUserRoleRequest:
+            properties:
+                reason:
+                    maxLength: 500
+                    type: string
+                role:
+                    enum:
+                        - admin
+                        - user
+                    type: string
+            required:
+                - role
+            type: object
+        adminhttp.UpdateUserStatusRequest:
+            properties:
+                reason:
+                    maxLength: 500
+                    type: string
+                status:
+                    enum:
+                        - active
+                        - suspended
+                        - inactive
+                    type: string
+            required:
+                - status
+            type: object
+        adminhttp.UserDetailResponse:
+            properties:
+                created_at:
+                    type: string
+                department_id:
+                    type: string
+                department_name:
+                    type: string
+                email:
+                    type: string
+                first_name:
+                    type: string
+                id:
+                    type: string
+                job_title:
+                    type: string
+                last_name:
+                    type: string
+                last_requisition_at:
+                    type: string
+                membership_status:
+                    type: string
+                phone:
+                    type: string
+                requisition_counts:
+                    additionalProperties:
+                        type: integer
+                    type: object
+                role:
+                    type: string
+                staff_id:
+                    type: string
+                status:
+                    type: string
+                total_estimated_amount:
+                    type: number
+                updated_at:
+                    type: string
+            type: object
+        adminhttp.UserSummaryResponse:
+            properties:
+                created_at:
+                    type: string
+                department_id:
+                    type: string
+                department_name:
+                    type: string
+                email:
+                    type: string
+                first_name:
+                    type: string
+                id:
+                    type: string
+                job_title:
+                    type: string
+                last_name:
+                    type: string
+                membership_status:
+                    type: string
+                phone:
+                    type: string
+                role:
+                    type: string
+                staff_id:
+                    type: string
+                status:
+                    type: string
+                updated_at:
+                    type: string
             type: object
         adminin.InviteMemberResult:
             properties:
@@ -546,6 +720,86 @@ info:
 openapi: 3.0.3
 paths:
     /admin/invitations:
+        get:
+            description: Search, filter and paginate invitations. Requires the admin role. Token hashes are never returned.
+            parameters:
+                - description: Search by email or name
+                  in: query
+                  name: q
+                  schema:
+                    type: string
+                - description: pending, delivered, failed, accepted, revoked or expired
+                  in: query
+                  name: status
+                  schema:
+                    type: string
+                - description: Department ID
+                  in: query
+                  name: department_id
+                  schema:
+                    type: string
+                - description: Inviter user ID
+                  in: query
+                  name: invited_by
+                  schema:
+                    type: string
+                - description: Created at from (RFC3339 or YYYY-MM-DD, UTC)
+                  in: query
+                  name: from
+                  schema:
+                    type: string
+                - description: Created at before (RFC3339 or YYYY-MM-DD, UTC)
+                  in: query
+                  name: to
+                  schema:
+                    type: string
+                - description: Page size (max 100)
+                  in: query
+                  name: limit
+                  schema:
+                    type: integer
+                - description: Offset
+                  in: query
+                  name: offset
+                  schema:
+                    type: integer
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                allOf:
+                                    - $ref: '#/components/schemas/response.Response'
+                                    - properties:
+                                        data:
+                                            items:
+                                                $ref: '#/components/schemas/adminhttp.InvitationSummaryResponse'
+                                            type: array
+                                      type: object
+                    description: OK
+                "400":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.ErrorResponse'
+                    description: Validation error
+                "401":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Missing or invalid access token
+                "403":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Authenticated user is not an admin
+            security:
+                - BearerAuth: []
+            summary: List invitations
+            tags:
+                - admin
         post:
             description: Creates a pending invitation for the given email and department and emails the invitation link. Requires the admin role.
             requestBody:
@@ -595,6 +849,463 @@ paths:
             security:
                 - BearerAuth: []
             summary: Invite a member
+            tags:
+                - admin
+    /admin/invitations/{id}:
+        get:
+            description: Get one invitation with its department and inviter names. Requires the admin role.
+            parameters:
+                - description: Invitation ID
+                  in: path
+                  name: id
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                allOf:
+                                    - $ref: '#/components/schemas/response.Response'
+                                    - properties:
+                                        data:
+                                            $ref: '#/components/schemas/adminhttp.InvitationDetailResponse'
+                                      type: object
+                    description: OK
+                "400":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.ErrorResponse'
+                    description: Invalid invitation ID
+                "401":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Missing or invalid access token
+                "403":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Authenticated user is not an admin
+                "404":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Invitation not found
+            security:
+                - BearerAuth: []
+            summary: Get invitation
+            tags:
+                - admin
+    /admin/invitations/{id}/resend:
+        post:
+            description: Rotate the invitation token, audit the change and queue a replacement email. Accepted and revoked invitations cannot be resent. Requires the admin role.
+            parameters:
+                - description: Invitation ID
+                  in: path
+                  name: id
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                allOf:
+                                    - $ref: '#/components/schemas/response.Response'
+                                    - properties:
+                                        data:
+                                            $ref: '#/components/schemas/adminhttp.ResendInvitationResponse'
+                                      type: object
+                    description: OK
+                "400":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.ErrorResponse'
+                    description: Invalid invitation ID
+                "401":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Missing or invalid access token
+                "403":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Authenticated user is not an admin
+                "404":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Invitation not found
+                "409":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Invitation cannot be resent or another active invitation exists
+            security:
+                - BearerAuth: []
+            summary: Resend invitation
+            tags:
+                - admin
+    /admin/invitations/{id}/revoke:
+        post:
+            description: Invalidate the invitation link immediately. Revoking an already revoked invitation is a no-op. Requires the admin role.
+            parameters:
+                - description: Invitation ID
+                  in: path
+                  name: id
+                  required: true
+                  schema:
+                    type: string
+                - description: Optional reason for the audit log
+                  in: query
+                  name: reason
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: OK
+                "400":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.ErrorResponse'
+                    description: Invalid invitation ID
+                "401":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Missing or invalid access token
+                "403":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Authenticated user is not an admin
+                "404":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Invitation not found
+                "409":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Invitation has been accepted
+            security:
+                - BearerAuth: []
+            summary: Revoke invitation
+            tags:
+                - admin
+    /admin/users:
+        get:
+            description: Search, filter and paginate users. Requires the admin role.
+            parameters:
+                - description: Search by name, email or staff ID
+                  in: query
+                  name: q
+                  schema:
+                    type: string
+                - description: admin or user
+                  in: query
+                  name: role
+                  schema:
+                    type: string
+                - description: active, suspended or inactive
+                  in: query
+                  name: status
+                  schema:
+                    type: string
+                - description: Department ID
+                  in: query
+                  name: department_id
+                  schema:
+                    type: string
+                - description: created_at, -created_at, last_name or email
+                  in: query
+                  name: sort
+                  schema:
+                    type: string
+                - description: Page size (max 100)
+                  in: query
+                  name: limit
+                  schema:
+                    type: integer
+                - description: Offset
+                  in: query
+                  name: offset
+                  schema:
+                    type: integer
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                allOf:
+                                    - $ref: '#/components/schemas/response.Response'
+                                    - properties:
+                                        data:
+                                            items:
+                                                $ref: '#/components/schemas/adminhttp.UserSummaryResponse'
+                                            type: array
+                                      type: object
+                    description: OK
+                "400":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.ErrorResponse'
+                    description: Validation error
+                "401":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Missing or invalid access token
+                "403":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Authenticated user is not an admin
+            security:
+                - BearerAuth: []
+            summary: List users
+            tags:
+                - admin
+    /admin/users/{id}:
+        get:
+            description: Get a user with department, requisition counts and spend. Requires the admin role.
+            parameters:
+                - description: User ID
+                  in: path
+                  name: id
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                allOf:
+                                    - $ref: '#/components/schemas/response.Response'
+                                    - properties:
+                                        data:
+                                            $ref: '#/components/schemas/adminhttp.UserDetailResponse'
+                                      type: object
+                    description: OK
+                "400":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.ErrorResponse'
+                    description: Invalid user ID
+                "401":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Missing or invalid access token
+                "403":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Authenticated user is not an admin
+                "404":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: User not found
+            security:
+                - BearerAuth: []
+            summary: Get user
+            tags:
+                - admin
+    /admin/users/{id}/role:
+        patch:
+            description: Promote or demote a user. Requires the admin role. Self-changes and demoting the last active admin are rejected.
+            parameters:
+                - description: User ID
+                  in: path
+                  name: id
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/adminhttp.UpdateUserRoleRequest'
+                description: New role and reason
+                required: true
+                x-originalParamName: request
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: OK
+                "400":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.ErrorResponse'
+                    description: Validation error
+                "401":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Missing or invalid access token
+                "403":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Authenticated user is not an admin or is the target
+                "404":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: User not found
+                "409":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Target is the last active admin
+            security:
+                - BearerAuth: []
+            summary: Update user role
+            tags:
+                - admin
+    /admin/users/{id}/sessions/revoke:
+        post:
+            description: Invalidate every refresh session for a user. Access tokens expire within their TTL. Requires the admin role.
+            parameters:
+                - description: User ID
+                  in: path
+                  name: id
+                  required: true
+                  schema:
+                    type: string
+                - description: Optional reason for the audit log
+                  in: query
+                  name: reason
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: OK
+                "401":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Missing or invalid access token
+                "403":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Authenticated user is not an admin
+                "404":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: User not found
+            security:
+                - BearerAuth: []
+            summary: Revoke user sessions
+            tags:
+                - admin
+    /admin/users/{id}/status:
+        patch:
+            description: Activate, suspend or deactivate a user. Requires the admin role. Self-changes and removing the last active admin are rejected.
+            parameters:
+                - description: User ID
+                  in: path
+                  name: id
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/adminhttp.UpdateUserStatusRequest'
+                description: New status and reason
+                required: true
+                x-originalParamName: request
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: OK
+                "400":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.ErrorResponse'
+                    description: Validation error
+                "401":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Missing or invalid access token
+                "403":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Authenticated user is not an admin or is the target
+                "404":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: User not found
+                "409":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Target is the last active admin
+            security:
+                - BearerAuth: []
+            summary: Update user status
             tags:
                 - admin
     /auth/login:

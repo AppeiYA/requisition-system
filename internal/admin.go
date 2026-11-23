@@ -24,7 +24,9 @@ func (a *App) buildAdminHandler(
 	cfg *config.Config,
 	txManager *db.TransactionManager,
 	getUserByEmailUC identityin.GetUserByEmailUsecaseInt,
+	adminUsersUC *identityin.AdminUsersPortIn,
 	saveInvitationUC invitationin.SaveInvitationUsecaseInt,
+	adminInvitationsUC *invitationin.AdminInvitationsPortIn,
 	getDepartmentByIDUC departmentin.GetDepartmentByIDUsecaseInt,
 	asynqClient *asynq.Client,
 	telemetry adminout.Telemetry,
@@ -32,11 +34,35 @@ func (a *App) buildAdminHandler(
 	taskQueue := adminworker.NewTaskQueue(asynqClient, cfg.Worker)
 	identityPort := adminexternal.NewAdminIdentityAdapter(getUserByEmailUC)
 	adminInvitationPort := adminexternal.NewAdminInvitationAdapter(saveInvitationUC)
+	adminInvitationManagementPort := adminexternal.NewAdminInvitationManagementAdapter(adminInvitationsUC)
 	adminDepartmentPort := adminexternal.NewAdminDepartmentAdapter(getDepartmentByIDUC)
 
 	inviteUC := adminusecase.NewInviteMemberUsecase(taskQueue, identityPort, adminInvitationPort, adminDepartmentPort, txManager, telemetry)
 
-	adminPortIn := adminin.NewAdminPortIn(inviteUC)
+	userAdminPort := adminexternal.NewAdminIdentityUserAdapter(adminUsersUC)
+	listUsersUC := adminusecase.NewListUsersUsecase(userAdminPort)
+	getUserUC := adminusecase.NewGetUserUsecase(userAdminPort)
+	updateStatusUC := adminusecase.NewUpdateUserStatusUsecase(userAdminPort, telemetry)
+	updateRoleUC := adminusecase.NewUpdateUserRoleUsecase(userAdminPort, telemetry)
+	revokeSessionsUC := adminusecase.NewRevokeUserSessionsUsecase(userAdminPort, telemetry)
+
+	listInvitationsUC := adminusecase.NewListInvitationsUsecase(adminInvitationManagementPort)
+	getInvitationUC := adminusecase.NewGetInvitationUsecase(adminInvitationManagementPort)
+	resendInvitationUC := adminusecase.NewResendInvitationUsecase(adminInvitationManagementPort, adminDepartmentPort, taskQueue, telemetry)
+	revokeInvitationUC := adminusecase.NewRevokeInvitationUsecase(adminInvitationManagementPort, telemetry)
+
+	adminPortIn := adminin.NewAdminPortInWithAll(
+		inviteUC,
+		listUsersUC,
+		getUserUC,
+		updateStatusUC,
+		updateRoleUC,
+		revokeSessionsUC,
+		listInvitationsUC,
+		getInvitationUC,
+		resendInvitationUC,
+		revokeInvitationUC,
+	)
 	adminHandler := adminhttp.NewHandler(adminPortIn)
 
 	return admin.NewAdminModule(adminPortIn, adminHandler)

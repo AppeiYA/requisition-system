@@ -3,16 +3,18 @@ package domain
 import customerrors "github.com/AppeiYA/requisition-system/internal/shared/infrastructure/errors"
 
 type InvitationStatus string
+
 const (
-	InvitationStatusPending InvitationStatus = "pending"
+	InvitationStatusPending   InvitationStatus = "pending"
 	InvitationStatusDelivered InvitationStatus = "delivered"
-	InvitationStatusFailed   InvitationStatus = "failed"
-	InvitationStatusAccepted InvitationStatus = "accepted"
-	InvitationStatusRevoked  InvitationStatus = "revoked"
-	InvitationStatusExpired  InvitationStatus = "expired"
+	InvitationStatusFailed    InvitationStatus = "failed"
+	InvitationStatusAccepted  InvitationStatus = "accepted"
+	InvitationStatusRevoked   InvitationStatus = "revoked"
+	InvitationStatusExpired   InvitationStatus = "expired"
 )
+
 var (
-	ErrInvalidInvitationStatus = customerrors.NewBadRequestError("invalid invitation status")
+	ErrInvalidInvitationStatus           = customerrors.NewBadRequestError("invalid invitation status")
 	ErrInvalidInvitationStatusTransition = customerrors.NewBadRequestError("invalid invitation status transition")
 )
 
@@ -29,7 +31,7 @@ var validInvitationStatusTransitions = map[InvitationStatus]map[InvitationStatus
 		InvitationStatusRevoked:  {},
 		InvitationStatusExpired:  {},
 	},
-	InvitationStatusFailed: {},
+	InvitationStatusFailed:   {},
 	InvitationStatusAccepted: {},
 	InvitationStatusRevoked:  {},
 	InvitationStatusExpired:  {},

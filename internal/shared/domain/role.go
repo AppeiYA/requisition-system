@@ -3,6 +3,7 @@ package shareddomain
 import customerrors "github.com/AppeiYA/requisition-system/internal/shared/infrastructure/errors"
 
 type Role string
+
 const (
 	RoleAdmin Role = "admin"
 	RoleUser  Role = "user"

@@ -8,14 +8,16 @@ import (
 
 var (
 	ErrInvalidAttachmentRefName = customerrors.NewInternalServerError("invalid attachment ref name")
-	ErrInvalidAttachmentRefID = customerrors.NewInternalServerError("invalid attachment ref ID")
+	ErrInvalidAttachmentRefID   = customerrors.NewInternalServerError("invalid attachment ref ID")
 )
 
 type AttachmentRefName string
+
 const (
-	RefNameRequisition AttachmentRefName = "requisition"
+	RefNameRequisition     AttachmentRefName = "requisition"
 	RefNameRequisitionItem AttachmentRefName = "requisition_item"
 )
+
 func (r AttachmentRefName) IsValid() bool {
 	switch r {
 	case RefNameRequisition, RefNameRequisitionItem:
@@ -29,13 +31,13 @@ func (r AttachmentRefName) String() string {
 }
 
 var RefNameToIDSyntax = map[AttachmentRefName]string{
-	RefNameRequisition: "req",
+	RefNameRequisition:     "req",
 	RefNameRequisitionItem: "reqitem",
 }
 
 type AttachmentRef struct {
 	refName AttachmentRefName
-	id string
+	id      string
 }
 
 func NewAttachmentRef(refName AttachmentRefName, id string) (*AttachmentRef, error) {
@@ -48,7 +50,7 @@ func NewAttachmentRef(refName AttachmentRefName, id string) (*AttachmentRef, err
 
 	if value, ok := RefNameToIDSyntax[refName]; !ok {
 		return nil, ErrInvalidAttachmentRefName
-	}else {
+	} else {
 		if !strings.HasPrefix(id, value) {
 			return nil, ErrInvalidAttachmentRefID
 		}
@@ -56,7 +58,7 @@ func NewAttachmentRef(refName AttachmentRefName, id string) (*AttachmentRef, err
 
 	return &AttachmentRef{
 		refName: refName,
-		id: id,
+		id:      id,
 	}, nil
 }
 
@@ -65,7 +67,7 @@ func ReconstructAttachmentRef(id string) (*AttachmentRef, error) {
 		if strings.HasPrefix(id, prefix) {
 			return &AttachmentRef{
 				refName: refName,
-				id: id,
+				id:      id,
 			}, nil
 		}
 	}

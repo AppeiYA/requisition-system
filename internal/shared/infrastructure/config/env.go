@@ -11,4 +11,5 @@ type Config struct {
 	Frontend  FrontendConfig
 	Worker    WorkerConfig
 	Telemetry TelemetryConfig
+	RateLimit RateLimitConfig
 }
