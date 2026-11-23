@@ -4,7 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"log"
+	"log/slog"
 )
 
 type TransactionManager struct {
@@ -28,7 +28,7 @@ func (m *TransactionManager) WithinTransaction(
 
 	defer func() {
 		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
-			log.Printf("failed to roll back transaction: %v", err)
+			slog.ErrorContext(ctx, "failed to roll back transaction", slog.String("error.message", err.Error()))
 		}
 	}()
 

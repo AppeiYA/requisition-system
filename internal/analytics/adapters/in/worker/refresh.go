@@ -2,7 +2,7 @@ package analyticsworker
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"time"
 
 	analyticspostgres "github.com/AppeiYA/requisition-system/internal/analytics/adapters/out/postgres"
@@ -35,7 +35,7 @@ func (h *RefreshHandler) Handle(ctx context.Context, _ *asynq.Task) error {
 	}()
 
 	if err := h.refresher.Refresh(ctx); err != nil {
-		log.Printf("analytics materialized refresh failed: %v", err)
+		slog.ErrorContext(ctx, "analytics materialized refresh failed", slog.String("error.message", err.Error()))
 		return err
 	}
 	return nil

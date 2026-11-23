@@ -31,6 +31,17 @@ services:
       - "13133:13133"
     depends_on:
       - tempo
+      - loki
+    restart: unless-stopped
+
+  loki:
+    image: grafana/loki:3.3.0
+    command: ["-config.file=/etc/loki/local-config.yaml"]
+    ports:
+      - "3100:3100" # Log query API and OTLP HTTP receiver
+    volumes:
+      - ./loki/loki.yaml:/etc/loki/local-config.yaml:ro
+      - loki-data:/loki
     restart: unless-stopped
 
   tempo:
@@ -80,8 +91,10 @@ services:
     depends_on:
       - prometheus
       - tempo
+      - loki
     restart: unless-stopped
 
 volumes:
   tempo-data:
   grafana-data:
+  loki-data:

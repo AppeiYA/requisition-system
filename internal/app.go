@@ -3,7 +3,7 @@ package app
 import (
 	"context"
 	"errors"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -16,11 +16,13 @@ import (
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/config"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/db"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/generator"
+	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/logger"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/redis"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/response"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/server"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/taskqueue"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/telemetry"
+	"github.com/AppeiYA/requisition-system/internal/version"
 	"github.com/gin-gonic/gin"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 )
@@ -57,6 +59,16 @@ func (a *App) Run() error {
 	a.config = cfg
 
 	otel := telemetry.NewTelemetry("requisition-system", cfg.Telemetry)
+	appLogger := logger.New(logger.Options{
+		Level:          cfg.Log.Level,
+		Format:         cfg.Log.Format,
+		AddSource:      cfg.Log.AddSource,
+		ServiceName:    otel.ServiceName(),
+		ServiceVersion: version.Version,
+		Environment:    string(cfg.App.Env),
+	})
+	logger.SetDefault(appLogger)
+
 	shutdownOtel, err := otel.Setup(ctx)
 	if err != nil {
 		return err
@@ -69,7 +81,7 @@ func (a *App) Run() error {
 	// error.
 	defer func() {
 		if err := shutdownOtel(context.Background()); err != nil {
-			log.Printf("failed to flush telemetry: %v", err)
+			appLogger.Error("failed to flush telemetry", slog.String("error.message", err.Error()))
 		}
 	}()
 
@@ -79,7 +91,7 @@ func (a *App) Run() error {
 	}
 	defer func() {
 		if err := database.Close(); err != nil {
-			log.Printf("failed to close database: %v", err)
+			appLogger.Error("failed to close database", slog.String("error.message", err.Error()))
 		}
 	}()
 
@@ -89,7 +101,7 @@ func (a *App) Run() error {
 	}
 	defer func() {
 		if err := redisClient.Close(); err != nil {
-			log.Printf("failed to close redis client: %v", err)
+			appLogger.Error("failed to close redis client", slog.String("error.message", err.Error()))
 		}
 	}()
 
@@ -145,7 +157,7 @@ func (a *App) Run() error {
 	// rewrites the request with the span context, so every handler picks it
 	// up through c.Request.Context() without any change.
 	router.Use(otelgin.Middleware(otel.ServiceName()))
-	router.Use(gin.Logger(), gin.Recovery())
+	router.Use(logger.GinLogger(appLogger), logger.GinRecovery(appLogger))
 	router.Use(requestBodyLimit())
 	api := router.Group("/api")
 
@@ -208,7 +220,7 @@ func (a *App) Run() error {
 
 	errCH := make(chan error, 1)
 	go func() {
-		log.Printf("Server is running on port: %s", cfg.Server.Address)
+		appLogger.Info("server is running", slog.String("server.address", cfg.Server.Address))
 		if err := a.server.Start(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errCH <- err
 		}
@@ -220,7 +232,7 @@ func (a *App) Run() error {
 	case err := <-errCH:
 		runErr = err
 	case <-ctx.Done():
-		log.Println("Shutting down server...")
+		appLogger.Info("shutting down server")
 	}
 
 	shutDownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

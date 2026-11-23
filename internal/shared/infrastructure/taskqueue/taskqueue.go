@@ -3,7 +3,7 @@ package taskqueue
 import (
 	"context"
 	"encoding/json"
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/config"
@@ -32,9 +32,62 @@ func NewServer(r *redis.Redis, cfg config.WorkerConfig) *asynq.Server {
 		ErrorHandler: asynq.ErrorHandlerFunc(func(ctx context.Context, task *asynq.Task, err error) {
 			retried, _ := asynq.GetRetryCount(ctx)
 			maxRetry, _ := asynq.GetMaxRetry(ctx)
-			log.Printf("task %s gave up after %d/%d retries: %v", task.Type(), retried, maxRetry, err)
+			taskID, _ := asynq.GetTaskID(ctx)
+			queue, _ := asynq.GetQueueName(ctx)
+			slog.ErrorContext(ctx, "task gave up after retries exhausted",
+				slog.String("task.id", taskID),
+				slog.String("task.type", task.Type()),
+				slog.String("task.queue", queue),
+				slog.Int("task.retry_count", retried),
+				slog.Int("task.max_retry", maxRetry),
+				slog.String("error.message", err.Error()),
+			)
 		}),
 	})
+}
+
+// LoggingMiddleware logs task execution start, completion, and failure with structured
+// duration and task metadata.
+func LoggingMiddleware() asynq.MiddlewareFunc {
+	return func(next asynq.Handler) asynq.Handler {
+		return asynq.HandlerFunc(func(ctx context.Context, task *asynq.Task) error {
+			start := time.Now()
+			taskID, _ := asynq.GetTaskID(ctx)
+			queue, _ := asynq.GetQueueName(ctx)
+			retried, _ := asynq.GetRetryCount(ctx)
+
+			slog.DebugContext(ctx, "asynq task started",
+				slog.String("task.id", taskID),
+				slog.String("task.type", task.Type()),
+				slog.String("task.queue", queue),
+				slog.Int("task.retry_count", retried),
+			)
+
+			err := next.ProcessTask(ctx, task)
+			duration := time.Since(start)
+
+			if err != nil {
+				slog.ErrorContext(ctx, "asynq task failed",
+					slog.String("task.id", taskID),
+					slog.String("task.type", task.Type()),
+					slog.String("task.queue", queue),
+					slog.Int("task.retry_count", retried),
+					slog.Float64("task.duration_ms", float64(duration.Microseconds())/1000.0),
+					slog.String("error.message", err.Error()),
+				)
+				return err
+			}
+
+			slog.InfoContext(ctx, "asynq task completed",
+				slog.String("task.id", taskID),
+				slog.String("task.type", task.Type()),
+				slog.String("task.queue", queue),
+				slog.Int("task.retry_count", retried),
+				slog.Float64("task.duration_ms", float64(duration.Microseconds())/1000.0),
+			)
+			return nil
+		})
+	}
 }
 
 func NewScheduler(r *redis.Redis) *asynq.Scheduler {

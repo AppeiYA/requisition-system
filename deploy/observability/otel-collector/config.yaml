@@ -64,6 +64,12 @@ exporters:
     resource_to_telemetry_conversion:
       enabled: true
 
+  # Logs go to Loki through its native OTLP HTTP endpoint.
+  otlphttp/loki:
+    endpoint: http://loki:3100/otlp
+    tls:
+      insecure: true
+
 service:
   extensions: [health_check]
   pipelines:
@@ -75,3 +81,7 @@ service:
       receivers: [otlp]
       processors: [memory_limiter, batch]
       exporters: [prometheus]
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [otlphttp/loki]
