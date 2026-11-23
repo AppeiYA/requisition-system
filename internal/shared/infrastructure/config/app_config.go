@@ -27,8 +27,9 @@ func (e Environment) IsValid() bool {
 }
 
 type AppConfig struct {
-	Env      Environment // "development", "staging", "production"
-	Binaries AppBinaries
+	Env             Environment // "development", "staging", "production"
+	Binaries        AppBinaries
+	AnalyticsSource string
 }
 
 func LoadAppConfig() (*AppConfig, error) {
@@ -48,8 +49,14 @@ func LoadAppConfig() (*AppConfig, error) {
 		return nil, fmt.Errorf("invalid value for APP_BINARIES: %d", binaries)
 	}
 
+	analyticsSource := getEnv("ANALYTICS_SOURCE", "direct")
+	if analyticsSource != "direct" && analyticsSource != "materialized" {
+		return nil, fmt.Errorf("invalid value for ANALYTICS_SOURCE: %s", analyticsSource)
+	}
+
 	return &AppConfig{
-		Env:      appEnv,
-		Binaries: validBinary,
+		Env:             appEnv,
+		Binaries:        validBinary,
+		AnalyticsSource: analyticsSource,
 	}, nil
 }

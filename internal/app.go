@@ -174,6 +174,8 @@ func (a *App) Run() error {
 		operationTelemetry,
 	)
 
+	analyticsModule := buildAnalytics(baseRepo, redisCache, cfg.App.AnalyticsSource)
+
 	asynqClient := taskqueue.NewClient(redisClient)
 
 	adminModule := a.buildAdminHandler(
@@ -196,6 +198,7 @@ func (a *App) Run() error {
 		requisitionModule.ItemCategoryHandler(),
 		requisitionModule.ItemHandler(),
 		requisitionModule.RequisitionHandler(),
+		analyticsModule.Handler(),
 		identityModule.AuthMiddleware(),
 	); err != nil {
 		return err
