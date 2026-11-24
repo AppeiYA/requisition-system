@@ -51,8 +51,8 @@ func (r *Repository) GetUserAnalytics(ctx context.Context, filter analyticsdomai
 	var departments []departmentBreakdownRow
 	if err := r.repository.Executor(ctx).SelectContext(ctx, &departments, `
 		SELECT d.name,
-		       COUNT(dm.id)::int AS members,
-		       COUNT(dm.id) FILTER (WHERE dm.status='active')::int AS active_members
+		       COUNT(DISTINCT (user_id, department_id))::int AS members,
+		       COUNT(DISTINCT (user_id, department_id)) FILTER (WHERE dm.status='active')::int AS active_members
 		FROM departments d
 		LEFT JOIN department_memberships dm ON dm.department_id=d.id
 		GROUP BY d.id,d.name
