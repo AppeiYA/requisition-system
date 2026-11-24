@@ -52,7 +52,7 @@ func parseFilter(c *gin.Context) (analyticdomain.Filter, []response.FieldError) 
 		}
 	}
 	if len(details) == 0 {
-		if from.After(to) {
+		if !from.Before(to) {
 			details = append(details, response.FieldError{Field: "from", Message: "must be before to"})
 		}
 		if to.Sub(from) > 366*24*time.Hour {

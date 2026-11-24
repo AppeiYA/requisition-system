@@ -55,6 +55,7 @@ func (r *Repository) GetUserAnalytics(ctx context.Context, filter analyticsdomai
 		       COUNT(DISTINCT (user_id, department_id)) FILTER (WHERE dm.status='active')::int AS active_members
 		FROM departments d
 		LEFT JOIN department_memberships dm ON dm.department_id=d.id
+		WHERE d.created_at >= $1 AND d.created_at < $2
 		GROUP BY d.id,d.name
 		ORDER BY members DESC LIMIT $3`, args[0], args[1], filter.Limit); err != nil {
 		return nil, err

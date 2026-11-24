@@ -211,7 +211,7 @@ func (r *Repository) GetRequisitionAnalytics(ctx context.Context, filter analyti
 
 	trendQuery := fmt.Sprintf(`
 		SELECT date_trunc('%s', r.created_at) AS bucket,
-		       COUNT(*)::int AS count,
+		       COUNT(DISTINCT r.id)::int AS count,
 		       COALESCE(SUM(ri.estimated_unit_amount * ri.quantity),0)::bigint AS minor
 		FROM requisitions r
 		LEFT JOIN requisition_items ri ON ri.requisition_id=r.id

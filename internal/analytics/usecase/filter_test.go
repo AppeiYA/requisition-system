@@ -34,6 +34,16 @@ func TestNormalizeFilter(t *testing.T) {
 		}
 	})
 
+	t.Run("rejects equal range", func(t *testing.T) {
+		to := time.Date(2026, 12, 1, 0, 0, 0, 0, time.UTC)
+		_, err := NormalizeFilter(analyticdomain.Filter{
+			From: to, To: to, Interval: "day", Limit: 10,
+		})
+		if err != ErrInvalidRange {
+			t.Fatalf("err = %v", err)
+		}
+	})
+
 	t.Run("rejects invalid interval", func(t *testing.T) {
 		to := time.Now().UTC()
 		_, err := NormalizeFilter(analyticdomain.Filter{
