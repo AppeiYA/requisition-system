@@ -516,32 +516,15 @@ func mapStatusHistoryWriteError(err error) error {
 	return err
 }
 
-func (r *RequisitionRepository) ListRequisitionsByUserID(ctx context.Context, userID string, limit int, offset int) ([]*requisitiondomain.Requisition, error) {
-	var rows []models.RequisitionModel
-	if err := r.repository.Executor(ctx).SelectContext(ctx, &rows,
-		`SELECT `+requisitionColumns+` FROM requisitions
-		 WHERE requested_by = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3`,
-		userID, limit, offset); err != nil {
-		return nil, err
-	}
-	return r.loadAggregates(ctx, rows)
-}
-
-func (r *RequisitionRepository) ListRequisitions(ctx context.Context, limit int, offset int) ([]*requisitiondomain.Requisition, error) {
-	var rows []models.RequisitionModel
-	if err := r.repository.Executor(ctx).SelectContext(ctx, &rows,
-		`SELECT `+requisitionColumns+` FROM requisitions
-		 ORDER BY created_at DESC LIMIT $1 OFFSET $2`, limit, offset); err != nil {
-		return nil, err
-	}
-	return r.loadAggregates(ctx, rows)
-}
-
 var listRequisitionSummariesQuery = `
 	SELECT
 		r.id,
 		r.reference_code,
 		r.requested_by,
+		u.id AS owner_id,
+		u.first_name AS owner_first_name,
+		u.last_name AS owner_last_name,
+		u.email AS owner_email,
 		r.department_id,
 		r.status,
 		r.priority,
@@ -551,12 +534,17 @@ var listRequisitionSummariesQuery = `
 		r.created_at,
 		r.updated_at
 	FROM requisitions r
+	JOIN users u ON u.id = r.requested_by
 	LEFT JOIN requisition_items ri
 		ON ri.requisition_id = r.id
 	GROUP BY
 		r.id,
 		r.reference_code,
 		r.requested_by,
+		u.id,
+		u.first_name,
+		u.last_name,
+		u.email,
 		r.department_id,
 		r.status,
 		r.priority,
@@ -573,6 +561,10 @@ var listRequisitionSummariesByUserIDQuery = `
 		r.id,
 		r.reference_code,
 		r.requested_by,
+		u.id AS owner_id,
+		u.first_name AS owner_first_name,
+		u.last_name AS owner_last_name,
+		u.email AS owner_email,
 		r.department_id,
 		r.status,
 		r.priority,
@@ -582,6 +574,7 @@ var listRequisitionSummariesByUserIDQuery = `
 		r.created_at,
 		r.updated_at
 	FROM requisitions r
+	JOIN users u ON u.id = r.requested_by
 	LEFT JOIN requisition_items ri
 		ON ri.requisition_id = r.id
 	WHERE r.requested_by = $1
@@ -589,6 +582,10 @@ var listRequisitionSummariesByUserIDQuery = `
 		r.id,
 		r.reference_code,
 		r.requested_by,
+		u.id,
+		u.first_name,
+		u.last_name,
+		u.email,
 		r.department_id,
 		r.status,
 		r.priority,
@@ -626,18 +623,6 @@ func requisitionSummariesFromModels(rows []models.RequisitionSummaryModel) ([]*r
 			return nil, err
 		}
 		result = append(result, summary)
-	}
-	return result, nil
-}
-
-func (r *RequisitionRepository) loadAggregates(ctx context.Context, rows []models.RequisitionModel) ([]*requisitiondomain.Requisition, error) {
-	result := make([]*requisitiondomain.Requisition, 0, len(rows))
-	for _, row := range rows {
-		requisition, err := r.loadAggregate(ctx, row)
-		if err != nil {
-			return nil, err
-		}
-		result = append(result, requisition)
 	}
 	return result, nil
 }

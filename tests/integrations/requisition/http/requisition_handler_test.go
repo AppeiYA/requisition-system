@@ -308,6 +308,10 @@ func TestRequisitionCreateGetAndListHandler(t *testing.T) {
 		require.Len(t, envelope.Data, 1)
 		require.Equal(t, created.ID, envelope.Data[0].ID)
 		require.Equal(t, 10000.0, envelope.Data[0].TotalEstimatedAmount)
+		require.Equal(t, fixture.UserID, envelope.Data[0].Owner.ID)
+		require.Equal(t, "Requisition", envelope.Data[0].Owner.FirstName)
+		require.Equal(t, "User", envelope.Data[0].Owner.LastName)
+		require.Equal(t, "requisition.user@example.com", envelope.Data[0].Owner.Email)
 		require.Equal(t, 1, envelope.Pagination.Page)
 		require.Equal(t, 10, envelope.Pagination.PageSize)
 	})
@@ -331,6 +335,10 @@ func TestRequisitionCreateGetAndListHandler(t *testing.T) {
 		require.True(t, envelope.Success)
 		require.Len(t, envelope.Data, 1)
 		require.Equal(t, created.ID, envelope.Data[0].ID)
+		require.Equal(t, fixture.UserID, envelope.Data[0].Owner.ID)
+		require.Equal(t, "Requisition", envelope.Data[0].Owner.FirstName)
+		require.Equal(t, "User", envelope.Data[0].Owner.LastName)
+		require.Equal(t, "requisition.user@example.com", envelope.Data[0].Owner.Email)
 	})
 
 	t.Run("forbids another user from reading the requisition", func(t *testing.T) {

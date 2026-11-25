@@ -14,7 +14,7 @@ var (
 // listMyRequisitionsDoc documents the listMy handler in requisition_handler.go.
 //
 //	@Summary		List my requisitions
-//	@Description	Returns header summaries for requisitions created by the authenticated user, ordered by creation time (newest first), including the derived total but excluding lines and status history. Use GET /requisitions/{id} for the full detail. Amounts are expressed in major currency units (naira for NGN) while stored internally as minor units. Requires an access token.
+//	@Description	Returns header summaries for requisitions created by the authenticated user, ordered by creation time (newest first), including the requesting user's owner details and the derived total but excluding lines and status history. Use GET /requisitions/{id} for the full detail. Amounts are expressed in major currency units (naira for NGN) while stored internally as minor units. Requires an access token.
 //	@Tags			requisition
 //	@Produce		json
 //	@Security		BearerAuth

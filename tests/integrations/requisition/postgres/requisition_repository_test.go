@@ -239,6 +239,10 @@ func TestRequisitionRepositoryAggregateLifecycle(t *testing.T) {
 		require.Len(t, summaries, 1)
 		require.Equal(t, requisition.ID(), summaries[0].ID)
 		require.Equal(t, 17500.0, summaries[0].TotalEstimatedAmount)
+		require.Equal(t, repositoryUserID, summaries[0].Owner.ID)
+		require.Equal(t, "Repository", summaries[0].Owner.FirstName)
+		require.Equal(t, "User", summaries[0].Owner.LastName)
+		require.Equal(t, "repository.user@example.com", summaries[0].Owner.Email)
 
 		byUser, err := fixture.RequisitionRepository.ListRequisitionSummariesByUserID(
 			ctx,
@@ -249,6 +253,8 @@ func TestRequisitionRepositoryAggregateLifecycle(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, byUser, 1)
 		require.Equal(t, requisition.ID(), byUser[0].ID)
+		require.Equal(t, repositoryUserID, byUser[0].Owner.ID)
+		require.Equal(t, "repository.user@example.com", byUser[0].Owner.Email)
 	})
 
 	t.Run("updates the aggregate while preserving line identity", func(t *testing.T) {

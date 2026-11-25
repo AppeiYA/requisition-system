@@ -118,20 +118,29 @@ type RequisitionResponse struct {
 	UpdatedAt            time.Time                          `json:"updated_at"`
 }
 
+// RequisitionOwnerResponse identifies the user who created a requisition.
+type RequisitionOwnerResponse struct {
+	ID        string `json:"id"`
+	FirstName string `json:"first_name"`
+	LastName  string `json:"last_name"`
+	Email     string `json:"email"`
+}
+
 // RequisitionSummaryResponse is the list projection. It intentionally omits
 // lines and status history so list responses stay header-oriented.
 type RequisitionSummaryResponse struct {
-	ID                   string    `json:"id"`
-	ReferenceCode        string    `json:"reference_code"`
-	RequestedBy          string    `json:"requested_by"`
-	DepartmentID         string    `json:"department_id"`
-	Status               string    `json:"status"`
-	Priority             string    `json:"priority"`
-	NeededBy             string    `json:"needed_by"`
-	Justification        string    `json:"justification"`
-	TotalEstimatedAmount float64   `json:"total_estimated_amount"`
-	CreatedAt            time.Time `json:"created_at"`
-	UpdatedAt            time.Time `json:"updated_at"`
+	ID                   string                   `json:"id"`
+	ReferenceCode        string                   `json:"reference_code"`
+	RequestedBy          string                   `json:"requested_by"`
+	Owner                RequisitionOwnerResponse `json:"owner"`
+	DepartmentID         string                   `json:"department_id"`
+	Status               string                   `json:"status"`
+	Priority             string                   `json:"priority"`
+	NeededBy             string                   `json:"needed_by"`
+	Justification        string                   `json:"justification"`
+	TotalEstimatedAmount float64                  `json:"total_estimated_amount"`
+	CreatedAt            time.Time                `json:"created_at"`
+	UpdatedAt            time.Time                `json:"updated_at"`
 }
 
 type RequisitionLineResponse struct {
@@ -161,9 +170,15 @@ func RequisitionSummaryResponseFromDomain(summary *domain.RequisitionSummary) *R
 		return nil
 	}
 	return &RequisitionSummaryResponse{
-		ID:                   summary.ID,
-		ReferenceCode:        summary.ReferenceCode,
-		RequestedBy:          summary.RequestedBy,
+		ID:            summary.ID,
+		ReferenceCode: summary.ReferenceCode,
+		RequestedBy:   summary.RequestedBy,
+		Owner: RequisitionOwnerResponse{
+			ID:        summary.Owner.ID,
+			FirstName: summary.Owner.FirstName,
+			LastName:  summary.Owner.LastName,
+			Email:     summary.Owner.Email,
+		},
 		DepartmentID:         summary.DepartmentID,
 		Status:               summary.Status,
 		Priority:             summary.Priority,

@@ -30,9 +30,10 @@ func newRequisitionMockDB(t *testing.T) (*shareddb.DB, sqlmock.Sqlmock) {
 
 func summaryRows() *sqlmock.Rows {
 	return sqlmock.NewRows([]string{
-		"id", "reference_code", "requested_by", "department_id", "status",
-		"priority", "needed_by", "justification", "total_estimated_amount",
-		"created_at", "updated_at",
+		"id", "reference_code", "requested_by",
+		"owner_id", "owner_first_name", "owner_last_name", "owner_email",
+		"department_id", "status", "priority", "needed_by", "justification",
+		"total_estimated_amount", "created_at", "updated_at",
 	})
 }
 
@@ -65,10 +66,14 @@ func TestListRequisitionSummariesUsesOneQueryAndMapsTotals(t *testing.T) {
 	database, mock := newRequisitionMockDB(t)
 	now := time.Date(2026, 11, 5, 10, 0, 0, 0, time.UTC)
 	rows := summaryRows().
-		AddRow("req-2", "REQ-2026-10002", "usr-2", "dpt-1", "pending",
-			"medium", now.AddDate(0, 0, 5), "Office setup", int64(0), now, now).
-		AddRow("req-1", "REQ-2026-10001", "usr-1", "dpt-1", "approved",
-			"high", now.AddDate(0, 0, 3), "Laptops", int64(11500), now, now)
+		AddRow("req-2", "REQ-2026-10002", "usr-2",
+			"usr-2", "Jane", "Doe", "jane@example.com",
+			"dpt-1", "pending", "medium", now.AddDate(0, 0, 5), "Office setup",
+			int64(0), now, now).
+		AddRow("req-1", "REQ-2026-10001", "usr-1",
+			"usr-1", "John", "Smith", "john@example.com",
+			"dpt-1", "approved", "high", now.AddDate(0, 0, 3), "Laptops",
+			int64(11500), now, now)
 
 	mock.ExpectQuery(regexp.QuoteMeta(listRequisitionSummariesQuery)).
 		WithArgs(100, 0).
@@ -93,6 +98,10 @@ func TestListRequisitionSummariesUsesOneQueryAndMapsTotals(t *testing.T) {
 		got[1].Status != "approved" || got[1].Justification != "Laptops" {
 		t.Fatalf("header values not mapped: %+v", got[1])
 	}
+	if got[1].Owner.ID != "usr-1" || got[1].Owner.FirstName != "John" ||
+		got[1].Owner.LastName != "Smith" || got[1].Owner.Email != "john@example.com" {
+		t.Fatalf("owner values not mapped: %+v", got[1].Owner)
+	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatalf("unmet expectations: %v", err)
 	}
@@ -104,8 +113,10 @@ func TestListRequisitionSummariesByUserIDFiltersUserAndClamps(t *testing.T) {
 	database, mock := newRequisitionMockDB(t)
 	now := time.Date(2026, 11, 5, 10, 0, 0, 0, time.UTC)
 	rows := summaryRows().
-		AddRow("req-1", "REQ-2026-10001", "usr-123", "dpt-1", "pending",
-			"medium", now.AddDate(0, 0, 5), "Office setup", int64(150000), now, now)
+		AddRow("req-1", "REQ-2026-10001", "usr-123",
+			"usr-123", "Ada", "Obi", "ada@example.com",
+			"dpt-1", "pending", "medium", now.AddDate(0, 0, 5), "Office setup",
+			int64(150000), now, now)
 
 	mock.ExpectQuery(regexp.QuoteMeta(listRequisitionSummariesByUserIDQuery)).
 		WithArgs("usr-123", 10, 20).
@@ -118,6 +129,10 @@ func TestListRequisitionSummariesByUserIDFiltersUserAndClamps(t *testing.T) {
 	}
 	if len(got) != 1 || got[0].RequestedBy != "usr-123" {
 		t.Fatalf("summaries = %+v, want one summary for usr-123", got)
+	}
+	if got[0].Owner.ID != "usr-123" || got[0].Owner.FirstName != "Ada" ||
+		got[0].Owner.LastName != "Obi" || got[0].Owner.Email != "ada@example.com" {
+		t.Fatalf("owner values not mapped: %+v", got[0].Owner)
 	}
 	if got[0].TotalEstimatedAmount != 1500 {
 		t.Fatalf("total = %f, want 1500 major units", got[0].TotalEstimatedAmount)
