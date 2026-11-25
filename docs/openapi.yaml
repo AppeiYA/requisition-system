@@ -307,6 +307,13 @@ components:
                 updated_at:
                     type: string
             type: object
+        identityhttp.forgotPasswordRequest:
+            properties:
+                email:
+                    type: string
+            required:
+                - email
+            type: object
         identityhttp.loginRequest:
             properties:
                 email:
@@ -330,6 +337,16 @@ components:
                     type: string
             required:
                 - refresh_token
+            type: object
+        identityhttp.resetPasswordRequest:
+            properties:
+                password:
+                    type: string
+                token:
+                    type: string
+            required:
+                - password
+                - token
             type: object
         identityin.TokenResponse:
             properties:
@@ -1472,6 +1489,39 @@ paths:
             summary: Update user status
             tags:
                 - admin
+    /auth/forgot-password:
+        post:
+            description: Always returns the same response, whether or not the account exists, is active, or is throttled. No account information is revealed.
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/identityhttp.forgotPasswordRequest'
+                description: Email address
+                required: true
+                x-originalParamName: request
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: OK
+                "400":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.ErrorResponse'
+                    description: Validation error
+                "429":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Too many requests
+            summary: Request a password reset link
+            tags:
+                - identity
     /auth/login:
         post:
             description: Validates the given credentials and returns a new access/refresh token pair.
@@ -1605,6 +1655,39 @@ paths:
                                 $ref: '#/components/schemas/response.Response'
                     description: Invalid or expired refresh token
             summary: Refresh an access token
+            tags:
+                - identity
+    /auth/reset-password:
+        post:
+            description: Sets a new password using a single-use token from the reset email. Revokes all refresh sessions and does not issue new credentials.
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/identityhttp.resetPasswordRequest'
+                description: Reset token and new password
+                required: true
+                x-originalParamName: request
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: OK
+                "400":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.ErrorResponse'
+                    description: Validation error, weak password, or invalid/expired token
+                "429":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Too many requests
+            summary: Reset a password with a reset token
             tags:
                 - identity
     /categories:

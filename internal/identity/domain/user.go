@@ -165,6 +165,19 @@ func (u *User) IsActive() bool {
 	return u.status == ACTIVE
 }
 
+// ChangePassword replaces the user's password hash and records the update.
+// Callers are responsible for hashing the new password and for revoking the
+// existing sessions; this method only owns the aggregate state.
+func (u *User) ChangePassword(hash *PasswordHash) error {
+	if hash == nil {
+		return ErrInvalidPasswordHash
+	}
+	u.passwordHash = hash
+	now := time.Now()
+	u.updatedAt = &now
+	return nil
+}
+
 func (u *User) UpdateStatus(newStatus Status) error {
 	if !u.status.CanTransitionTo(newStatus) {
 		return ErrInvalidStatus

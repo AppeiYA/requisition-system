@@ -12,6 +12,7 @@ import (
 
 	adminout "github.com/AppeiYA/requisition-system/internal/admin/ports/out"
 	jwtadapter "github.com/AppeiYA/requisition-system/internal/identity/adapters/out/jwt"
+	identityout "github.com/AppeiYA/requisition-system/internal/identity/ports/out"
 	invitationout "github.com/AppeiYA/requisition-system/internal/invitation/ports/out"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/config"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/db"
@@ -143,6 +144,16 @@ func (a *App) Run() error {
 			MetricBase: "requisition.admin.invitation_revocations",
 			Unit:       "{revocation}",
 		},
+		telemetry.Operation{
+			Name:       identityout.OperationRequestPasswordReset,
+			MetricBase: "requisition.auth.password_reset_requests",
+			Unit:       "{request}",
+		},
+		telemetry.Operation{
+			Name:       identityout.OperationResetPassword,
+			MetricBase: "requisition.auth.password_reset_completions",
+			Unit:       "{completion}",
+		},
 	)
 	if err != nil {
 		return err
@@ -171,7 +182,21 @@ func (a *App) Run() error {
 	idGen := &generator.IDGenerator{}
 	redisCache := redis.NewCache(redisClient.Client())
 
-	identityModule := a.buildIdentity(cfg, baseRepo, redisCache, redisClient, txManager, accessTokenService, idGen)
+	// The asynq client is needed by the identity queue adapter, so it is
+	// created before the identity module is composed.
+	asynqClient := taskqueue.NewClient(redisClient)
+
+	identityModule := a.buildIdentity(
+		cfg,
+		baseRepo,
+		redisCache,
+		redisClient,
+		txManager,
+		accessTokenService,
+		idGen,
+		asynqClient,
+		operationTelemetry,
+	)
 
 	departmentModule := a.buildDepartment(baseRepo, idGen, redisCache)
 
@@ -187,8 +212,6 @@ func (a *App) Run() error {
 	)
 
 	analyticsModule := buildAnalytics(baseRepo, redisCache, cfg.App.AnalyticsSource)
-
-	asynqClient := taskqueue.NewClient(redisClient)
 
 	adminModule := a.buildAdminHandler(
 		cfg,

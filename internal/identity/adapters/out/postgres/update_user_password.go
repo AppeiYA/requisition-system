@@ -2,6 +2,7 @@ package identitypostgres
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/AppeiYA/requisition-system/internal/identity/domain"
 )
@@ -32,5 +33,8 @@ func (r *UserRepository) UpdateUserPassword(ctx context.Context, user *domain.Us
 		return ErrUserNotFound
 	}
 
-	return nil
+	// GetUserByID caches the whole user, including the password hash. Without
+	// this delete a reset could leave the old hash usable through the cache
+	// for up to five minutes.
+	return r.cache.Delete(ctx, fmt.Sprintf("%s%s", UserKeyPrefix, user.ID()))
 }

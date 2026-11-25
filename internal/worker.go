@@ -12,12 +12,15 @@ import (
 	adminTasks "github.com/AppeiYA/requisition-system/internal/admin/tasks"
 	analyticsworker "github.com/AppeiYA/requisition-system/internal/analytics/adapters/in/worker"
 	analyticspostgres "github.com/AppeiYA/requisition-system/internal/analytics/adapters/out/postgres"
+	identityout "github.com/AppeiYA/requisition-system/internal/identity/ports/out"
+	identitytasks "github.com/AppeiYA/requisition-system/internal/identity/tasks"
 	invitationworker "github.com/AppeiYA/requisition-system/internal/invitation/adapters/in/worker"
 	invitationpostgres "github.com/AppeiYA/requisition-system/internal/invitation/adapters/out/postgres"
 	invitationout "github.com/AppeiYA/requisition-system/internal/invitation/ports/out"
 	invitationusecase "github.com/AppeiYA/requisition-system/internal/invitation/usecase"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/config"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/db"
+	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/email"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/logger"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/redis"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/taskqueue"
@@ -109,6 +112,11 @@ func (w *Worker) Run() error {
 			MetricBase: "requisition.invitation.expirations",
 			Unit:       "{invitation}",
 		},
+		telemetry.Operation{
+			Name:       identityout.OperationSendPasswordResetEmail,
+			MetricBase: "requisition.auth.password_reset_emails",
+			Unit:       "{email}",
+		},
 	)
 	if err != nil {
 		return err
@@ -120,8 +128,15 @@ func (w *Worker) Run() error {
 	mux.Use(taskqueue.TraceMiddleware(), taskqueue.LoggingMiddleware())
 
 	invitationRepo := invitationpostgres.NewInvitationRepository(db.NewRepository(database))
-	adminModule := w.buildAdminWorker(cfg, invitationRepo, operationTelemetry)
+	// One sender instance is shared by both worker modules so they do not
+	// create separate instrumented HTTP clients.
+	emailSender := email.NewSender(cfg.Email)
+	adminModule := w.buildAdminWorker(cfg, invitationRepo, emailSender, operationTelemetry)
 	mux.HandleFunc(adminTasks.SendInvitationEmail, adminModule.SendMailHandler().Handle)
+
+	identityModule := w.buildIdentityWorker(cfg, database, emailSender, operationTelemetry)
+	mux.HandleFunc(identitytasks.SendPasswordResetEmail, identityModule.SendPasswordResetEmailHandler().Handle)
+	mux.HandleFunc(identitytasks.CleanupPasswordResetTokens, identityModule.CleanupPasswordResetTokensHandler().Handle)
 
 	expireInvitations := invitationusecase.NewExpireInvitationsUsecase(invitationRepo, operationTelemetry)
 	expireInvitationsHandler := invitationworker.NewExpireInvitationsHandler(expireInvitations)
@@ -136,6 +151,9 @@ func (w *Worker) Run() error {
 	w.server = taskqueue.NewServer(redisClient, cfg.Worker)
 	scheduler := taskqueue.NewScheduler(redisClient)
 	if _, err := scheduler.Register("*/15 * * * *", asynq.NewTask(invitationworker.ExpireInvitations, nil), asynq.Queue(cfg.Worker.Queue)); err != nil {
+		return err
+	}
+	if _, err := scheduler.Register("0 * * * *", asynq.NewTask(identitytasks.CleanupPasswordResetTokens, nil), asynq.Queue(cfg.Worker.Queue)); err != nil {
 		return err
 	}
 	if cfg.App.AnalyticsSource == "materialized" {

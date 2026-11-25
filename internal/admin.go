@@ -68,8 +68,13 @@ func (a *App) buildAdminHandler(
 	return admin.NewAdminModule(adminPortIn, adminHandler)
 }
 
-func (w *Worker) buildAdminWorker(cfg *config.Config, invitationRepo invitationout.InvitationRepository, telemetry adminout.Telemetry) *admin.AdminWorkerModule {
-	emailPort := adminemail.NewInvitationSender(email.NewSender(cfg.Email), cfg.Frontend)
+func (w *Worker) buildAdminWorker(
+	cfg *config.Config,
+	invitationRepo invitationout.InvitationRepository,
+	sender *email.Sender,
+	telemetry adminout.Telemetry,
+) *admin.AdminWorkerModule {
+	emailPort := adminemail.NewInvitationSender(sender, cfg.Frontend)
 
 	sendInvitationEmailUsecase := adminusecase.NewSendInvitationEmailUsecase(emailPort, telemetry)
 
