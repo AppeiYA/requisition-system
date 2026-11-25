@@ -26,6 +26,10 @@ type RequisitionSummaryModel struct {
 	ID                   string    `db:"id"`
 	ReferenceCode        string    `db:"reference_code"`
 	RequestedBy          string    `db:"requested_by"`
+	OwnerID              string    `db:"owner_id"`
+	OwnerFirstName       string    `db:"owner_first_name"`
+	OwnerLastName        string    `db:"owner_last_name"`
+	OwnerEmail           string    `db:"owner_email"`
 	DepartmentID         string    `db:"department_id"`
 	Status               string    `db:"status"`
 	Priority             string    `db:"priority"`
@@ -42,9 +46,15 @@ func (m RequisitionSummaryModel) ToDomain() (*requisitiondomain.RequisitionSumma
 		return nil, err
 	}
 	return &requisitiondomain.RequisitionSummary{
-		ID:                   m.ID,
-		ReferenceCode:        m.ReferenceCode,
-		RequestedBy:          m.RequestedBy,
+		ID:            m.ID,
+		ReferenceCode: m.ReferenceCode,
+		RequestedBy:   m.RequestedBy,
+		Owner: requisitiondomain.RequisitionOwner{
+			ID:        m.OwnerID,
+			FirstName: m.OwnerFirstName,
+			LastName:  m.OwnerLastName,
+			Email:     m.OwnerEmail,
+		},
 		DepartmentID:         m.DepartmentID,
 		Status:               m.Status,
 		Priority:             m.Priority,

@@ -82,12 +82,6 @@ func (*createRequisitionRepo) UpdateRequisition(context.Context, *requisitiondom
 func (*createRequisitionRepo) UpdateRequisitionAggregate(context.Context, *requisitiondomain.Requisition) error {
 	return nil
 }
-func (*createRequisitionRepo) ListRequisitionsByUserID(context.Context, string, int, int) ([]*requisitiondomain.Requisition, error) {
-	return nil, nil
-}
-func (*createRequisitionRepo) ListRequisitions(context.Context, int, int) ([]*requisitiondomain.Requisition, error) {
-	return nil, nil
-}
 func (r *createRequisitionRepo) ListRequisitionSummaries(_ context.Context, limit int, offset int) ([]*requisitiondomain.RequisitionSummary, error) {
 	r.listCalled = true
 	r.summaryLimit = limit

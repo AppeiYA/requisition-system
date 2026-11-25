@@ -534,6 +534,17 @@ components:
                 requested_item_id:
                     type: string
             type: object
+        requisitionhttp.RequisitionOwnerResponse:
+            properties:
+                email:
+                    type: string
+                first_name:
+                    type: string
+                id:
+                    type: string
+                last_name:
+                    type: string
+            type: object
         requisitionhttp.RequisitionResponse:
             properties:
                 created_at:
@@ -598,6 +609,8 @@ components:
                     type: string
                 needed_by:
                     type: string
+                owner:
+                    $ref: '#/components/schemas/requisitionhttp.RequisitionOwnerResponse'
                 priority:
                     type: string
                 reference_code:
@@ -2579,7 +2592,7 @@ paths:
                 - item
     /requisitions:
         get:
-            description: Returns header summaries for requisitions created by the authenticated user, ordered by creation time (newest first), including the derived total but excluding lines and status history. Use GET /requisitions/{id} for the full detail. Amounts are expressed in major currency units (naira for NGN) while stored internally as minor units. Requires an access token.
+            description: Returns header summaries for requisitions created by the authenticated user, ordered by creation time (newest first), including the requesting user's owner details and the derived total but excluding lines and status history. Use GET /requisitions/{id} for the full detail. Amounts are expressed in major currency units (naira for NGN) while stored internally as minor units. Requires an access token.
             parameters:
                 - description: Maximum number of requisitions to return (default 100, max 100)
                   in: query
@@ -2849,7 +2862,7 @@ paths:
                 - requisition
     /requisitions/all:
         get:
-            description: Returns header summaries for all requisitions, ordered by creation time (newest first), including the derived total but excluding lines and status history. Use GET /requisitions/{id} for the full detail. Amounts are expressed in major currency units (naira for NGN) while stored internally as minor units. Requires an access token and admin role.
+            description: Returns header summaries for all requisitions, ordered by creation time (newest first), including the requesting user's owner details and the derived total but excluding lines and status history. Use GET /requisitions/{id} for the full detail. Amounts are expressed in major currency units (naira for NGN) while stored internally as minor units. Requires an access token and admin role.
             parameters:
                 - description: Maximum number of requisitions to return (default 100, max 100)
                   in: query

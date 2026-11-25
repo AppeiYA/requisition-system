@@ -14,8 +14,6 @@ type RequisitionRepository interface {
 	// already holds the requisition header lock so its persisted-line snapshot
 	// is stable.
 	UpdateRequisitionAggregate(ctx context.Context, requisition *domain.Requisition) error
-	ListRequisitionsByUserID(ctx context.Context, userID string, limit int, offset int) ([]*domain.Requisition, error)
-	ListRequisitions(ctx context.Context, limit int, offset int) ([]*domain.Requisition, error)
 	ListRequisitionSummariesByUserID(ctx context.Context, userID string, limit int, offset int) ([]*domain.RequisitionSummary, error)
 	ListRequisitionSummaries(ctx context.Context, limit int, offset int) ([]*domain.RequisitionSummary, error)
 }

@@ -153,9 +153,15 @@ func validRequisition() *domain.Requisition {
 func validRequisitionSummary() *domain.RequisitionSummary {
 	now := time.Now().UTC()
 	return &domain.RequisitionSummary{
-		ID:                   "req_123",
-		ReferenceCode:        "REQ-2026-10001",
-		RequestedBy:          "usr_123",
+		ID:            "req_123",
+		ReferenceCode: "REQ-2026-10001",
+		RequestedBy:   "usr_123",
+		Owner: domain.RequisitionOwner{
+			ID:        "usr_123",
+			FirstName: "Ada",
+			LastName:  "Obi",
+			Email:     "ada@example.com",
+		},
 		DepartmentID:         "dpt_123",
 		Status:               "pending",
 		Priority:             "medium",
@@ -572,6 +578,10 @@ func Test_ListMyRequisitions_ReturnsSummariesOnly(t *testing.T) {
 	if resp.Data[0].ID != "req_123" || resp.Data[0].TotalEstimatedAmount != 11500 {
 		t.Fatalf("unexpected summary response: %+v", resp.Data[0])
 	}
+	if resp.Data[0].Owner.ID != "usr_123" || resp.Data[0].Owner.FirstName != "Ada" ||
+		resp.Data[0].Owner.LastName != "Obi" || resp.Data[0].Owner.Email != "ada@example.com" {
+		t.Fatalf("unexpected owner response: %+v", resp.Data[0].Owner)
+	}
 
 	var raw struct {
 		Data []map[string]json.RawMessage `json:"data"`
@@ -646,6 +656,9 @@ func Test_ListAllRequisitions_AdminReturnsSummariesOnly(t *testing.T) {
 	}
 	if _, exists := raw.Data[0]["total_estimated_amount"]; !exists {
 		t.Fatal("list response must include total_estimated_amount")
+	}
+	if _, exists := raw.Data[0]["owner"]; !exists {
+		t.Fatal("list response must include owner")
 	}
 }
 
