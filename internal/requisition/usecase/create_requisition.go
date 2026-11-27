@@ -18,7 +18,6 @@ var (
 	ErrItemNotInCategory  = customerrors.NewBadRequestError("selected item does not belong to the selected category")
 	ErrInactiveItem       = customerrors.NewBadRequestError("selected item is inactive")
 	ErrInactiveMembership = customerrors.NewForbiddenError("department membership is not active")
-	ErrDepartmentMismatch = customerrors.NewForbiddenError("requisition department does not match the authenticated user's department")
 	// ErrInvalidStagedUpload is returned before the transaction starts for
 	// syntactically bad or repeated upload tokens. The attachment module maps
 	// unavailable tokens to the same generic error so ownership stays hidden.
@@ -72,16 +71,7 @@ func (uc *CreateRequisitionUsecase) Execute(ctx context.Context, cmd requisition
 		return nil, ErrInactiveMembership
 	}
 
-	departmentID := cmd.DepartmentID
-	if departmentID == "" {
-		departmentID = membership.DepartmentID()
-	}
-	if !strings.HasPrefix(departmentID, domain.DepartmentPrefixID) {
-		return nil, domain.ErrInvalidDepartmentID
-	}
-	if departmentID != membership.DepartmentID() {
-		return nil, ErrDepartmentMismatch
-	}
+	departmentID := membership.DepartmentID()
 
 	lines := cmd.Lines
 	if len(lines) == 0 {

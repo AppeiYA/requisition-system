@@ -120,7 +120,6 @@ func Test_UpdateRequisition_DateOnlyNeededBy(t *testing.T) {
 	update := &stubUpdateRequisition{res: validRequisition()}
 	router := newRequisitionUpdateTestRouter(update)
 	body := `{
-		"department_id":"dpt_123",
 		"priority":"medium",
 		"needed_by":"` + time.Now().UTC().AddDate(0, 0, 5).Format(dateOnlyLayout) + `",
 		"justification":"Office setup",

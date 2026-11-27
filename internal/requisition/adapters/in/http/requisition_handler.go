@@ -78,7 +78,7 @@ func (h *RequisitionHandler) update(c *gin.Context) {
 		lines = append(lines, commandLine)
 	}
 	updated, err := h.portIn.UpdateRequisitionUsecase.Execute(c.Request.Context(), requisitionin.UpdateRequisitionCommand{
-		RequisitionID: requisitionID, UserID: userID, DepartmentID: request.DepartmentID,
+		RequisitionID: requisitionID, UserID: userID,
 		Lines: lines, Justification: request.Justification, Priority: request.Priority,
 		NeededBy: request.NeededBy.Time(),
 	})
@@ -137,7 +137,6 @@ func (h *RequisitionHandler) create(c *gin.Context) {
 
 	requisition, err := h.portIn.CreateRequisitionUsecase.Execute(c.Request.Context(), requisitionin.CreateRequisitionCommand{
 		UserID:        userID,
-		DepartmentID:  request.DepartmentID,
 		Lines:         lines,
 		Justification: request.Justification,
 		Priority:      request.Priority,
@@ -280,7 +279,7 @@ func validateUpdateRequisitionRequest(request UpdateRequisitionRequest) []respon
 		})
 	}
 	details := validateCreateRequisitionRequest(CreateRequisitionRequest{
-		DepartmentID: request.DepartmentID, Priority: request.Priority,
+		Priority: request.Priority,
 		NeededBy: request.NeededBy, Justification: request.Justification,
 		Lines: createLines,
 	})
@@ -340,11 +339,6 @@ func validateCreateRequisitionRequest(request CreateRequisitionRequest) []respon
 	if len(request.Lines) == 0 {
 		details = append(details, response.FieldError{
 			Field: "lines", Message: "at least one requisition line is required",
-		})
-	}
-	if !strings.HasPrefix(request.DepartmentID, domain.DepartmentPrefixID) {
-		details = append(details, response.FieldError{
-			Field: "department_id", Message: "must be a valid department ID",
 		})
 	}
 	if request.NeededBy != "" && isNotFutureDate(request.NeededBy.Time()) {

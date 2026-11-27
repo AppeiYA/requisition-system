@@ -46,9 +46,9 @@ func (d Date) Time() time.Time {
 }
 
 // CreateRequisitionRequest is the requisition create payload. Amounts are
-// expressed in major currency units (naira for NGN).
+// expressed in major currency units (naira for NGN). The requisition is always
+// created for the authenticated user's department, resolved on the server.
 type CreateRequisitionRequest struct {
-	DepartmentID  string                         `json:"department_id" binding:"required" minLength:"1" example:"dpt_123"`
 	Priority      string                         `json:"priority" binding:"omitempty,oneof=low normal medium high urgent" example:"medium"`
 	NeededBy      Date                           `json:"needed_by" binding:"required" example:"2026-11-15"`
 	Justification string                         `json:"justification" binding:"required" minLength:"1" maxLength:"500" example:"Replacement laptops for the new hires"`
@@ -80,7 +80,6 @@ type CreateRequestedItemRequest struct {
 // requisition. Lines that already exist include requisition_item_id so their
 // identity can be preserved; lines without it are treated as new.
 type UpdateRequisitionRequest struct {
-	DepartmentID  string                         `json:"department_id" binding:"required" minLength:"1" example:"dpt_123"`
 	Priority      string                         `json:"priority" binding:"omitempty,oneof=low normal medium high urgent" example:"medium"`
 	NeededBy      Date                           `json:"needed_by" binding:"required" example:"2026-11-15"`
 	Justification string                         `json:"justification" binding:"required" minLength:"1" maxLength:"500" example:"Replacement laptops for the new hires"`

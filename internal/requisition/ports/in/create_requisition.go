@@ -10,7 +10,6 @@ import (
 type CreateRequisitionCommand struct {
 	UserID        string
 	ReferenceCode string
-	DepartmentID  string
 	Lines         []CreateRequisitionLine
 	Justification string
 	Priority      string
