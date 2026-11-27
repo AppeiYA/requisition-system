@@ -53,7 +53,7 @@ func LoadAttachmentConfig() (*AttachmentConfig, error) {
 		return nil, fmt.Errorf("ATTACHMENT_LOCAL_ROOT must be a directory")
 	}
 
-	maxSize, err := getIntEnv("ATTACHMENT_MAX_SIZE_BYTES", 10<<20)
+	maxSize, err := getIntEnv("ATTACHMENT_MAX_SIZE_BYTES", 3<<20)
 	if err != nil {
 		return nil, err
 	}
