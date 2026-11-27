@@ -39,3 +39,13 @@ func NewContentType(value string) (ContentType, error) {
 func (ct ContentType) String() string {
 	return string(ct)
 }
+
+// IsInlineSafe reports whether the browser may display the type inline.
+// Everything else is served with a download disposition to prevent stored
+// XSS from an uploaded document.
+func (ct ContentType) IsInlineSafe() bool {
+	return ct == ContentTypePDF ||
+		ct == ContentTypePNG ||
+		ct == ContentTypeJPEG ||
+		ct == ContentTypeGIF
+}

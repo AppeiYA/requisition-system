@@ -115,24 +115,34 @@ func Load() (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
+	passwordResetConfig, err := LoadPasswordResetConfig()
+	if err != nil {
+		return nil, err
+	}
+	attachmentConfig, err := LoadAttachmentConfig()
+	if err != nil {
+		return nil, err
+	}
 	logConfig, err := LoadLogConfig(appConfig.Env)
 	if err != nil {
 		return nil, err
 	}
 
 	return &Config{
-		App:       *appConfig,
-		API:       *apiConfig,
-		DB:        *dbConfig,
-		Redis:     *redisConfig,
-		Server:    *serverConfig,
-		JWT:       *jwtConfig,
-		Email:     *emailConfig,
-		Frontend:  *frontendConfig,
-		Worker:    *workerConfig,
-		Telemetry: *telemetryConfig,
-		RateLimit: *rateLimitConfig,
-		Log:       *logConfig,
+		App:           *appConfig,
+		API:           *apiConfig,
+		DB:            *dbConfig,
+		Redis:         *redisConfig,
+		Server:        *serverConfig,
+		JWT:           *jwtConfig,
+		Email:         *emailConfig,
+		Frontend:      *frontendConfig,
+		Worker:        *workerConfig,
+		Telemetry:     *telemetryConfig,
+		RateLimit:     *rateLimitConfig,
+		PasswordReset: *passwordResetConfig,
+		Attachment:    *attachmentConfig,
+		Log:           *logConfig,
 	}, nil
 }
 

@@ -11,6 +11,7 @@ import (
 	identityredis "github.com/AppeiYA/requisition-system/internal/identity/adapters/out/redis"
 	identitydomain "github.com/AppeiYA/requisition-system/internal/identity/domain"
 	identityin "github.com/AppeiYA/requisition-system/internal/identity/ports/in"
+	identitytasks "github.com/AppeiYA/requisition-system/internal/identity/tasks"
 	identityusecase "github.com/AppeiYA/requisition-system/internal/identity/usecase"
 	shareddomain "github.com/AppeiYA/requisition-system/internal/shared/domain"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/config"
@@ -23,12 +24,32 @@ import (
 )
 
 type IdentityHTTP struct {
-	Router                   *gin.Engine
-	UserRepository           *identitypostgres.UserRepository
-	AccessTokens             *jwtadapter.JWTService
-	PasswordHasher           *hasher.PasswordHasher
-	RefreshSessionRepository *identityredis.RefreshSessionRepository
-	RefreshTokenGenerator    *generator.TokenGenerator
+	Router                       *gin.Engine
+	UserRepository               *identitypostgres.UserRepository
+	PasswordResetTokenRepository *identitypostgres.PasswordResetTokenRepository
+	AccessTokens                 *jwtadapter.JWTService
+	PasswordHasher               *hasher.PasswordHasher
+	RefreshSessionRepository     *identityredis.RefreshSessionRepository
+	RefreshTokenGenerator        *generator.TokenGenerator
+	PasswordResetQueue           *RecordingPasswordResetQueue
+	PasswordResetConfig          config.PasswordResetConfig
+}
+
+// RecordingPasswordResetQueue captures queued reset emails so integration
+// tests can read the raw token without contacting Resend or asynq.
+type RecordingPasswordResetQueue struct {
+	Payloads []identitytasks.PasswordResetEmailPayload
+}
+
+func (q *RecordingPasswordResetQueue) EnqueuePasswordResetEmail(_ context.Context, payload identitytasks.PasswordResetEmailPayload) error {
+	q.Payloads = append(q.Payloads, payload)
+	return nil
+}
+
+type noopIdentityTelemetry struct{}
+
+func (noopIdentityTelemetry) Measure(ctx context.Context, _ string, fn func(context.Context) error) error {
+	return fn(ctx)
 }
 
 type IdentityUserFixture struct {
@@ -192,6 +213,14 @@ func (s *Suite) SetupIdentityHTTP(t *testing.T) *IdentityHTTP {
 	cache := redisinfra.NewCache(redisResource.Client)
 	baseRepository := appdb.NewRepository(s.AppDB)
 	userRepository := identitypostgres.NewUserRepository(baseRepository, cache)
+	passwordResetTokenRepository := identitypostgres.NewPasswordResetTokenRepository(baseRepository)
+	passwordResetConfig := config.PasswordResetConfig{
+		TokenTTL:         30 * time.Minute,
+		RequestCooldown:  0, // tests control timing through fixtures
+		MaxPerHour:       0,
+		CleanupRetention: 7 * 24 * time.Hour,
+	}
+	passwordResetQueue := &RecordingPasswordResetQueue{}
 
 	jwtConfig := config.JWTConfig{
 		Secret:          "integration-test-secret-long-enough",
@@ -235,6 +264,27 @@ func (s *Suite) SetupIdentityHTTP(t *testing.T) *IdentityHTTP {
 	getUserByEmailUsecase := identityusecase.NewGetUserByEmailUsecase(userRepository)
 	authMiddleware := identityhttp.NewAuthMiddleware(accessTokens, userRepository)
 
+	txManager := appdb.NewTransactionManager(s.AppDB)
+	requestPasswordResetUsecase := identityusecase.NewRequestPasswordResetUsecase(
+		userRepository,
+		passwordResetTokenRepository,
+		passwordResetQueue,
+		refreshTokenGenerator,
+		&generator.IDGenerator{},
+		txManager,
+		passwordResetConfig,
+		noopIdentityTelemetry{},
+	)
+	resetPasswordUsecase := identityusecase.NewResetPasswordUsecase(
+		userRepository,
+		passwordResetTokenRepository,
+		refreshSessionRepository,
+		refreshTokenGenerator,
+		passwordHasher,
+		txManager,
+		noopIdentityTelemetry{},
+	)
+
 	identityPortIn := identityin.NewIdentityPortIn(
 		registerUsecase,
 		getUserByEmailUsecase,
@@ -242,15 +292,21 @@ func (s *Suite) SetupIdentityHTTP(t *testing.T) *IdentityHTTP {
 		logoutUsecase,
 		getMeUsecase,
 		refreshUsecase,
+		requestPasswordResetUsecase,
+		resetPasswordUsecase,
 	)
 	handler := identityhttp.NewHandler(identityPortIn, authMiddleware)
 	handler.SetRateLimiter(ratelimit.New(redisResource.Client), config.RateLimitConfig{
-		LoginLimit:    5,
-		LoginWindow:   15 * time.Minute,
-		RefreshLimit:  10,
-		RefreshWindow: time.Minute,
-		LogoutLimit:   20,
-		LogoutWindow:  time.Minute,
+		LoginLimit:           5,
+		LoginWindow:          15 * time.Minute,
+		RefreshLimit:         10,
+		RefreshWindow:        time.Minute,
+		LogoutLimit:          20,
+		LogoutWindow:         time.Minute,
+		ForgotPasswordLimit:  5,
+		ForgotPasswordWindow: 15 * time.Minute,
+		ResetPasswordLimit:   10,
+		ResetPasswordWindow:  15 * time.Minute,
 	})
 
 	gin.SetMode(gin.TestMode)
@@ -258,11 +314,14 @@ func (s *Suite) SetupIdentityHTTP(t *testing.T) *IdentityHTTP {
 	handler.Register(router.Group("/api/v1"))
 
 	return &IdentityHTTP{
-		Router:                   router,
-		UserRepository:           userRepository,
-		AccessTokens:             accessTokens,
-		PasswordHasher:           passwordHasher,
-		RefreshSessionRepository: refreshSessionRepository,
-		RefreshTokenGenerator:    refreshTokenGenerator,
+		Router:                       router,
+		UserRepository:               userRepository,
+		PasswordResetTokenRepository: passwordResetTokenRepository,
+		AccessTokens:                 accessTokens,
+		PasswordHasher:               passwordHasher,
+		RefreshSessionRepository:     refreshSessionRepository,
+		RefreshTokenGenerator:        refreshTokenGenerator,
+		PasswordResetQueue:           passwordResetQueue,
+		PasswordResetConfig:          passwordResetConfig,
 	}
 }

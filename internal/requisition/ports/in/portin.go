@@ -6,6 +6,7 @@ type RequisitionPortIn struct {
 	ListRequisitionsByUserUsecase ListRequisitionsByUserUsecaseInt
 	ListRequisitionsUsecase       ListRequisitionsUsecaseInt
 	GetRequisitionUsecase         GetRequisitionUsecaseInt
+	GetRequisitionItemUsecase     GetRequisitionItemUsecaseInt
 	TransitionRequisitionUsecase  TransitionRequisitionUsecaseInt
 }
 
@@ -15,6 +16,7 @@ func NewRequisitionPortIn(
 	listRequisitionsByUserUsecase ListRequisitionsByUserUsecaseInt,
 	listRequisitionsUsecase ListRequisitionsUsecaseInt,
 	getRequisitionUsecase GetRequisitionUsecaseInt,
+	getRequisitionItemUsecase GetRequisitionItemUsecaseInt,
 	transitionRequisitionUsecase TransitionRequisitionUsecaseInt,
 ) *RequisitionPortIn {
 	return &RequisitionPortIn{
@@ -23,6 +25,7 @@ func NewRequisitionPortIn(
 		ListRequisitionsByUserUsecase: listRequisitionsByUserUsecase,
 		ListRequisitionsUsecase:       listRequisitionsUsecase,
 		GetRequisitionUsecase:         getRequisitionUsecase,
+		GetRequisitionItemUsecase:     getRequisitionItemUsecase,
 		TransitionRequisitionUsecase:  transitionRequisitionUsecase,
 	}
 }

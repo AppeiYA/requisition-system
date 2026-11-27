@@ -53,6 +53,8 @@ type CreateRequisitionRequest struct {
 	NeededBy      Date                           `json:"needed_by" binding:"required" example:"2026-11-15"`
 	Justification string                         `json:"justification" binding:"required" minLength:"1" maxLength:"500" example:"Replacement laptops for the new hires"`
 	Lines         []CreateRequisitionLineRequest `json:"lines" binding:"required,min=1,dive"`
+	// UploadIDs reference files previously staged through POST /api/v1/uploads.
+	UploadIDs []string `json:"upload_ids" example:"upl-123"`
 }
 
 // CreateRequisitionLineRequest is one line in a requisition. Exactly one of
@@ -63,6 +65,7 @@ type CreateRequisitionLineRequest struct {
 	Quantity            int                         `json:"quantity" minimum:"1" maximum:"1000" example:"2"`
 	EstimatedUnitAmount float64                     `json:"estimated_unit_amount" example:"50000"`
 	Notes               string                      `json:"notes" example:"Optional note"`
+	UploadIDs           []string                    `json:"upload_ids" example:"upl-123"`
 }
 
 // CreateRequestedItemRequest is the free-filled item payload for a line that

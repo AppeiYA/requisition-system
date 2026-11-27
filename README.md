@@ -11,12 +11,22 @@ hexagonal architecture (ports & adapters) per feature module.
 
 - **Authentication** – login, refresh, logout, `me`; access tokens (JWT) plus rotating
   refresh sessions stored in Redis; role-based access (`admin`, member).
+- **Password reset** – self-service reset links emailed through
+  [Resend](https://resend.com); single-use tokens with a 30-minute lifetime,
+  generic responses that do not reveal whether an account exists, and automatic
+  revocation of all refresh sessions on success.
 - **Invitations** – admins invite staff by email; the invitee accepts via a single-use,
   24h link delivered through [Resend](https://resend.com).
 - **Departments** – create and list departments with a unique 4-letter code, and manage
   department memberships (job titles).
 - **Item categories** – admins create and update categories; authenticated users list
   and read them. Default categories are provided as a seed.
+- **Attachments** – authenticated users can stage files before a requisition exists
+  and add files later to a requisition or requisition line. Staged files are owned by
+  the uploader and expire if they are not claimed. Metadata lives in PostgreSQL and
+  bytes live behind a storage port (`local` disk driver today); content type is
+  detected from the file bytes, and permanent access follows the parent requisition's
+  rules.
 - **API documentation** – OpenAPI 3 spec served by Scalar at `/api/v1/docs`.
 
 ## Tech stack
@@ -39,6 +49,7 @@ hexagonal architecture (ports & adapters) per feature module.
 internal/
 ├── identity/       # auth, users, roles
 ├── department/     # departments & memberships
+├── attachment/     # file metadata, storage port, upload/download/delete
 ├── invitation/     # invitations lifecycle
 ├── admin/          # admin-only actions (invite members, manage users)
 ├── shared/         # config, db, redis, email, jwt, response, telemetry
@@ -56,7 +67,7 @@ place that knows the concrete implementations.
 - Go 1.26+
 - PostgreSQL 14+
 - Redis 6+
-- A [Resend](https://resend.com) API key (for invitation emails)
+- A [Resend](https://resend.com) API key (for invitation and password-reset emails)
 
 ## Quick start
 
@@ -78,7 +89,7 @@ go run ./migrations -seed
 go run ./cmd/api
 
 # 6. In a second terminal, run the worker (drains background tasks,
-#    e.g. sending invitation emails)
+#    e.g. sending invitation/password-reset emails and cleaning up spent tokens)
 go run ./cmd/worker
 ```
 
@@ -130,6 +141,8 @@ Base URL: `http://localhost:8080/api/v1` — interactive docs at
 | POST   | `/api/v1/auth/login`        | –            | Login, returns access token + refresh token |
 | POST   | `/api/v1/auth/refresh`      | –            | Rotate the refresh session |
 | POST   | `/api/v1/auth/logout`       | –            | Revoke the refresh session |
+| POST   | `/api/v1/auth/forgot-password` | –            | Send a password-reset link (always generic, gated by `PASSWORD_RESET_ENABLED`) |
+| POST   | `/api/v1/auth/reset-password`  | –            | Set a new password with a single-use token; revokes all refresh sessions |
 | GET    | `/api/v1/auth/me`           | access token | Current user |
 | GET    | `/api/v1/invitations/:token/validate` | – | Check an invitation link |
 | POST   | `/api/v1/invitations/:token/accept`   | – | Accept an invitation and register |
@@ -159,6 +172,12 @@ Base URL: `http://localhost:8080/api/v1` — interactive docs at
 | PATCH  | `/api/v1/items/:id/activate`   | admin | Activate an item |
 | PATCH  | `/api/v1/items/:id/deactivate` | admin | Deactivate an item |
 | PATCH  | `/api/v1/requisitions/:id` | access token | Update an owned pending requisition |
+| POST   | `/api/v1/uploads`          | access token | Stage a file before creating a requisition (multipart: `file`); max 10 MiB by default |
+| POST   | `/api/v1/attachments`      | access token | Upload a file to an existing parent (multipart: `file`, `ref_name`, `ref_id`); max 10 MiB by default |
+| GET    | `/api/v1/attachments`      | access token | List a parent's attachments (`ref_name`, `ref_id`, paginated) |
+| GET    | `/api/v1/attachments/:id`  | access token | Get attachment metadata, including its content URL |
+| GET    | `/api/v1/attachments/:id/content` | access token | Stream bytes (supports `Range`), or redirect to a signed URL |
+| DELETE | `/api/v1/attachments/:id`  | access token | Delete an attachment (uploader or admin) |
 
 Authenticated requests need `Authorization: Bearer <access token>`.
 
@@ -210,6 +229,38 @@ users are refused with `403` even while their access token is still valid, and
 a demoted admin loses admin routes immediately. Revoking sessions invalidates
 refresh tokens; existing access tokens expire within their 15-minute TTL.
 
+### Password reset
+
+The two self-service endpoints work as follows:
+
+1. `POST /auth/forgot-password` takes an email address. Unknown, inactive and
+   throttled addresses all receive the same `200` response and the same message;
+   no account information, token or email address is returned. A valid active
+   account gets a hashed token row in `password_reset_tokens` and an
+   `identity:send-password-reset-email` task on the queue. The raw token is
+   never stored — only its SHA-256 hash is.
+2. The worker sends a link built from `FRONTEND_BASE_URL` and
+   `FRONTEND_PASSWORD_RESET_PATH`, with the raw token in the `?token=` query
+   parameter. Each request invalidates the previous active token, so the newest
+   email is always the one that works.
+3. `POST /auth/reset-password` takes `{ "token": "…", "password": "…" }` in the
+   JSON body. The token is consumed atomically, so it can only be used once;
+   unknown, expired, spent, superseded or wrong-user tokens all return the same
+   generic `400` ("invalid or expired password reset token"). A weak password
+   is rejected by the existing password policy *before* the token is consumed,
+   leaving it usable.
+4. A successful reset writes the new password hash, invalidates any other
+   active tokens and revokes all refresh sessions in the same transaction. The
+   cached user row is invalidated too, and no access or refresh token is
+   issued — the user signs in normally with the new password. If session
+   revocation fails, the transaction rolls back and the token stays usable.
+
+Reset requests are limited by client IP (`RATE_LIMIT_FORGOT_PASSWORD_*` and
+`RATE_LIMIT_RESET_PASSWORD_*`) and per account (`PASSWORD_RESET_REQUEST_COOLDOWN`
+and `PASSWORD_RESET_MAX_PER_HOUR`). Throttled forgot-password requests still
+return the generic success response. Set `PASSWORD_RESET_ENABLED=false` to hide
+both routes until the frontend page is ready.
+
 ## Configuration
 
 All configuration comes from environment variables (a local `.env` is loaded
@@ -247,24 +298,92 @@ automatically). Required variables have no default and stop the app at boot.
 | `JWT_ACCESS_TOKEN_TTL` | – | `15m` | Access-token lifetime |
 | `JWT_REFRESH_TOKEN_TTL` | – | `168h` | Refresh-token lifetime; must exceed the access TTL |
 | `JWT_LEEWAY` | – | `30s` | Clock-skew leeway for token validation |
+| `PASSWORD_RESET_ENABLED` | – | `true` | Register the forgot/reset routes |
+| `PASSWORD_RESET_TOKEN_TTL` | – | `30m` | Reset-link lifetime; must be positive |
+| `PASSWORD_RESET_REQUEST_COOLDOWN` | – | `1m` | Minimum gap between reset emails for one account |
+| `PASSWORD_RESET_MAX_PER_HOUR` | – | `5` | Maximum reset requests per account per rolling hour |
+| `PASSWORD_RESET_CLEANUP_RETENTION` | – | `168h` | How long spent token rows are kept; at least the token TTL |
+| `ATTACHMENT_STORAGE_DRIVER` | – | `local` | Storage driver: `local` or `s3` (S3-compatible) |
+| `ATTACHMENT_LOCAL_ROOT` | – | `./var/attachments` | Disk root for `local`; mount a volume here in production |
+| `ATTACHMENT_MAX_SIZE_BYTES` | – | `10485760` | Per-file cap (10 MiB), enforced in HTTP and in the use case |
+| `ATTACHMENT_MAX_PER_REF` | – | `10` | Maximum attachments per parent |
+| `ATTACHMENT_SIGNED_URL_TTL` | – | `5m` | Lifetime of a signed download URL |
+| `STAGED_UPLOAD_TTL` | – | `24h` | How long a parentless upload can be claimed by requisition creation (`ATTACHMENT_STAGING_TTL` is a legacy alias) |
+| `STAGED_UPLOAD_MAX_PENDING_PER_USER` | – | `20` | Maximum unexpired staged uploads per user |
+| `STAGED_UPLOAD_MAX_BYTES_PER_USER` | – | `0` | Maximum staged bytes per user; `0` disables the byte cap |
+| `ATTACHMENT_RECONCILE_BATCH_SIZE` | – | `50` | Maximum due reconciliation events per worker sweep |
+| `ATTACHMENT_RECONCILE_MAX_ATTEMPTS` | – | `5` | Attempts before a reconciliation event is marked dead |
+| `ATTACHMENT_RECONCILE_BACKOFF` | – | `1m` | Base backoff; retries use exponential delays |
+| `ATTACHMENT_RECONCILE_SCHEDULE` | – | `@every 15s` | asynq cronspec for reconciliation sweeps |
+| `ATTACHMENT_RECONCILE_STUCK_AFTER` | – | `15m` | Requeue attachments left in `processing` longer than this |
+| `ATTACHMENT_CLEANUP_SCHEDULE` | – | `@every 5m` | asynq cronspec for staged-upload cleanup sweeps |
+| `ATTACHMENT_S3_BUCKET` | with `s3` | – | S3 bucket name |
+| `ATTACHMENT_S3_REGION` | with `s3` and no endpoint | – | AWS region; optional when a custom endpoint is set |
+| `ATTACHMENT_S3_ENDPOINT` | – | – | Custom endpoint for MinIO/R2 |
+| `ATTACHMENT_S3_ACCESS_KEY_ID` / `ATTACHMENT_S3_SECRET_ACCESS_KEY` | – | – | Set both together, or leave both empty to use a task role |
+| `ATTACHMENT_S3_FORCE_PATH_STYLE` | – | `false` | MinIO path-style addressing |
+| `ATTACHMENT_S3_USE_SSL` | – | `true` | Scheme for a custom endpoint |
+| `RATE_LIMIT_LOGIN_MAX` | – | `5` | Login attempts per client IP per window |
+| `RATE_LIMIT_LOGIN_WINDOW` | – | `15m` | Login rate-limit window |
+| `RATE_LIMIT_REFRESH_MAX` | – | `10` | Refresh attempts per client IP per window |
+| `RATE_LIMIT_REFRESH_WINDOW` | – | `1m` | Refresh rate-limit window |
+| `RATE_LIMIT_LOGOUT_MAX` | – | `20` | Logout attempts per client IP per window |
+| `RATE_LIMIT_LOGOUT_WINDOW` | – | `1m` | Logout rate-limit window |
+| `RATE_LIMIT_FORGOT_PASSWORD_MAX` | – | `5` | Forgot-password requests per client IP per window |
+| `RATE_LIMIT_FORGOT_PASSWORD_WINDOW` | – | `15m` | Forgot-password rate-limit window |
+| `RATE_LIMIT_RESET_PASSWORD_MAX` | – | `10` | Reset-password attempts per client IP per window |
+| `RATE_LIMIT_RESET_PASSWORD_WINDOW` | – | `15m` | Reset-password rate-limit window |
+| `RATE_LIMIT_TRUSTED_PROXIES` | – | – | Comma-separated IPs/CIDRs allowed to set `X-Forwarded-For` |
 | `RESEND_API_KEY` | ✅ | – | Resend API key |
 | `EMAIL_FROM` | – | `onboarding@resend.dev` | Sender address (must be verified in Resend) |
 | `EMAIL_FROM_NAME` | – | `Requisition System` | Sender display name |
-| `FRONTEND_BASE_URL` | – | `http://localhost:3000` | Base URL for invitation links in emails |
+| `FRONTEND_BASE_URL` | – | `http://localhost:3000` | Base URL for invitation and reset links in emails |
+| `FRONTEND_PASSWORD_RESET_PATH` | – | `/reset-password` | Reset page path; must start with `/` |
 | `WORKER_CONCURRENCY` | – | `10` | Parallel task handlers |
 | `WORKER_QUEUE` | – | `default` | Queue the worker drains and tasks are enqueued to |
 | `WORKER_TASK_MAX_RETRY` | – | `5` | Delivery attempts per task before it is given up on |
 | `WORKER_TASK_TIMEOUT` | – | `30s` | Per-attempt processing timeout |
 | `WORKER_SHUTDOWN_TIMEOUT` | – | `8s` | Grace period for in-flight tasks on shutdown |
 
+A staged upload is stored under `staging/<upl-id>` and returns only its
+server-generated ID, metadata and expiry — never its storage path. The ID is
+intended for the requisition-creation payload so the file can be claimed once
+the real `req-…` or `reqitem-…` ID exists. Permanent attachment access still
+uses the parent authorisation rules; staging itself checks only the uploader's
+identity.
+
+Requisition creation accepts those IDs as `upload_ids`: a top-level array
+attaches to the requisition header, and the same field on each line attaches to
+the generated `reqitem-…` ID. Tokens are single-use and owned by the
+authenticated user; an invalid, expired, foreign or repeated token returns
+`400` and rolls back the whole creation. Claimed files stay non-downloadable
+until reconciliation moves them and marks the attachment `READY`.
+
+Attachment metadata is backed up with PostgreSQL; file bytes are not. With the
+`local` driver, `ATTACHMENT_LOCAL_ROOT` must be on a mounted volume and
+snapshotted in the same runbook as `pg_dump`. With the `s3` driver, enable
+bucket versioning/replication and coordinate its snapshot with `pg_dump` —
+restoring one side alone leaves attachments inconsistent. The SHA-256 checksum
+is stored as object metadata (`attachment-checksum`) so reconciliation can
+verify bytes after a retry.
+
 ## Worker (background tasks)
 
 Work that does not need to run inside the request cycle runs in a separate
 binary, `cmd/worker`, so slow integrations never add latency to a response.
-Invitation emails work this way: the API persists the invitation, enqueues an
-`admin:send-invitation-email` task on Redis (via [asynq](https://github.com/hibiken/asynq))
+Invitation and password-reset emails work this way: the API persists the
+record, enqueues a task on Redis (via [asynq](https://github.com/hibiken/asynq))
 and returns immediately; the worker delivers the mail, retrying with
 exponential backoff up to `WORKER_TASK_MAX_RETRY` times.
+
+| Task | Trigger | Purpose |
+| ---- | ------- | ------- |
+| `admin:send-invitation-email` | API | Deliver an invitation link |
+| `identity:send-password-reset-email` | API | Deliver a reset link (deduplicated by reset ID) |
+| `identity:cleanup-password-reset-tokens` | Every hour | Delete token rows older than `PASSWORD_RESET_CLEANUP_RETENTION` |
+| `invitation:expire` | Every 15 minutes | Expire stale invitations |
+| `attachment:reconcile` | Every 15 seconds | Move claimed staged files to their permanent keys |
+| `attachment:cleanup` | Every 5 minutes | Expire staged uploads, recover stuck reconciliation and publish queue metrics |
 
 ```bash
 go run ./cmd/worker    # run alongside ./cmd/api
@@ -272,11 +391,12 @@ go run ./cmd/worker    # run alongside ./cmd/api
 
 Both binaries share the same `.env`. Each domain registers its own tasks
 through a `build<Domain>Worker` function in `internal/` — see
-`internal/admin_worker.go` for the pattern.
+`internal/admin_worker.go` and `internal/identity_worker.go` for the pattern.
 
 ## Email delivery (Resend)
 
-Invitation emails are sent through the [Resend](https://resend.com) API:
+Invitation and password-reset emails are sent through the
+[Resend](https://resend.com) API:
 
 1. Create an API key at <https://resend.com/api-keys> and set it as `RESEND_API_KEY`.
 2. For local development you can keep the sandbox sender
@@ -285,13 +405,15 @@ Invitation emails are sent through the [Resend](https://resend.com) API:
 3. For production, verify your domain in Resend (add the DNS records it gives you) and
    point `EMAIL_FROM` / `EMAIL_FROM_NAME` at it, e.g. `EMAIL_FROM=noreply@yourdomain.com`.
 
-The sender lives in `internal/shared/infrastructure/email/sender.go`; invitation
-content is built in `internal/admin/adapters/out/email/invitation_sender.go`.
+The sender lives in `internal/shared/infrastructure/email/sender.go`; message
+content is built per domain — invitation content in
+`internal/admin/adapters/out/email/invitation_sender.go`, reset links in
+`internal/identity/adapters/out/email/password_reset_sender.go`.
 
 ## Observability
 
-The API and worker processes export OpenTelemetry traces and metrics for the two
-request-driven business operations. The use cases ask for an operation to be
+The API and worker processes export OpenTelemetry traces and metrics for their
+business operations. The use cases ask for an operation to be
 measured through an outbound port (`ports/out/telemetry.go`), so the domain
 never depends on OpenTelemetry; the adapter lives in
 `internal/shared/infrastructure/telemetry` and is wired in `internal/app.go`
@@ -406,6 +528,9 @@ counters of the operation.
 | Invitee accepts an invitation | `invitation.accept` | `requisition.invitee.acceptances.{attempted,succeeded,failed,duration}` |
 | Worker delivers the invitation email | `admin.email.delivery` | `requisition.admin.email_delivery.{attempted,succeeded,failed,duration}` |
 | Worker expires the stale invitations | `invitation.expire` | `requisition.invitation.expirations.{attempted,succeeded,failed,duration}` |
+| Request a password reset | `auth.password_reset.request` | `requisition.auth.password_reset_requests.{attempted,succeeded,failed,duration}` |
+| Complete a password reset | `auth.password_reset.complete` | `requisition.auth.password_reset_completions.{attempted,succeeded,failed,duration}` |
+| Worker delivers the reset email | `auth.password_reset.email` | `requisition.auth.password_reset_emails.{attempted,succeeded,failed,duration}` |
 
 The span covers the whole operation: the admin span covers the durable
 invitation creation and the enqueueing of the delivery task, the acceptance
@@ -439,9 +564,15 @@ the field back and starts the consumer span as a child of it. Any task type
 gets this by carrying the field; a task that carries nothing, the scheduled
 `expire_invitations` sweep for instance, starts a trace of its own.
 
+The reset-password email follows the same pattern: the forgot-password request
+carries the traceparent in the `identity:send-password-reset-email` payload, and
+the delivery span is a child of it. The scheduled cleanup task carries no
+traceparent and starts a trace of its own.
+
 The call to Resend is the one gap: `resend-go` builds its request without the
 caller's context, so it stays a trace of its own, as described above. The
-counters of `admin.email.delivery` still record whether it worked.
+counters of `admin.email.delivery` and `auth.password_reset.email` still record
+whether it worked.
 
 ## Docker
 
@@ -466,8 +597,14 @@ from the container. On push to `master`, CI publishes both images to GHCR
 
 ```bash
 go test ./...        # everything
-go test ./internal/department/...   # a single module
+go test ./internal/...                  # unit tests only (fast)
+go test ./internal/department/...       # a single module
 ```
+
+The `tests/integrations` suites start PostgreSQL and Redis containers through
+testcontainers, so the full run needs Docker and takes longer than the unit
+tests. They cover the password-reset repository and the forgot/reset HTTP
+flows end to end.
 
 CI (`.github/workflows/ci-cd.yml`) runs the full suite on every pull request and
 pushes the image to GHCR on `master`.

@@ -15,6 +15,9 @@ type CreateRequisitionCommand struct {
 	Justification string
 	Priority      string
 	NeededBy      time.Time
+	// UploadIDs are staged upload tokens for attachments to the requisition
+	// header. Line-level tokens live on CreateRequisitionLine.
+	UploadIDs []string
 }
 
 // CreateRequisitionLine describes one requisition line. Exactly one of ItemID
@@ -27,6 +30,9 @@ type CreateRequisitionLine struct {
 	Quantity            int
 	EstimatedUnitAmount float64
 	Notes               string
+	// UploadIDs are staged upload tokens for attachments to this specific
+	// requisition line, whose reqitem-… ID is allocated by creation.
+	UploadIDs []string
 }
 
 // CreateRequestedItem is the free-filled item payload for a requisition line

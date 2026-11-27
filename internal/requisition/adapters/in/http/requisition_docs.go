@@ -10,7 +10,7 @@ var (
 // createRequisitionDoc documents the create handler in requisition_handler.go.
 //
 //	@Summary		Create a requisition
-//	@Description	Creates a multi-line requisition for the authenticated user's department. Each line references either a catalogue item (item_id) or a free-filled requested item (requested_item), never both. Amounts are expressed in major currency units (naira for NGN) and stored internally as minor units. needed_by must be a calendar date in YYYY-MM-DD format and must be in the future.
+//	@Description	Creates a multi-line requisition for the authenticated user's department. Each line references either a catalogue item (item_id) or a free-filled requested item (requested_item), never both. Amounts are expressed in major currency units (naira for NGN) and stored internally as minor units. needed_by must be a calendar date in YYYY-MM-DD format and must be in the future. Optional upload_ids at the top level and on each line reference files created through POST /api/v1/uploads; they are claimed inside the creation transaction and are not downloadable until reconciliation completes.
 //	@Tags			requisition
 //	@Accept			json
 //	@Produce		json

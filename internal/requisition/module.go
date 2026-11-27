@@ -36,6 +36,10 @@ func NewRequisitionModule(
 	}
 }
 
+func (m *RequisitionModule) RequisitionPortIn() *requisitionin.RequisitionPortIn {
+	return m.requisitionPortIn
+}
+
 func (m *RequisitionModule) RequisitionHandler() *requisitionhttp.RequisitionHandler {
 	return m.requisitionHandler
 }

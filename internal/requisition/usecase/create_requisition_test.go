@@ -73,6 +73,9 @@ func (r *createRequisitionRepo) SaveRequisition(_ context.Context, requisition *
 func (r *createRequisitionRepo) GetRequisitionByID(context.Context, string) (*requisitiondomain.Requisition, error) {
 	return r.get, r.err
 }
+func (r *createRequisitionRepo) GetRequisitionIDByItemID(context.Context, string) (string, error) {
+	return "", nil
+}
 func (r *createRequisitionRepo) GetRequisitionByIDForUpdate(context.Context, string) (*requisitiondomain.Requisition, error) {
 	return r.get, r.err
 }
@@ -143,7 +146,7 @@ func TestCreateRequisitionUsecasePersistsAggregateTransactionally(t *testing.T) 
 	usecase := NewCreateRequisitionUsecase(
 		repository, createCategoryRepo{}, createItemRepo{},
 		createMembership{membership: validCreateMembership(t)},
-		&createIDGenerator{}, transaction,
+		&createIDGenerator{}, transaction, nil,
 	)
 
 	requisition, err := usecase.Execute(context.Background(), requisitionin.CreateRequisitionCommand{
@@ -191,7 +194,7 @@ func TestCreateRequisitionUsecaseBuildsCatalogueAndRequestedLines(t *testing.T) 
 	usecase := NewCreateRequisitionUsecase(
 		repository, createCategoryRepo{}, createItemRepo{},
 		createMembership{membership: validCreateMembership(t)},
-		&createIDGenerator{}, &createTransactionManager{},
+		&createIDGenerator{}, &createTransactionManager{}, nil,
 	)
 
 	requisition, err := usecase.Execute(context.Background(), requisitionin.CreateRequisitionCommand{
@@ -230,7 +233,7 @@ func TestCreateRequisitionUsecaseRollsBackOnRepositoryError(t *testing.T) {
 	usecase := NewCreateRequisitionUsecase(
 		repository, createCategoryRepo{}, createItemRepo{},
 		createMembership{membership: validCreateMembership(t)},
-		&createIDGenerator{}, transaction,
+		&createIDGenerator{}, transaction, nil,
 	)
 
 	_, err := usecase.Execute(context.Background(), requisitionin.CreateRequisitionCommand{
@@ -264,7 +267,7 @@ func TestCreateRequisitionUsecaseRejectsInactiveMembership(t *testing.T) {
 	usecase := NewCreateRequisitionUsecase(
 		&createRequisitionRepo{}, createCategoryRepo{}, createItemRepo{},
 		createMembership{membership: membership}, &createIDGenerator{},
-		&createTransactionManager{},
+		&createTransactionManager{}, nil,
 	)
 
 	_, err = usecase.Execute(context.Background(), requisitionin.CreateRequisitionCommand{
@@ -282,11 +285,104 @@ func TestCreateRequisitionUsecaseRejectsInactiveMembership(t *testing.T) {
 	}
 }
 
-func TestCreateRequisitionUsecaseRejectsDepartmentMismatch(t *testing.T) {
+type createRegistrar struct {
+	targets []requisitionout.StagedAttachmentTarget
+	err     error
+}
+
+func (r *createRegistrar) RegisterStagedAttachments(
+	_ context.Context,
+	targets []requisitionout.StagedAttachmentTarget,
+) error {
+	r.targets = append(r.targets, targets...)
+	return r.err
+}
+
+func createCommandWithUploads() requisitionin.CreateRequisitionCommand {
+	return requisitionin.CreateRequisitionCommand{
+		UserID:       "usr-123",
+		DepartmentID: "dpt-123",
+		Lines: []requisitionin.CreateRequisitionLine{{
+			RequestedItem: &requisitionin.CreateRequestedItem{
+				Name: "Pens", CategoryID: "cat-123", Description: "Blue pens",
+			},
+			Quantity: 1, EstimatedUnitAmount: 2500,
+			UploadIDs: []string{"upl-line"},
+		}},
+		Justification: "Office supplies",
+		Priority:      "medium",
+		NeededBy:      time.Now().AddDate(0, 0, 2),
+		UploadIDs:     []string{"upl-header"},
+	}
+}
+
+func TestCreateRequisitionRegistersStagedAttachmentsAfterIDsExist(t *testing.T) {
+	registrar := &createRegistrar{}
 	usecase := NewCreateRequisitionUsecase(
 		&createRequisitionRepo{}, createCategoryRepo{}, createItemRepo{},
 		createMembership{membership: validCreateMembership(t)},
-		&createIDGenerator{}, &createTransactionManager{},
+		&createIDGenerator{}, &createTransactionManager{}, registrar,
+	)
+
+	created, err := usecase.Execute(context.Background(), createCommandWithUploads())
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if len(registrar.targets) != 2 {
+		t.Fatalf("registered %d targets, want 2", len(registrar.targets))
+	}
+	if registrar.targets[0].RefName != "requisition" || registrar.targets[0].RefID != created.ID() {
+		t.Errorf("header target = %+v", registrar.targets[0])
+	}
+	if registrar.targets[1].RefName != "requisition_item" ||
+		registrar.targets[1].RefID != created.Items()[0].ID() {
+		t.Errorf("line target = %+v", registrar.targets[1])
+	}
+	for _, target := range registrar.targets {
+		if target.ActorID != "usr-123" {
+			t.Errorf("target actor = %q", target.ActorID)
+		}
+	}
+}
+
+func TestCreateRequisitionRollsBackWhenClaimFails(t *testing.T) {
+	registrar := &createRegistrar{err: errors.New("claim failed")}
+	usecase := NewCreateRequisitionUsecase(
+		&createRequisitionRepo{}, createCategoryRepo{}, createItemRepo{},
+		createMembership{membership: validCreateMembership(t)},
+		&createIDGenerator{}, &createTransactionManager{}, registrar,
+	)
+
+	_, err := usecase.Execute(context.Background(), createCommandWithUploads())
+	if !errors.Is(err, registrar.err) {
+		t.Fatalf("Execute() error = %v, want %v", err, registrar.err)
+	}
+}
+
+func TestCreateRequisitionRejectsInvalidStagedUploadIDs(t *testing.T) {
+	for _, uploads := range [][]string{{"req-1234"}, {"upl-1234", "upl-1234"}} {
+		cmd := createCommandWithUploads()
+		cmd.UploadIDs = uploads
+		registrar := &createRegistrar{}
+		usecase := NewCreateRequisitionUsecase(
+			&createRequisitionRepo{}, createCategoryRepo{}, createItemRepo{},
+			createMembership{membership: validCreateMembership(t)},
+			&createIDGenerator{}, &createTransactionManager{}, registrar,
+		)
+		if _, err := usecase.Execute(context.Background(), cmd); err != ErrInvalidStagedUpload {
+			t.Fatalf("Execute() error = %v, want %v", err, ErrInvalidStagedUpload)
+		}
+		if len(registrar.targets) != 0 {
+			t.Errorf("registrar was called with %+v", registrar.targets)
+		}
+	}
+}
+
+func TestCreateRequisitionRejectsDepartmentMismatch(t *testing.T) {
+	usecase := NewCreateRequisitionUsecase(
+		&createRequisitionRepo{}, createCategoryRepo{}, createItemRepo{},
+		createMembership{membership: validCreateMembership(t)},
+		&createIDGenerator{}, &createTransactionManager{}, nil,
 	)
 
 	_, err := usecase.Execute(context.Background(), requisitionin.CreateRequisitionCommand{

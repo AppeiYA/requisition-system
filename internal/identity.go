@@ -6,7 +6,9 @@ import (
 	jwtadapter "github.com/AppeiYA/requisition-system/internal/identity/adapters/out/jwt"
 	identitypostgres "github.com/AppeiYA/requisition-system/internal/identity/adapters/out/postgres"
 	identityredis "github.com/AppeiYA/requisition-system/internal/identity/adapters/out/redis"
+	identityworker "github.com/AppeiYA/requisition-system/internal/identity/adapters/out/worker"
 	identityin "github.com/AppeiYA/requisition-system/internal/identity/ports/in"
+	identityout "github.com/AppeiYA/requisition-system/internal/identity/ports/out"
 	identityusecase "github.com/AppeiYA/requisition-system/internal/identity/usecase"
 	requisitionexternal "github.com/AppeiYA/requisition-system/internal/requisition/adapters/out/external"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/audit"
@@ -17,6 +19,7 @@ import (
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/hasher"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/ratelimit"
 	"github.com/AppeiYA/requisition-system/internal/shared/infrastructure/redis"
+	"github.com/hibiken/asynq"
 )
 
 func (a *App) buildIdentity(
@@ -27,8 +30,11 @@ func (a *App) buildIdentity(
 	txManager *db.TransactionManager,
 	accessTokenService *jwtadapter.JWTService,
 	idGen *generator.IDGenerator,
+	asynqClient *asynq.Client,
+	operationTelemetry identityout.Telemetry,
 ) *identity.IdentityModule {
 	userRepository := identitypostgres.NewUserRepository(baseRepo, cache)
+	passwordResetTokenRepository := identitypostgres.NewPasswordResetTokenRepository(baseRepo)
 
 	refreshSessionRepository := identityredis.NewRefreshSessionRepository(
 		redisClient.Client(),
@@ -59,6 +65,27 @@ func (a *App) buildIdentity(
 	registerUsecase := identityusecase.NewRegisterUserUsecase(userRepository, passwordHasher, idGen)
 	getUserByEmailUsecase := identityusecase.NewGetUserByEmailUsecase(userRepository)
 
+	passwordResetQueue := identityworker.NewPasswordResetQueue(asynqClient, cfg.Worker)
+	requestPasswordResetUsecase := identityusecase.NewRequestPasswordResetUsecase(
+		userRepository,
+		passwordResetTokenRepository,
+		passwordResetQueue,
+		refreshTokenGenerator,
+		idGen,
+		txManager,
+		cfg.PasswordReset,
+		operationTelemetry,
+	)
+	resetPasswordUsecase := identityusecase.NewResetPasswordUsecase(
+		userRepository,
+		passwordResetTokenRepository,
+		refreshSessionRepository,
+		refreshTokenGenerator,
+		passwordHasher,
+		txManager,
+		operationTelemetry,
+	)
+
 	auditRecorder := audit.NewPostgresRecorder(baseRepo, idGen)
 	adminUsersPortIn := &identityin.AdminUsersPortIn{
 		ListUsers:         identityusecase.NewListUsersUsecase(userRepository),
@@ -75,12 +102,15 @@ func (a *App) buildIdentity(
 		logoutUsecase,
 		getMeUsecase,
 		refreshUsecase,
+		requestPasswordResetUsecase,
+		resetPasswordUsecase,
 	)
 
 	handler := identityhttp.NewHandler(
 		identityPortIn,
 		authMiddleware,
 	)
+	handler.SetPasswordResetEnabled(cfg.PasswordReset.Enabled)
 	handler.SetRateLimiter(ratelimit.New(redisClient.Client()), cfg.RateLimit)
 	userLookup := requisitionexternal.NewIdentityAdapter(userRepository)
 

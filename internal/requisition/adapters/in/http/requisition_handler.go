@@ -123,6 +123,7 @@ func (h *RequisitionHandler) create(c *gin.Context) {
 			Quantity:            line.Quantity,
 			EstimatedUnitAmount: line.EstimatedUnitAmount,
 			Notes:               line.Notes,
+			UploadIDs:           line.UploadIDs,
 		}
 		if line.RequestedItem != nil {
 			commandLine.RequestedItem = &requisitionin.CreateRequestedItem{
@@ -141,6 +142,7 @@ func (h *RequisitionHandler) create(c *gin.Context) {
 		Justification: request.Justification,
 		Priority:      request.Priority,
 		NeededBy:      request.NeededBy.Time(),
+		UploadIDs:     request.UploadIDs,
 	})
 	if err != nil {
 		response.ErrorFrom(c, err)
@@ -307,8 +309,33 @@ func validateUpdateRequisitionRequest(request UpdateRequisitionRequest) []respon
 	return details
 }
 
+// stagedUploadIDPrefix mirrors the upload token shape for request validation;
+// the attachment module enforces ownership, expiry and single use.
+const stagedUploadIDPrefix = "upl-"
+
 func validateCreateRequisitionRequest(request CreateRequisitionRequest) []response.FieldError {
 	details := make([]response.FieldError, 0)
+
+	seenUploads := make(map[string]string, len(request.UploadIDs))
+	checkUpload := func(uploadID, field string) {
+		if !strings.HasPrefix(uploadID, stagedUploadIDPrefix) || uploadID == stagedUploadIDPrefix {
+			details = append(details, response.FieldError{
+				Field: field, Message: "must be a valid upload ID",
+			})
+			return
+		}
+		if previousField, exists := seenUploads[uploadID]; exists {
+			details = append(details, response.FieldError{
+				Field:   field,
+				Message: fmt.Sprintf("upload already supplied for %s", previousField),
+			})
+			return
+		}
+		seenUploads[uploadID] = field
+	}
+	for _, uploadID := range request.UploadIDs {
+		checkUpload(uploadID, "upload_ids")
+	}
 
 	if len(request.Lines) == 0 {
 		details = append(details, response.FieldError{
@@ -408,6 +435,9 @@ func validateCreateRequisitionRequest(request CreateRequisitionRequest) []respon
 			details = append(details, response.FieldError{
 				Field: field + ".estimated_unit_amount", Message: "must be greater than or equal to 0",
 			})
+		}
+		for _, uploadID := range line.UploadIDs {
+			checkUpload(uploadID, field+".upload_ids")
 		}
 	}
 

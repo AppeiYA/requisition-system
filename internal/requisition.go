@@ -24,6 +24,7 @@ func (a *App) buildRequisition(
 	membershipRepo requisitionout.MembershipLookup,
 	txManager requisitionout.TransactionManager,
 	userLookup requisitionout.UserLookup,
+	stagedRegistrar requisitionout.StagedAttachmentRegistrar,
 ) *requisition.RequisitionModule {
 	itemCategoryRepo := requisitionpostgres.NewItemCategoryRepository(baseRepo, cache)
 	itemRepo := requisitionpostgres.NewItemRepository(baseRepo, cache)
@@ -80,6 +81,7 @@ func (a *App) buildRequisition(
 	requisitionRepo := requisitionpostgres.NewRequisitionRepository(baseRepo)
 	createRequisitionUC := requisitionusecase.NewCreateRequisitionUsecase(
 		requisitionRepo, itemCategoryRepo, itemRepo, membershipRepo, idGen, txManager,
+		stagedRegistrar,
 	)
 	updateRequisitionUC := requisitionusecase.NewUpdateRequisitionUsecase(
 		requisitionRepo, itemCategoryRepo, itemRepo, membershipRepo, idGen, txManager,
@@ -87,6 +89,7 @@ func (a *App) buildRequisition(
 	listRequisitionsByUserUC := requisitionusecase.NewListRequisitionsByUserUsecase(requisitionRepo, nil)
 	listRequisitionsUC := requisitionusecase.NewListRequisitionsUsecase(requisitionRepo)
 	getRequisitionUC := requisitionusecase.NewGetRequisitionUsecase(requisitionRepo)
+	getRequisitionItemUC := requisitionusecase.NewGetRequisitionItemUsecase(requisitionRepo)
 	transitionRequisitionUC := requisitionusecase.NewTransitionRequisitionUsecase(requisitionRepo, idGen, txManager)
 	requisitionPortIn := requisitionin.NewRequisitionPortIn(
 		createRequisitionUC,
@@ -94,6 +97,7 @@ func (a *App) buildRequisition(
 		listRequisitionsByUserUC,
 		listRequisitionsUC,
 		getRequisitionUC,
+		getRequisitionItemUC,
 		transitionRequisitionUC,
 	)
 	requisitionHandler := requisitionhttp.NewRequisitionHandler(requisitionPortIn)

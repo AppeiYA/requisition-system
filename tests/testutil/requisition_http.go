@@ -15,6 +15,7 @@ import (
 	requisitionin "github.com/AppeiYA/requisition-system/internal/requisition/ports/in"
 	categoryin "github.com/AppeiYA/requisition-system/internal/requisition/ports/in/category"
 	itemin "github.com/AppeiYA/requisition-system/internal/requisition/ports/in/item"
+	requisitionout "github.com/AppeiYA/requisition-system/internal/requisition/ports/out"
 	requisitionusecase "github.com/AppeiYA/requisition-system/internal/requisition/usecase"
 	categoryusecase "github.com/AppeiYA/requisition-system/internal/requisition/usecase/category"
 	itemusecase "github.com/AppeiYA/requisition-system/internal/requisition/usecase/item"
@@ -29,12 +30,24 @@ type RequisitionHTTP struct {
 	Router                  *gin.Engine
 	MembershipRepository    *departmentpostgres.MembershipRepository
 	RequisitionRepository   *requisitionpostgres.RequisitionRepository
+	RequisitionPortIn       *requisitionin.RequisitionPortIn
 	ItemRepository          *requisitionpostgres.ItemRepository
 	ItemCategoryRepository  *requisitionpostgres.ItemCategoryRepository
 	RequestedItemRepository *requisitionpostgres.RequestedItemRepository
 }
 
 func (s *Suite) SetupRequisitionHTTP(t *testing.T) *RequisitionHTTP {
+	t.Helper()
+	return s.SetupRequisitionHTTPWithRegistrar(t, nil)
+}
+
+// SetupRequisitionHTTPWithRegistrar allows the attachment fixture to inject a
+// real claim registrar while every other requisition fixture keeps the old
+// upload-free behaviour.
+func (s *Suite) SetupRequisitionHTTPWithRegistrar(
+	t *testing.T,
+	registrar requisitionout.StagedAttachmentRegistrar,
+) *RequisitionHTTP {
 	t.Helper()
 
 	department := s.SetupDepartmentHTTP(t)
@@ -106,6 +119,7 @@ func (s *Suite) SetupRequisitionHTTP(t *testing.T) *RequisitionHTTP {
 		membershipRepository,
 		idGenerator,
 		transactionManager,
+		registrar,
 	)
 	updateRequisition := requisitionusecase.NewUpdateRequisitionUsecase(
 		requisitionRepository,
@@ -118,6 +132,7 @@ func (s *Suite) SetupRequisitionHTTP(t *testing.T) *RequisitionHTTP {
 	listRequisitionsByUser := requisitionusecase.NewListRequisitionsByUserUsecase(requisitionRepository, nil)
 	listRequisitions := requisitionusecase.NewListRequisitionsUsecase(requisitionRepository)
 	getRequisition := requisitionusecase.NewGetRequisitionUsecase(requisitionRepository)
+	getRequisitionItem := requisitionusecase.NewGetRequisitionItemUsecase(requisitionRepository)
 	transitionRequisition := requisitionusecase.NewTransitionRequisitionUsecase(
 		requisitionRepository,
 		idGenerator,
@@ -129,6 +144,7 @@ func (s *Suite) SetupRequisitionHTTP(t *testing.T) *RequisitionHTTP {
 		listRequisitionsByUser,
 		listRequisitions,
 		getRequisition,
+		getRequisitionItem,
 		transitionRequisition,
 	)
 
@@ -160,6 +176,7 @@ func (s *Suite) SetupRequisitionHTTP(t *testing.T) *RequisitionHTTP {
 		Router:                  router,
 		MembershipRepository:    membershipRepository,
 		RequisitionRepository:   requisitionRepository,
+		RequisitionPortIn:       requisitionPortIn,
 		ItemRepository:          itemRepository,
 		ItemCategoryRepository:  itemCategoryRepository,
 		RequestedItemRepository: requestedItemRepository,
