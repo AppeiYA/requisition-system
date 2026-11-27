@@ -7,8 +7,8 @@ import (
 )
 
 var (
-	ErrInvalidAttachmentRefName = customerrors.NewInternalServerError("invalid attachment ref name")
-	ErrInvalidAttachmentRefID   = customerrors.NewInternalServerError("invalid attachment ref ID")
+	ErrInvalidAttachmentRefName = customerrors.NewBadRequestError("invalid attachment ref name")
+	ErrInvalidAttachmentRefID   = customerrors.NewBadRequestError("invalid attachment ref ID")
 )
 
 type AttachmentRefName string
@@ -26,9 +26,8 @@ func (r AttachmentRefName) IsValid() bool {
 		return false
 	}
 }
-func (r AttachmentRefName) String() string {
-	return string(r)
-}
+
+func (r AttachmentRefName) String() string { return string(r) }
 
 var RefNameToIDSyntax = map[AttachmentRefName]string{
 	RefNameRequisition:     "req",
@@ -44,40 +43,13 @@ func NewAttachmentRef(refName AttachmentRefName, id string) (*AttachmentRef, err
 	if !refName.IsValid() {
 		return nil, ErrInvalidAttachmentRefName
 	}
-	if id == "" {
+	prefix, ok := RefNameToIDSyntax[refName]
+	if !ok || !strings.HasPrefix(id, prefix+"-") || id == prefix+"-" {
 		return nil, ErrInvalidAttachmentRefID
 	}
 
-	if value, ok := RefNameToIDSyntax[refName]; !ok {
-		return nil, ErrInvalidAttachmentRefName
-	} else {
-		if !strings.HasPrefix(id, value) {
-			return nil, ErrInvalidAttachmentRefID
-		}
-	}
-
-	return &AttachmentRef{
-		refName: refName,
-		id:      id,
-	}, nil
+	return &AttachmentRef{refName: refName, id: id}, nil
 }
 
-func ReconstructAttachmentRef(id string) (*AttachmentRef, error) {
-	for refName, prefix := range RefNameToIDSyntax {
-		if strings.HasPrefix(id, prefix) {
-			return &AttachmentRef{
-				refName: refName,
-				id:      id,
-			}, nil
-		}
-	}
-	return nil, ErrInvalidAttachmentRefID
-}
-
-func (r *AttachmentRef) RefName() AttachmentRefName {
-	return r.refName
-}
-
-func (r *AttachmentRef) ID() string {
-	return r.id
-}
+func (r *AttachmentRef) RefName() AttachmentRefName { return r.refName }
+func (r *AttachmentRef) ID() string                 { return r.id }

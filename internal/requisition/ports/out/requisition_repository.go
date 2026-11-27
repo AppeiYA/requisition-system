@@ -9,6 +9,10 @@ import (
 type RequisitionRepository interface {
 	SaveRequisition(ctx context.Context, requisition *domain.Requisition) error
 	GetRequisitionByID(ctx context.Context, id string) (*domain.Requisition, error)
+	// GetRequisitionIDByItemID resolves a requisition line to its parent. It is
+	// used by the attachment module to authorise line attachments through the
+	// requisition module without importing its domain.
+	GetRequisitionIDByItemID(ctx context.Context, itemID string) (string, error)
 	UpdateRequisition(ctx context.Context, requisition *domain.Requisition) error
 	// UpdateRequisitionAggregate must be called within a transaction that
 	// already holds the requisition header lock so its persisted-line snapshot

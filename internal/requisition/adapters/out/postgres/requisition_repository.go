@@ -14,7 +14,10 @@ import (
 	"github.com/lib/pq"
 )
 
-var ErrRequisitionNotFound = customerrors.NewNotFoundError("requisition not found")
+var (
+	ErrRequisitionNotFound     = customerrors.NewNotFoundError("requisition not found")
+	ErrRequisitionItemNotFound = customerrors.NewNotFoundError("requisition item not found")
+)
 
 type RequisitionRepository struct {
 	repository db.Repository
@@ -115,6 +118,19 @@ func (r *RequisitionRepository) GetRequisitionByID(ctx context.Context, id strin
 		return nil, err
 	}
 	return r.loadAggregate(ctx, model)
+}
+
+func (r *RequisitionRepository) GetRequisitionIDByItemID(ctx context.Context, itemID string) (string, error) {
+	var requisitionID string
+	err := r.repository.Executor(ctx).GetContext(ctx, &requisitionID,
+		`SELECT requisition_id FROM requisition_items WHERE id = $1`, itemID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", ErrRequisitionItemNotFound
+		}
+		return "", err
+	}
+	return requisitionID, nil
 }
 
 func (r *RequisitionRepository) UpdateRequisition(ctx context.Context, requisition *requisitiondomain.Requisition) error {

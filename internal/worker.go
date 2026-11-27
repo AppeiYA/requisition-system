@@ -12,6 +12,8 @@ import (
 	adminTasks "github.com/AppeiYA/requisition-system/internal/admin/tasks"
 	analyticsworker "github.com/AppeiYA/requisition-system/internal/analytics/adapters/in/worker"
 	analyticspostgres "github.com/AppeiYA/requisition-system/internal/analytics/adapters/out/postgres"
+	attachmentworker "github.com/AppeiYA/requisition-system/internal/attachment/adapters/in/worker"
+	attachmentout "github.com/AppeiYA/requisition-system/internal/attachment/ports/out"
 	identityout "github.com/AppeiYA/requisition-system/internal/identity/ports/out"
 	identitytasks "github.com/AppeiYA/requisition-system/internal/identity/tasks"
 	invitationworker "github.com/AppeiYA/requisition-system/internal/invitation/adapters/in/worker"
@@ -117,6 +119,16 @@ func (w *Worker) Run() error {
 			MetricBase: "requisition.auth.password_reset_emails",
 			Unit:       "{email}",
 		},
+		telemetry.Operation{
+			Name:       attachmentout.OperationReconcile,
+			MetricBase: "requisition.attachment.reconciliations",
+			Unit:       "{attachment}",
+		},
+		telemetry.Operation{
+			Name:       attachmentout.OperationCleanup,
+			MetricBase: "requisition.attachment.cleanups",
+			Unit:       "{sweep}",
+		},
 	)
 	if err != nil {
 		return err
@@ -142,6 +154,22 @@ func (w *Worker) Run() error {
 	expireInvitationsHandler := invitationworker.NewExpireInvitationsHandler(expireInvitations)
 	mux.HandleFunc(invitationworker.ExpireInvitations, expireInvitationsHandler.Handle)
 
+	attachmentRepos := newAttachmentRepositories(db.NewRepository(database))
+	attachmentModule, err := buildAttachmentWorker(
+		cfg, attachmentRepos, db.NewTransactionManager(database), operationTelemetry,
+	)
+	if err != nil {
+		return err
+	}
+	mux.HandleFunc(
+		attachmentworker.ReconcileOutbox,
+		attachmentModule.ReconcileOutboxHandler().Handle,
+	)
+	mux.HandleFunc(
+		attachmentworker.Cleanup,
+		attachmentModule.CleanupHandler().Handle,
+	)
+
 	if cfg.App.AnalyticsSource == "materialized" {
 		analyticsRefresher := analyticspostgres.NewRefresher(db.NewRepository(database))
 		analyticsRefreshHandler := analyticsworker.NewRefreshHandler(analyticsRefresher, redisClient.Client())
@@ -154,6 +182,20 @@ func (w *Worker) Run() error {
 		return err
 	}
 	if _, err := scheduler.Register("0 * * * *", asynq.NewTask(identitytasks.CleanupPasswordResetTokens, nil), asynq.Queue(cfg.Worker.Queue)); err != nil {
+		return err
+	}
+	if _, err := scheduler.Register(
+		cfg.Attachment.ReconcileSchedule,
+		asynq.NewTask(attachmentworker.ReconcileOutbox, nil),
+		asynq.Queue(cfg.Worker.Queue),
+	); err != nil {
+		return err
+	}
+	if _, err := scheduler.Register(
+		cfg.Attachment.CleanupSchedule,
+		asynq.NewTask(attachmentworker.Cleanup, nil),
+		asynq.Queue(cfg.Worker.Queue),
+	); err != nil {
 		return err
 	}
 	if cfg.App.AnalyticsSource == "materialized" {

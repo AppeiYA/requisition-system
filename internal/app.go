@@ -11,6 +11,8 @@ import (
 	"time"
 
 	adminout "github.com/AppeiYA/requisition-system/internal/admin/ports/out"
+	attachmentexternal "github.com/AppeiYA/requisition-system/internal/attachment/adapters/out/external"
+	attachmentout "github.com/AppeiYA/requisition-system/internal/attachment/ports/out"
 	jwtadapter "github.com/AppeiYA/requisition-system/internal/identity/adapters/out/jwt"
 	identityout "github.com/AppeiYA/requisition-system/internal/identity/ports/out"
 	invitationout "github.com/AppeiYA/requisition-system/internal/invitation/ports/out"
@@ -154,6 +156,21 @@ func (a *App) Run() error {
 			MetricBase: "requisition.auth.password_reset_completions",
 			Unit:       "{completion}",
 		},
+		telemetry.Operation{
+			Name:       attachmentout.OperationUpload,
+			MetricBase: "requisition.attachment.uploads",
+			Unit:       "{attachment}",
+		},
+		telemetry.Operation{
+			Name:       attachmentout.OperationDownload,
+			MetricBase: "requisition.attachment.downloads",
+			Unit:       "{attachment}",
+		},
+		telemetry.Operation{
+			Name:       attachmentout.OperationDelete,
+			MetricBase: "requisition.attachment.deletions",
+			Unit:       "{attachment}",
+		},
 	)
 	if err != nil {
 		return err
@@ -169,7 +186,7 @@ func (a *App) Run() error {
 	// up through c.Request.Context() without any change.
 	router.Use(otelgin.Middleware(otel.ServiceName()))
 	router.Use(logger.GinLogger(appLogger), logger.GinRecovery(appLogger))
-	router.Use(requestBodyLimit())
+	router.Use(requestBodyLimit(cfg.API.BaseURL))
 	api := router.Group("/api")
 
 	api.GET("/healthz", func(c *gin.Context) {
@@ -200,7 +217,24 @@ func (a *App) Run() error {
 
 	departmentModule := a.buildDepartment(baseRepo, idGen, redisCache)
 
-	requisitionModule := a.buildRequisition(baseRepo, idGen, redisCache, departmentModule.MembershipRepository(), txManager, identityModule.UserLookup())
+	attachmentRepos := newAttachmentRepositories(baseRepo)
+	stagedRegistrar := a.buildAttachmentRegistrar(attachmentRepos, idGen, cfg.Attachment.MaxPerRef)
+
+	requisitionModule := a.buildRequisition(
+		baseRepo, idGen, redisCache, departmentModule.MembershipRepository(),
+		txManager, identityModule.UserLookup(), stagedRegistrar,
+	)
+
+	attachmentModule, err := a.buildAttachment(
+		cfg,
+		idGen,
+		attachmentexternal.NewRequisitionAccessChecker(requisitionModule.RequisitionPortIn()),
+		txManager,
+		attachmentRepos,
+	)
+	if err != nil {
+		return err
+	}
 
 	invitationModule := a.buildInvitation(
 		baseRepo,
@@ -233,6 +267,7 @@ func (a *App) Run() error {
 		requisitionModule.ItemCategoryHandler(),
 		requisitionModule.ItemHandler(),
 		requisitionModule.RequisitionHandler(),
+		attachmentModule.Handler(),
 		analyticsModule.Handler(),
 		identityModule.AuthMiddleware(),
 	); err != nil {

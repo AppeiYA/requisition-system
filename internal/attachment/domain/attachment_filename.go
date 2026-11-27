@@ -3,7 +3,7 @@ package domain
 import customerrors "github.com/AppeiYA/requisition-system/internal/shared/infrastructure/errors"
 
 var (
-	ErrInvalidAttachmentFileName = customerrors.NewInternalServerError("invalid attachment file name")
+	ErrInvalidAttachmentFileName = customerrors.NewBadRequestError("invalid attachment file name")
 )
 
 type AttachmentFileName struct {
@@ -17,6 +17,4 @@ func NewAttachmentFileName(value string) (*AttachmentFileName, error) {
 	return &AttachmentFileName{value: value}, nil
 }
 
-func (f *AttachmentFileName) String() string {
-	return f.value
-}
+func (f *AttachmentFileName) String() string { return f.value }

@@ -119,6 +119,10 @@ func Load() (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
+	attachmentConfig, err := LoadAttachmentConfig()
+	if err != nil {
+		return nil, err
+	}
 	logConfig, err := LoadLogConfig(appConfig.Env)
 	if err != nil {
 		return nil, err
@@ -137,6 +141,7 @@ func Load() (*Config, error) {
 		Telemetry:     *telemetryConfig,
 		RateLimit:     *rateLimitConfig,
 		PasswordReset: *passwordResetConfig,
+		Attachment:    *attachmentConfig,
 		Log:           *logConfig,
 	}, nil
 }

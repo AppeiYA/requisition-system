@@ -203,6 +203,50 @@ components:
                 invitationID:
                     type: string
             type: object
+        attachmenthttp.AttachmentResponse:
+            properties:
+                checksum:
+                    type: string
+                content_type:
+                    type: string
+                created_at:
+                    type: string
+                file_name:
+                    type: string
+                file_size:
+                    type: integer
+                id:
+                    type: string
+                ref_id:
+                    type: string
+                ref_name:
+                    type: string
+                uploaded_by:
+                    type: string
+                url:
+                    type: string
+            type: object
+        attachmenthttp.StagedUploadResponse:
+            properties:
+                checksum:
+                    type: string
+                content_type:
+                    type: string
+                created_at:
+                    type: string
+                expires_at:
+                    type: string
+                file_name:
+                    type: string
+                file_size:
+                    type: integer
+                id:
+                    type: string
+                status:
+                    type: string
+                uploaded_by:
+                    type: string
+            type: object
         category.CreateItemCategoryRequest:
             properties:
                 description:
@@ -495,6 +539,12 @@ components:
                     type: integer
                 requested_item:
                     $ref: '#/components/schemas/requisitionhttp.CreateRequestedItemRequest'
+                upload_ids:
+                    example:
+                        - upl-123
+                    items:
+                        type: string
+                    type: array
             type: object
         requisitionhttp.CreateRequisitionRequest:
             properties:
@@ -524,6 +574,13 @@ components:
                         - urgent
                     example: medium
                     type: string
+                upload_ids:
+                    description: UploadIDs reference files previously staged through POST /api/v1/uploads.
+                    example:
+                        - upl-123
+                    items:
+                        type: string
+                    type: array
             required:
                 - department_id
                 - justification
@@ -1489,6 +1546,296 @@ paths:
             summary: Update user status
             tags:
                 - admin
+    /attachments:
+        get:
+            description: Returns a paginated list of attachments for one parent resource.
+            parameters:
+                - description: Parent type (requisition or requisition_item)
+                  in: query
+                  name: ref_name
+                  required: true
+                  schema:
+                    enum:
+                        - requisition
+                        - requisition_item
+                    type: string
+                - description: Parent id
+                  in: query
+                  name: ref_id
+                  required: true
+                  schema:
+                    type: string
+                - description: Page size (1-100)
+                  in: query
+                  name: limit
+                  schema:
+                    type: integer
+                - description: Page offset
+                  in: query
+                  name: offset
+                  schema:
+                    type: integer
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                allOf:
+                                    - $ref: '#/components/schemas/response.Response'
+                                    - properties:
+                                        data:
+                                            items:
+                                                $ref: '#/components/schemas/attachmenthttp.AttachmentResponse'
+                                            type: array
+                                      type: object
+                    description: OK
+                "400":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.ErrorResponse'
+                    description: Missing ref_name/ref_id or invalid pagination
+                "401":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Missing or invalid access token
+                "403":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Access to the parent resource denied
+                "404":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Parent resource not found
+            security:
+                - BearerAuth: []
+            summary: List attachments
+            tags:
+                - attachment
+        post:
+            description: Streams a file to storage and records its metadata against a requisition or requisition item. The content type is detected from the file bytes, not from the declared type.
+            requestBody:
+                content:
+                    multipart/form-data:
+                        schema:
+                            properties:
+                                file:
+                                    description: File to upload
+                                    format: binary
+                                    type: string
+                                    x-formData-name: file
+                                ref_id:
+                                    description: Parent id
+                                    type: string
+                                    x-formData-name: ref_id
+                                ref_name:
+                                    description: Parent type (requisition or requisition_item)
+                                    enum:
+                                        - requisition
+                                        - requisition_item
+                                    type: string
+                                    x-formData-name: ref_name
+                            required:
+                                - file
+                                - ref_id
+                                - ref_name
+                            type: object
+            responses:
+                "201":
+                    content:
+                        application/json:
+                            schema:
+                                allOf:
+                                    - $ref: '#/components/schemas/response.Response'
+                                    - properties:
+                                        data:
+                                            $ref: '#/components/schemas/attachmenthttp.AttachmentResponse'
+                                      type: object
+                    description: Created
+                "400":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.ErrorResponse'
+                    description: Invalid multipart body
+                "401":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Missing or invalid access token
+                "403":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Access to the parent resource denied
+                "404":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Parent resource not found
+                "409":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Attachment limit for the parent reached
+                "413":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: File exceeds the configured size limit
+                "415":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Unsupported content type
+            security:
+                - BearerAuth: []
+            summary: Upload an attachment
+            tags:
+                - attachment
+    /attachments/{id}:
+        delete:
+            description: Removes the attachment metadata and its stored object. Only the uploader or an administrator may delete it.
+            parameters:
+                - description: Attachment id
+                  in: path
+                  name: id
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: OK
+                "401":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Missing or invalid access token
+                "403":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Access to the parent resource denied
+                "404":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Attachment not found
+            security:
+                - BearerAuth: []
+            summary: Delete an attachment
+            tags:
+                - attachment
+        get:
+            description: Returns one attachment with a freshly derived content URL.
+            parameters:
+                - description: Attachment id
+                  in: path
+                  name: id
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                allOf:
+                                    - $ref: '#/components/schemas/response.Response'
+                                    - properties:
+                                        data:
+                                            $ref: '#/components/schemas/attachmenthttp.AttachmentResponse'
+                                      type: object
+                    description: OK
+                "401":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Missing or invalid access token
+                "403":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Access to the parent resource denied
+                "404":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Attachment not found
+            security:
+                - BearerAuth: []
+            summary: Get attachment metadata
+            tags:
+                - attachment
+    /attachments/{id}/content:
+        get:
+            description: Streams the attachment bytes with range support, or redirects to a signed URL when the storage adapter provides one.
+            parameters:
+                - description: Attachment id
+                  in: path
+                  name: id
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    content:
+                        application/octet-stream:
+                            schema:
+                                format: binary
+                                type: string
+                    description: Attachment bytes
+                "302":
+                    content:
+                        application/octet-stream:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Redirect to a signed URL
+                "401":
+                    content:
+                        application/octet-stream:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Missing or invalid access token
+                "403":
+                    content:
+                        application/octet-stream:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Access to the parent resource denied
+                "404":
+                    content:
+                        application/octet-stream:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Attachment not found
+            security:
+                - BearerAuth: []
+            summary: Download an attachment
+            tags:
+                - attachment
     /auth/forgot-password:
         post:
             description: Always returns the same response, whether or not the account exists, is active, or is throttled. No account information is revealed.
@@ -2719,7 +3066,7 @@ paths:
             tags:
                 - requisition
         post:
-            description: Creates a multi-line requisition for the authenticated user's department. Each line references either a catalogue item (item_id) or a free-filled requested item (requested_item), never both. Amounts are expressed in major currency units (naira for NGN) and stored internally as minor units. needed_by must be a calendar date in YYYY-MM-DD format and must be in the future.
+            description: Creates a multi-line requisition for the authenticated user's department. Each line references either a catalogue item (item_id) or a free-filled requested item (requested_item), never both. Amounts are expressed in major currency units (naira for NGN) and stored internally as minor units. needed_by must be a calendar date in YYYY-MM-DD format and must be in the future. Optional upload_ids at the top level and on each line reference files created through POST /api/v1/uploads; they are claimed inside the creation transaction and are not downloadable until reconciliation completes.
             requestBody:
                 content:
                     application/json:
@@ -2994,5 +3341,62 @@ paths:
             summary: List all requisitions
             tags:
                 - requisition
+    /uploads:
+        post:
+            description: Streams a file to temporary storage and records its owner. No requisition or requisition-item ID is required; pass the returned ID in the requisition creation payload.
+            requestBody:
+                content:
+                    multipart/form-data:
+                        schema:
+                            properties:
+                                file:
+                                    description: File to stage
+                                    format: binary
+                                    type: string
+                                    x-formData-name: file
+                            required:
+                                - file
+                            type: object
+            responses:
+                "201":
+                    content:
+                        application/json:
+                            schema:
+                                allOf:
+                                    - $ref: '#/components/schemas/response.Response'
+                                    - properties:
+                                        data:
+                                            $ref: '#/components/schemas/attachmenthttp.StagedUploadResponse'
+                                      type: object
+                    description: Created
+                "400":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.ErrorResponse'
+                    description: Invalid multipart body
+                "401":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Missing or invalid access token
+                "413":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: File exceeds the configured size limit
+                "415":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/response.Response'
+                    description: Unsupported content type
+            security:
+                - BearerAuth: []
+            summary: Stage a file before creating a requisition
+            tags:
+                - attachment
 servers:
     - url: /api/v1

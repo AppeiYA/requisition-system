@@ -19,7 +19,17 @@ var (
 	ErrInactiveItem       = customerrors.NewBadRequestError("selected item is inactive")
 	ErrInactiveMembership = customerrors.NewForbiddenError("department membership is not active")
 	ErrDepartmentMismatch = customerrors.NewForbiddenError("requisition department does not match the authenticated user's department")
+	// ErrInvalidStagedUpload is returned before the transaction starts for
+	// syntactically bad or repeated upload tokens. The attachment module maps
+	// unavailable tokens to the same generic error so ownership stays hidden.
+	ErrInvalidStagedUpload = customerrors.NewBadRequestError("invalid or repeated staged upload ID")
+	ErrRegistrarMissing    = customerrors.NewInternalServerError("attachment registrar is not configured")
 )
+
+// stagedUploadIDPrefix mirrors the attachment module's token prefix without
+// importing its domain. Only the shape is checked here; ownership, expiry and
+// single use are checked inside the transaction by the attachment module.
+const stagedUploadIDPrefix = "upl-"
 
 type CreateRequisitionUsecase struct {
 	requisitionRepo requisitionout.RequisitionRepository
@@ -28,6 +38,7 @@ type CreateRequisitionUsecase struct {
 	membership      requisitionout.MembershipLookup
 	idGenerator     requisitionout.IDGenerator
 	txManager       requisitionout.TransactionManager
+	registrar       requisitionout.StagedAttachmentRegistrar
 }
 
 func NewCreateRequisitionUsecase(
@@ -37,15 +48,20 @@ func NewCreateRequisitionUsecase(
 	membership requisitionout.MembershipLookup,
 	idGenerator requisitionout.IDGenerator,
 	txManager requisitionout.TransactionManager,
+	registrar requisitionout.StagedAttachmentRegistrar,
 ) *CreateRequisitionUsecase {
 	return &CreateRequisitionUsecase{
 		requisitionRepo: requisitionRepo, categoryRepo: categoryRepo, itemRepo: itemRepo,
 		membership: membership, idGenerator: idGenerator, txManager: txManager,
+		registrar: registrar,
 	}
 }
 
 func (uc *CreateRequisitionUsecase) Execute(ctx context.Context, cmd requisitionin.CreateRequisitionCommand) (*domain.Requisition, error) {
 	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if err := validateStagedUploadIDs(cmd); err != nil {
 		return nil, err
 	}
 	membership, err := uc.membership.GetMembershipByUserID(ctx, cmd.UserID)
@@ -129,15 +145,84 @@ func (uc *CreateRequisitionUsecase) Execute(ctx context.Context, cmd requisition
 		return nil, err
 	}
 
+	stagedTargets := buildStagedAttachmentTargets(cmd, requisitionID, items)
+	if len(stagedTargets) > 0 && uc.registrar == nil {
+		return nil, ErrRegistrarMissing
+	}
+
 	if uc.txManager == nil {
 		return nil, customerrors.NewInternalServerError("requisition transaction manager is not configured")
 	}
 	if err := uc.txManager.WithinTransaction(ctx, func(txCtx context.Context) error {
-		return uc.requisitionRepo.SaveRequisition(txCtx, requisition)
+		if err := uc.requisitionRepo.SaveRequisition(txCtx, requisition); err != nil {
+			return err
+		}
+		if len(stagedTargets) == 0 {
+			return nil
+		}
+		return uc.registrar.RegisterStagedAttachments(txCtx, stagedTargets)
 	}); err != nil {
 		return nil, err
 	}
 	return requisition, nil
+}
+
+func validateStagedUploadIDs(cmd requisitionin.CreateRequisitionCommand) error {
+	seen := make(map[string]struct{})
+	check := func(id string) error {
+		if !strings.HasPrefix(id, stagedUploadIDPrefix) || id == stagedUploadIDPrefix {
+			return ErrInvalidStagedUpload
+		}
+		if _, exists := seen[id]; exists {
+			return ErrInvalidStagedUpload
+		}
+		seen[id] = struct{}{}
+		return nil
+	}
+
+	for _, id := range cmd.UploadIDs {
+		if err := check(id); err != nil {
+			return err
+		}
+	}
+	for _, line := range cmd.Lines {
+		for _, id := range line.UploadIDs {
+			if err := check(id); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func buildStagedAttachmentTargets(
+	cmd requisitionin.CreateRequisitionCommand,
+	requisitionID string,
+	items []*domain.RequisitionItem,
+) []requisitionout.StagedAttachmentTarget {
+	targets := make([]requisitionout.StagedAttachmentTarget, 0)
+	for _, uploadID := range cmd.UploadIDs {
+		targets = append(targets, requisitionout.StagedAttachmentTarget{
+			UploadID: uploadID,
+			ActorID:  cmd.UserID,
+			RefName:  "requisition",
+			RefID:    requisitionID,
+		})
+	}
+	for index, line := range cmd.Lines {
+		if index >= len(items) {
+			break
+		}
+		for _, uploadID := range line.UploadIDs {
+			targets = append(targets, requisitionout.StagedAttachmentTarget{
+				UploadID: uploadID,
+				ActorID:  cmd.UserID,
+				RefName:  "requisition_item",
+				RefID:    items[index].ID(),
+			})
+		}
+	}
+	return targets
 }
 
 // lineIdentity carries the persisted identity of an existing line and its

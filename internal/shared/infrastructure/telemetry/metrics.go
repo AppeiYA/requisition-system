@@ -75,3 +75,27 @@ func (c *Counter) AddWithAttributes(
 ) {
 	c.instrument.Add(ctx, value, metric.WithAttributes(attributes...))
 }
+
+type Gauge struct {
+	instrument metric.Int64Gauge
+}
+
+func NewGauge(name, description, unit string) (*Gauge, error) {
+	opts := []metric.Int64GaugeOption{
+		metric.WithDescription(description),
+	}
+	if unit != "" {
+		opts = append(opts, metric.WithUnit(unit))
+	}
+
+	gauge, err := meter().Int64Gauge(name, opts...)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Gauge{instrument: gauge}, nil
+}
+
+func (g *Gauge) Record(ctx context.Context, value int64) {
+	g.instrument.Record(ctx, value)
+}

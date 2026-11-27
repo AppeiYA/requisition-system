@@ -21,6 +21,12 @@ hexagonal architecture (ports & adapters) per feature module.
   department memberships (job titles).
 - **Item categories** – admins create and update categories; authenticated users list
   and read them. Default categories are provided as a seed.
+- **Attachments** – authenticated users can stage files before a requisition exists
+  and add files later to a requisition or requisition line. Staged files are owned by
+  the uploader and expire if they are not claimed. Metadata lives in PostgreSQL and
+  bytes live behind a storage port (`local` disk driver today); content type is
+  detected from the file bytes, and permanent access follows the parent requisition's
+  rules.
 - **API documentation** – OpenAPI 3 spec served by Scalar at `/api/v1/docs`.
 
 ## Tech stack
@@ -43,6 +49,7 @@ hexagonal architecture (ports & adapters) per feature module.
 internal/
 ├── identity/       # auth, users, roles
 ├── department/     # departments & memberships
+├── attachment/     # file metadata, storage port, upload/download/delete
 ├── invitation/     # invitations lifecycle
 ├── admin/          # admin-only actions (invite members, manage users)
 ├── shared/         # config, db, redis, email, jwt, response, telemetry
@@ -165,6 +172,12 @@ Base URL: `http://localhost:8080/api/v1` — interactive docs at
 | PATCH  | `/api/v1/items/:id/activate`   | admin | Activate an item |
 | PATCH  | `/api/v1/items/:id/deactivate` | admin | Deactivate an item |
 | PATCH  | `/api/v1/requisitions/:id` | access token | Update an owned pending requisition |
+| POST   | `/api/v1/uploads`          | access token | Stage a file before creating a requisition (multipart: `file`); max 10 MiB by default |
+| POST   | `/api/v1/attachments`      | access token | Upload a file to an existing parent (multipart: `file`, `ref_name`, `ref_id`); max 10 MiB by default |
+| GET    | `/api/v1/attachments`      | access token | List a parent's attachments (`ref_name`, `ref_id`, paginated) |
+| GET    | `/api/v1/attachments/:id`  | access token | Get attachment metadata, including its content URL |
+| GET    | `/api/v1/attachments/:id/content` | access token | Stream bytes (supports `Range`), or redirect to a signed URL |
+| DELETE | `/api/v1/attachments/:id`  | access token | Delete an attachment (uploader or admin) |
 
 Authenticated requests need `Authorization: Bearer <access token>`.
 
@@ -290,6 +303,26 @@ automatically). Required variables have no default and stop the app at boot.
 | `PASSWORD_RESET_REQUEST_COOLDOWN` | – | `1m` | Minimum gap between reset emails for one account |
 | `PASSWORD_RESET_MAX_PER_HOUR` | – | `5` | Maximum reset requests per account per rolling hour |
 | `PASSWORD_RESET_CLEANUP_RETENTION` | – | `168h` | How long spent token rows are kept; at least the token TTL |
+| `ATTACHMENT_STORAGE_DRIVER` | – | `local` | Storage driver: `local` or `s3` (S3-compatible) |
+| `ATTACHMENT_LOCAL_ROOT` | – | `./var/attachments` | Disk root for `local`; mount a volume here in production |
+| `ATTACHMENT_MAX_SIZE_BYTES` | – | `10485760` | Per-file cap (10 MiB), enforced in HTTP and in the use case |
+| `ATTACHMENT_MAX_PER_REF` | – | `10` | Maximum attachments per parent |
+| `ATTACHMENT_SIGNED_URL_TTL` | – | `5m` | Lifetime of a signed download URL |
+| `STAGED_UPLOAD_TTL` | – | `24h` | How long a parentless upload can be claimed by requisition creation (`ATTACHMENT_STAGING_TTL` is a legacy alias) |
+| `STAGED_UPLOAD_MAX_PENDING_PER_USER` | – | `20` | Maximum unexpired staged uploads per user |
+| `STAGED_UPLOAD_MAX_BYTES_PER_USER` | – | `0` | Maximum staged bytes per user; `0` disables the byte cap |
+| `ATTACHMENT_RECONCILE_BATCH_SIZE` | – | `50` | Maximum due reconciliation events per worker sweep |
+| `ATTACHMENT_RECONCILE_MAX_ATTEMPTS` | – | `5` | Attempts before a reconciliation event is marked dead |
+| `ATTACHMENT_RECONCILE_BACKOFF` | – | `1m` | Base backoff; retries use exponential delays |
+| `ATTACHMENT_RECONCILE_SCHEDULE` | – | `@every 15s` | asynq cronspec for reconciliation sweeps |
+| `ATTACHMENT_RECONCILE_STUCK_AFTER` | – | `15m` | Requeue attachments left in `processing` longer than this |
+| `ATTACHMENT_CLEANUP_SCHEDULE` | – | `@every 5m` | asynq cronspec for staged-upload cleanup sweeps |
+| `ATTACHMENT_S3_BUCKET` | with `s3` | – | S3 bucket name |
+| `ATTACHMENT_S3_REGION` | with `s3` and no endpoint | – | AWS region; optional when a custom endpoint is set |
+| `ATTACHMENT_S3_ENDPOINT` | – | – | Custom endpoint for MinIO/R2 |
+| `ATTACHMENT_S3_ACCESS_KEY_ID` / `ATTACHMENT_S3_SECRET_ACCESS_KEY` | – | – | Set both together, or leave both empty to use a task role |
+| `ATTACHMENT_S3_FORCE_PATH_STYLE` | – | `false` | MinIO path-style addressing |
+| `ATTACHMENT_S3_USE_SSL` | – | `true` | Scheme for a custom endpoint |
 | `RATE_LIMIT_LOGIN_MAX` | – | `5` | Login attempts per client IP per window |
 | `RATE_LIMIT_LOGIN_WINDOW` | – | `15m` | Login rate-limit window |
 | `RATE_LIMIT_REFRESH_MAX` | – | `10` | Refresh attempts per client IP per window |
@@ -312,6 +345,28 @@ automatically). Required variables have no default and stop the app at boot.
 | `WORKER_TASK_TIMEOUT` | – | `30s` | Per-attempt processing timeout |
 | `WORKER_SHUTDOWN_TIMEOUT` | – | `8s` | Grace period for in-flight tasks on shutdown |
 
+A staged upload is stored under `staging/<upl-id>` and returns only its
+server-generated ID, metadata and expiry — never its storage path. The ID is
+intended for the requisition-creation payload so the file can be claimed once
+the real `req-…` or `reqitem-…` ID exists. Permanent attachment access still
+uses the parent authorisation rules; staging itself checks only the uploader's
+identity.
+
+Requisition creation accepts those IDs as `upload_ids`: a top-level array
+attaches to the requisition header, and the same field on each line attaches to
+the generated `reqitem-…` ID. Tokens are single-use and owned by the
+authenticated user; an invalid, expired, foreign or repeated token returns
+`400` and rolls back the whole creation. Claimed files stay non-downloadable
+until reconciliation moves them and marks the attachment `READY`.
+
+Attachment metadata is backed up with PostgreSQL; file bytes are not. With the
+`local` driver, `ATTACHMENT_LOCAL_ROOT` must be on a mounted volume and
+snapshotted in the same runbook as `pg_dump`. With the `s3` driver, enable
+bucket versioning/replication and coordinate its snapshot with `pg_dump` —
+restoring one side alone leaves attachments inconsistent. The SHA-256 checksum
+is stored as object metadata (`attachment-checksum`) so reconciliation can
+verify bytes after a retry.
+
 ## Worker (background tasks)
 
 Work that does not need to run inside the request cycle runs in a separate
@@ -327,6 +382,8 @@ exponential backoff up to `WORKER_TASK_MAX_RETRY` times.
 | `identity:send-password-reset-email` | API | Deliver a reset link (deduplicated by reset ID) |
 | `identity:cleanup-password-reset-tokens` | Every hour | Delete token rows older than `PASSWORD_RESET_CLEANUP_RETENTION` |
 | `invitation:expire` | Every 15 minutes | Expire stale invitations |
+| `attachment:reconcile` | Every 15 seconds | Move claimed staged files to their permanent keys |
+| `attachment:cleanup` | Every 5 minutes | Expire staged uploads, recover stuck reconciliation and publish queue metrics |
 
 ```bash
 go run ./cmd/worker    # run alongside ./cmd/api

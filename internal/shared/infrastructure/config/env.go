@@ -13,5 +13,6 @@ type Config struct {
 	Telemetry     TelemetryConfig
 	RateLimit     RateLimitConfig
 	PasswordReset PasswordResetConfig
+	Attachment    AttachmentConfig
 	Log           LogConfig
 }
