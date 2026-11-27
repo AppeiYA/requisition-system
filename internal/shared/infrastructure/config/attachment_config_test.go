@@ -47,7 +47,7 @@ func TestLoadAttachmentConfigDefaults(t *testing.T) {
 	if cfg.StorageDriver != "local" {
 		t.Errorf("StorageDriver = %q, want local", cfg.StorageDriver)
 	}
-	if cfg.MaxSizeBytes != 10<<20 {
+	if cfg.MaxSizeBytes != 3<<20 {
 		t.Errorf("MaxSizeBytes = %d, want %d", cfg.MaxSizeBytes, 10<<20)
 	}
 	if cfg.MaxPerRef != 10 {
