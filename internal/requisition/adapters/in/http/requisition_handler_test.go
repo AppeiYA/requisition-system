@@ -175,7 +175,6 @@ func validRequisitionSummary() *domain.RequisitionSummary {
 
 func createRequestBody(lines string) string {
 	return `{
-		"department_id": "dpt_123",
 		"priority": "medium",
 		"needed_by": "` + time.Now().UTC().AddDate(0, 0, 5).Format(dateOnlyLayout) + `",
 		"justification": "Office setup",
@@ -210,7 +209,7 @@ func Test_CreateRequisition_MultipleCatalogueLines(t *testing.T) {
 	if len(create.got.Lines) != 2 {
 		t.Fatalf("command lines = %d, want 2", len(create.got.Lines))
 	}
-	if create.got.DepartmentID != "dpt_123" || create.got.UserID != "usr-123" {
+	if create.got.UserID != "usr-123" {
 		t.Fatalf("command header = %+v", create.got)
 	}
 	if create.got.Lines[0].ItemID != "itm_123" || create.got.Lines[0].EstimatedUnitAmount != 150000 {
@@ -249,7 +248,6 @@ func Test_CreateRequisition_AcceptsSnakeCasePayload(t *testing.T) {
 	router := newRequisitionTestRouter(create, &stubListRequisitionsByUser{}, &stubListRequisitions{})
 
 	body := `{
-		"department_id": "dpt_123",
 		"priority": "medium",
 		"needed_by": "` + time.Now().UTC().AddDate(0, 0, 5).Format(dateOnlyLayout) + `",
 		"justification": "Office setup",
@@ -262,7 +260,7 @@ func Test_CreateRequisition_AcceptsSnakeCasePayload(t *testing.T) {
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("status = %d, want 201: %s", rec.Code, rec.Body.String())
 	}
-	if create.got.DepartmentID != "dpt_123" || create.got.Lines[0].ItemID != "itm_123" {
+	if create.got.Lines[0].ItemID != "itm_123" {
 		t.Fatalf("command = %+v", create.got)
 	}
 	if create.got.Lines[1].RequestedItem == nil || create.got.Lines[1].RequestedItem.CategoryID != "cat_123" {
@@ -372,28 +370,23 @@ func Test_CreateRequisition_RejectsInvalidIdentifiersAndNeededBy(t *testing.T) {
 		field string
 	}{
 		{
-			name:  "invalid department",
-			body:  `{"department_id":"invalid","priority":"medium","needed_by":"` + time.Now().UTC().AddDate(0, 0, 5).Format(dateOnlyLayout) + `","justification":"x","lines":[{"item_id":"itm_123","quantity":1,"estimated_unit_amount":1}]}`,
-			field: "department_id",
-		},
-		{
 			name:  "invalid item",
-			body:  `{"department_id":"dpt_123","priority":"medium","needed_by":"` + time.Now().UTC().AddDate(0, 0, 5).Format(dateOnlyLayout) + `","justification":"x","lines":[{"item_id":"invalid","quantity":1,"estimated_unit_amount":1}]}`,
+			body:  `{"priority":"medium","needed_by":"` + time.Now().UTC().AddDate(0, 0, 5).Format(dateOnlyLayout) + `","justification":"x","lines":[{"item_id":"invalid","quantity":1,"estimated_unit_amount":1}]}`,
 			field: "lines[0].item_id",
 		},
 		{
 			name:  "invalid category",
-			body:  `{"department_id":"dpt_123","priority":"medium","needed_by":"` + time.Now().UTC().AddDate(0, 0, 5).Format(dateOnlyLayout) + `","justification":"x","lines":[{"requested_item":{"name":"Stand","category_id":"invalid","description":"Adjustable"},"quantity":1,"estimated_unit_amount":1}]}`,
+			body:  `{"priority":"medium","needed_by":"` + time.Now().UTC().AddDate(0, 0, 5).Format(dateOnlyLayout) + `","justification":"x","lines":[{"requested_item":{"name":"Stand","category_id":"invalid","description":"Adjustable"},"quantity":1,"estimated_unit_amount":1}]}`,
 			field: "lines[0].requested_item.category_id",
 		},
 		{
 			name:  "invalid priority",
-			body:  `{"department_id":"dpt_123","priority":"extreme","needed_by":"` + time.Now().UTC().AddDate(0, 0, 5).Format(dateOnlyLayout) + `","justification":"x","lines":[{"item_id":"itm_123","quantity":1,"estimated_unit_amount":1}]}`,
+			body:  `{"priority":"extreme","needed_by":"` + time.Now().UTC().AddDate(0, 0, 5).Format(dateOnlyLayout) + `","justification":"x","lines":[{"item_id":"itm_123","quantity":1,"estimated_unit_amount":1}]}`,
 			field: "priority",
 		},
 		{
 			name:  "past needed by",
-			body:  `{"department_id":"dpt_123","priority":"medium","needed_by":"2000-01-01","justification":"x","lines":[{"item_id":"itm_123","quantity":1,"estimated_unit_amount":1}]}`,
+			body:  `{"priority":"medium","needed_by":"2000-01-01","justification":"x","lines":[{"item_id":"itm_123","quantity":1,"estimated_unit_amount":1}]}`,
 			field: "needed_by",
 		},
 	}

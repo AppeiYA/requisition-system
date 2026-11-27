@@ -150,8 +150,7 @@ func TestCreateRequisitionUsecasePersistsAggregateTransactionally(t *testing.T) 
 	)
 
 	requisition, err := usecase.Execute(context.Background(), requisitionin.CreateRequisitionCommand{
-		UserID:       "usr-123",
-		DepartmentID: "dpt-123",
+		UserID: "usr-123",
 		Lines: []requisitionin.CreateRequisitionLine{{
 			RequestedItem: &requisitionin.CreateRequestedItem{
 				Name: "Pens", CategoryID: "cat-123", Description: "Blue pens",
@@ -198,8 +197,7 @@ func TestCreateRequisitionUsecaseBuildsCatalogueAndRequestedLines(t *testing.T) 
 	)
 
 	requisition, err := usecase.Execute(context.Background(), requisitionin.CreateRequisitionCommand{
-		UserID:       "usr-123",
-		DepartmentID: "dpt-123",
+		UserID: "usr-123",
 		Lines: []requisitionin.CreateRequisitionLine{
 			{ItemID: "itm-123", Quantity: 2, EstimatedUnitAmount: 150000},
 			{RequestedItem: &requisitionin.CreateRequestedItem{
@@ -300,8 +298,7 @@ func (r *createRegistrar) RegisterStagedAttachments(
 
 func createCommandWithUploads() requisitionin.CreateRequisitionCommand {
 	return requisitionin.CreateRequisitionCommand{
-		UserID:       "usr-123",
-		DepartmentID: "dpt-123",
+		UserID: "usr-123",
 		Lines: []requisitionin.CreateRequisitionLine{{
 			RequestedItem: &requisitionin.CreateRequestedItem{
 				Name: "Pens", CategoryID: "cat-123", Description: "Blue pens",
@@ -375,25 +372,5 @@ func TestCreateRequisitionRejectsInvalidStagedUploadIDs(t *testing.T) {
 		if len(registrar.targets) != 0 {
 			t.Errorf("registrar was called with %+v", registrar.targets)
 		}
-	}
-}
-
-func TestCreateRequisitionRejectsDepartmentMismatch(t *testing.T) {
-	usecase := NewCreateRequisitionUsecase(
-		&createRequisitionRepo{}, createCategoryRepo{}, createItemRepo{},
-		createMembership{membership: validCreateMembership(t)},
-		&createIDGenerator{}, &createTransactionManager{}, nil,
-	)
-
-	_, err := usecase.Execute(context.Background(), requisitionin.CreateRequisitionCommand{
-		UserID:       "usr-123",
-		DepartmentID: "dpt-other",
-		Lines: []requisitionin.CreateRequisitionLine{{
-			ItemID: "itm-123", Quantity: 1, EstimatedUnitAmount: 150000,
-		}},
-		Justification: "Office supplies", NeededBy: time.Now().AddDate(0, 0, 2),
-	})
-	if err != ErrDepartmentMismatch {
-		t.Fatalf("Execute() error = %v, want %v", err, ErrDepartmentMismatch)
 	}
 }

@@ -10,7 +10,6 @@ import (
 type UpdateRequisitionCommand struct {
 	RequisitionID string
 	UserID        string
-	DepartmentID  string
 	Lines         []UpdateRequisitionLine
 	Justification string
 	Priority      string

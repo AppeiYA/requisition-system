@@ -548,10 +548,6 @@ components:
             type: object
         requisitionhttp.CreateRequisitionRequest:
             properties:
-                department_id:
-                    example: dpt_123
-                    minLength: 1
-                    type: string
                 justification:
                     example: Replacement laptops for the new hires
                     maxLength: 500
@@ -582,7 +578,6 @@ components:
                         type: string
                     type: array
             required:
-                - department_id
                 - justification
                 - lines
                 - needed_by
@@ -733,10 +728,6 @@ components:
             type: object
         requisitionhttp.UpdateRequisitionRequest:
             properties:
-                department_id:
-                    example: dpt_123
-                    minLength: 1
-                    type: string
                 justification:
                     example: Replacement laptops for the new hires
                     maxLength: 500
@@ -760,7 +751,6 @@ components:
                     example: medium
                     type: string
             required:
-                - department_id
                 - justification
                 - lines
                 - needed_by
@@ -3104,7 +3094,7 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/response.Response'
-                    description: Department membership is inactive or belongs to another department
+                    description: Department membership is inactive
                 "404":
                     content:
                         application/json:

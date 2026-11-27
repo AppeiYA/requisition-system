@@ -133,7 +133,6 @@ func requisitionToken(
 
 func (f *requisitionHTTPFixture) payload() map[string]any {
 	return map[string]any{
-		"department_id": f.Department,
 		"priority":      "medium",
 		"needed_by":     f.NeededBy,
 		"justification": "Replacement furniture for the new hires",
@@ -397,21 +396,6 @@ func TestRequisitionValidationAndTransitionHandler(t *testing.T) {
 			payload,
 		)
 		require.Equal(t, http.StatusBadRequest, recorder.Code, recorder.Body.String())
-	})
-
-	t.Run("rejects a department that differs from the membership", func(t *testing.T) {
-		payload := fixture.payload()
-		payload["department_id"] = "dpt-another-department"
-
-		recorder := performRequisitionRequest(
-			t,
-			fixture.Requisition.Router,
-			http.MethodPost,
-			"/api/v1/requisitions",
-			fixture.UserToken,
-			payload,
-		)
-		require.Equal(t, http.StatusForbidden, recorder.Code, recorder.Body.String())
 	})
 
 	t.Run("rejects a user without a department membership", func(t *testing.T) {

@@ -12,6 +12,8 @@ import (
 	customerrors "github.com/AppeiYA/requisition-system/internal/shared/infrastructure/errors"
 )
 
+var ErrDepartmentMismatch = customerrors.NewForbiddenError("requisition department does not match the authenticated user's department")
+
 type UpdateRequisitionUsecase struct {
 	requisitionRepo requisitionout.RequisitionEditRepository
 	categoryRepo    requisitionout.ItemCategoryRepository
@@ -75,11 +77,10 @@ func (uc *UpdateRequisitionUsecase) Execute(
 		if membership.Status() != departmentdomain.MembershipStatusActive {
 			return ErrInactiveMembership
 		}
-		departmentID := cmd.DepartmentID
-		if departmentID == "" {
-			departmentID = requisition.DepartmentID()
-		}
-		if departmentID != membership.DepartmentID() {
+		// The requisition department is immutable; it is inferred from the
+		// owner's membership on creation. Keep it aligned with the owner's
+		// current department before allowing edits.
+		if requisition.DepartmentID() != membership.DepartmentID() {
 			return ErrDepartmentMismatch
 		}
 

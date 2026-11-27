@@ -19,7 +19,7 @@ var (
 //	@Success		201		{object}	response.Response{data=RequisitionResponse}
 //	@Failure		400		{object}	response.ErrorResponse	"Validation error"
 //	@Failure		401		{object}	response.Response		"Missing or invalid access token"
-//	@Failure		403		{object}	response.Response		"Department membership is inactive or belongs to another department"
+//	@Failure		403		{object}	response.Response		"Department membership is inactive"
 //	@Failure		404		{object}	response.Response		"Department membership, category, or item not found"
 //	@Router			/requisitions [post]
 func createRequisitionDoc() {}
